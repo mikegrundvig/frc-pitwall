@@ -12,14 +12,10 @@ permissions:
 
 jobs:
   ci:
-    name: Build, check, test (${{ matrix.os }})
-    # Linux, like the robot, and Windows, like most teams' laptops: a check that passes on one and
-    # fails on the other has happened.
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    name: Build, check, test
+    # Linux only: this is a library, built on Windows only as part of a robot project's build,
+    # which checks it there.
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:
@@ -42,7 +38,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: reports-${{ matrix.os }}-${{ github.sha }}
+          name: reports-${{ github.sha }}
           path: |
             build/reports/
             build/test-results/
