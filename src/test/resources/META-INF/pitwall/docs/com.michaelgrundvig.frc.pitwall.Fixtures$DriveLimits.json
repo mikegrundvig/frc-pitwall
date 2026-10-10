@@ -1,0 +1,7 @@
+{
+  "summary": "The drive's limits.",
+  "text": "The drive's limits.",
+  "params": {
+    "current": "the most current through the motor"
+  }
+}

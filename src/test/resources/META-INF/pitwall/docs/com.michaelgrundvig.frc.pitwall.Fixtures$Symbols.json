@@ -1,0 +1,8 @@
+{
+  "summary": "What a configuration writes that JSON must escape, or that isn't ASCII.",
+  "text": "What a configuration writes that JSON must escape, or that isn't ASCII.",
+  "params": {
+    "heading": "the \"zero\" heading, in ° from C:\\field's corner",
+    "resistance": "in Ω, or Ω"
+  }
+}

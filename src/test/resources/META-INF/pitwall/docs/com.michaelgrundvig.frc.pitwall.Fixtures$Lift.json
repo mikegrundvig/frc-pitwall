@@ -1,0 +1,7 @@
+{
+  "summary": "A stage that lifts.",
+  "text": "A stage that lifts.",
+  "params": {
+    "kP": "volts per meter of error"
+  }
+}

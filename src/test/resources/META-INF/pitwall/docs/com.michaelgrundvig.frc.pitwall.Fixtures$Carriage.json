@@ -1,0 +1,7 @@
+{
+  "summary": "A carriage, on whichever stage.",
+  "text": "A carriage, on whichever stage.",
+  "params": {
+    "stage": "the stage it rides"
+  }
+}

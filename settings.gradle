@@ -1,0 +1,15 @@
+// Pitwall: the robot program's own web page and API, a library of its own. A build that uses it
+// includes this one (includeBuild) and asks for com.michaelgrundvig.frc:frc-pitwall.
+
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    // Downloads the JDK the build asks for (java.toolchain), so ./gradlew works on any machine.
+    id "org.gradle.toolchains.foojay-resolver-convention" version "1.0.0"
+}
+
+rootProject.name = "frc-pitwall"

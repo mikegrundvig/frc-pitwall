@@ -1,0 +1,8 @@
+{
+  "summary": "How the drive is controlled.",
+  "text": "How the drive is controlled. Tuned on a running machine, then committed.\n\nStart `kP` low.",
+  "params": {
+    "kP": "volts per meter per second of error",
+    "lookahead": "how far ahead the drive aims"
+  }
+}
