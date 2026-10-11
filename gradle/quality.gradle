@@ -7,7 +7,13 @@
 // Quick mode skips the work only CI needs (static analysis, auto-formatting, coverage), which
 // costs seconds on every save. `ci` still enforces all of it, and refuses to run in quick mode.
 def quick = project.hasProperty("quick")
-def testsNamed = gradle.startParameter.taskRequests.any { it.args.contains("--tests") }
+// The command line is the outermost build's: built as part of another build (a team's robot
+// program includes this one), this build's own start parameters name no tasks.
+def outermostBuild = gradle
+while (outermostBuild.parent != null) {
+    outermostBuild = outermostBuild.parent
+}
+def testsNamed = outermostBuild.startParameter.taskRequests.any { it.args.contains("--tests") }
 
 // NullAway checks every package of Pitwall's, and of the libraries it reads that are annotated.
 def nullSafePackages = "com.michaelgrundvig.frc"
