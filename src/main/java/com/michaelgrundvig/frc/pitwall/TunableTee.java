@@ -218,6 +218,15 @@ public final class TunableTee implements TunableBackend {
     return outcome;
   }
 
+  /**
+   * How many of the page's requests wait for the next update. A program that plays the page's part
+   * itself, as a recorded session does, reads this to know that a request it sent over the network
+   * has arrived, and so which loop applies it. Safe to call from any thread.
+   */
+  public int waiting() {
+    return queue.size();
+  }
+
   @Override
   public boolean publish(String path, TunableBase tunable) {
     String key = PathUtil.normalizeName(path);

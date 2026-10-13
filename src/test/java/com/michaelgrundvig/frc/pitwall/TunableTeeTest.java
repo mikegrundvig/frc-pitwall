@@ -132,6 +132,22 @@ class TunableTeeTest {
   }
 
   @Test
+  void thePagesRequestsWaitForTheNextUpdateAndTheTeeSaysHowMany() {
+    assertThat(tee.waiting()).isZero();
+
+    tee.requestChanges(Map.of("Shooter/kP", 1.5));
+    tee.requestChanges(Map.of("Intake/enabled", true));
+
+    assertThat(tee.waiting()).as("asked, and not yet applied").isEqualTo(2);
+    assertThat(kP.get()).isEqualTo(0.5);
+
+    tee.update();
+
+    assertThat(tee.waiting()).isZero();
+    assertThat(kP.get()).isEqualTo(1.5);
+  }
+
+  @Test
   void thePageIsLockedLikeDashboards() {
     whyLocked = "tuning is off";
 
