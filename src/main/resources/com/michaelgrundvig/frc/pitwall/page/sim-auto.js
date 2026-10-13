@@ -20,9 +20,10 @@ function autos() {
 /**
  * The auto's section.
  *
+ * @param options {compact}: for the Sim panel
  * @return {element, render(what)}
  */
-export function makeAuto() {
+export function makeAuto({ compact = false } = {}) {
   const ui = { shownChoices: "" };
   ui.lines = h("ul", { class: "slist" });
   ui.choices = h("div", { class: "dchoices" });
@@ -31,7 +32,7 @@ export function makeAuto() {
                          onclick: () => enableInAutonomous(ui.message) },
     "▶ Set autonomous and enable");
   ui.why = h("p", { class: "meta" });
-  const element = block("Autonomous", true, ui.lines, ui.choices,
+  const element = block("Autonomous", compact, ui.lines, ui.choices,
     h("div", { class: "acts" }, ui.run), ui.why, ui.message);
   element.hidden = true;
   return {

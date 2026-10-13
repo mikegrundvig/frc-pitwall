@@ -155,7 +155,7 @@ input[readonly] { background: var(--surface-2); }
 .side-body { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--s3) var(--s4) var(--s4); }
 @media (max-width: 899px) {
   .sidedock { position: fixed; z-index: 8; left: 0; right: 0; bottom: 0; width: auto;
-          height: min(64vh, 560px); border-left: none; border-top: 1px solid var(--line-strong);
+          height: min(50vh, 480px); border-left: none; border-top: 1px solid var(--line-strong);
           border-radius: 12px 12px 0 0; box-shadow: var(--shadow); }
   .side-grip { display: none; }
   .side-close { min-width: 44px; min-height: 44px; }

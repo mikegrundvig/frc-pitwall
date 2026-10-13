@@ -20,7 +20,7 @@ let drawn = null;
 
 function mount(element) {
   const options = { compact: true };
-  const parts = [makeStation(options), makeDriving(options), makeAuto(), makeTime(options),
+  const parts = [makeStation(options), makeDriving(options), makeAuto(options), makeTime(options),
     makeFaults(options)];
   element.append(
     ...parts.map((part) => part.element),
