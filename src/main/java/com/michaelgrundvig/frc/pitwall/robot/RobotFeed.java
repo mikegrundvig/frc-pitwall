@@ -63,21 +63,40 @@ public final class RobotFeed implements Feed {
     if (now < nextPatchNanos || newest == sentIndex) {
       return Map.of();
     }
-    Optional<RobotView> view = session.view(newest);
-    if (view.isEmpty()) {
+    Map<String, Object> before = sent;
+    if (!send(newest)) {
       return Map.of();
     }
     nextPatchNanos = now + PATCH_NANOS;
-    sentIndex = newest;
-    Map<String, Object> current = RobotWire.wire(view.get(), newest, session.lastFiring(newest));
-    Map<String, @Nullable Object> changed = changes(sent, current);
-    sent = current;
-    return changed;
+    return changes(before, sent);
   }
 
+  /**
+   * Everything as last sent. A page can start showing the view in a loop in which no patch was
+   * asked for yet, the first page to show it for one: it is then sent the newest loop whole, and
+   * that is remembered as sent, so the patch that follows holds only what changed since.
+   */
   @Override
   public Map<String, Object> sent() {
+    if (sentIndex < 0) {
+      send(session.taken() - 1);
+    }
     return sent;
+  }
+
+  /**
+   * Remembers a loop's view as what was sent.
+   *
+   * @return whether the session holds the loop
+   */
+  private boolean send(long index) {
+    Optional<RobotView> view = session.view(index);
+    if (view.isEmpty()) {
+      return false;
+    }
+    sent = RobotWire.wire(view.get(), index, session.lastFiring(index));
+    sentIndex = index;
+    return true;
   }
 
   /**

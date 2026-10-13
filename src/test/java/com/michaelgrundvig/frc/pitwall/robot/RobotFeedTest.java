@@ -61,6 +61,25 @@ class RobotFeedTest {
   }
 
   /**
+   * A page may start showing the view in a loop in which no patch was asked for: it is sent the
+   * newest loop whole all the same, and the patch after it holds only what changed since.
+   */
+  @Test
+  void aPageThatIsFirstToShowTheViewStartsFromTheNewestLoopWhole() {
+    assertThat(feed.sent()).as("before any loop").isEmpty();
+    loop(10);
+
+    Map<String, Object> whole = feed.sent();
+    assertThat(whole.get("order"))
+        .isEqualTo(List.of("pivot", "roller", "elevator", "arm", "shooter", "claw"));
+    assertThat(in(whole, "joints", "pivot", "needles")).containsEntry("now", 10.0);
+    assertThat(feed.patch()).as("nothing has changed since").isEmpty();
+
+    loop(20);
+    assertThat(in(feed.patch(), "joints").keySet()).containsExactly("pivot");
+  }
+
+  /**
    * No more than 20 patches a second, and none for a loop already sent: a paused robot is quiet.
    */
   @Test
