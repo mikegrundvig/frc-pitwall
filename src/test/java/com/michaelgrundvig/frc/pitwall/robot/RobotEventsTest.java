@@ -6,6 +6,7 @@ import com.michaelgrundvig.frc.pitwall.robot.RobotEvent.Kind;
 import com.michaelgrundvig.frc.pitwall.robot.RobotEvent.Severity;
 import com.michaelgrundvig.frc.pitwall.robot.RobotEvent.Subject;
 import com.michaelgrundvig.frc.pitwall.robot.RobotEvents.Filter;
+import com.michaelgrundvig.frc.world.record.BindingFired;
 import com.michaelgrundvig.frc.world.record.JointState;
 import com.michaelgrundvig.frc.world.record.MoveResult;
 import java.util.ArrayList;
@@ -99,7 +100,15 @@ class RobotEventsTest {
               "a binding fired",
               AT_REST,
               moment -> moment.fired(INTAKE),
-              Expected.of(Kind.BINDING_FIRED, Subject.GAMEPAD, "", INTAKE)),
+              Expected.of(Kind.BINDING_FIRED, Subject.GAMEPAD, "1", INTAKE)),
+          new Change(
+              "a binding fired by a button of the driver's gamepad: it is about that gamepad",
+              AT_REST,
+              moment ->
+                  moment.fired(
+                      "driver face down: on press: Deploy", 0, BindingFired.Control.BUTTON, 0),
+              Expected.of(
+                  Kind.BINDING_FIRED, Subject.GAMEPAD, "0", "driver face down: on press: Deploy")),
           new Change(
               "a switch tripped",
               AT_REST,

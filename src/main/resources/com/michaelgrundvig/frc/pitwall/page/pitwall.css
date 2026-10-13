@@ -765,6 +765,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .rv-pad { padding: var(--s1) 0; }
 .rv-pad-name, .rv-sub { font-size: var(--meta); color: var(--text-2); font-weight: 600; margin: var(--s1) 0 2px; }
 .rv-just { color: var(--edit); font-weight: 600; }
+.tag.rv-fired-by { outline: 2px solid var(--edit); outline-offset: 1px; color: var(--edit);
+                   background: var(--edit-tint); }
 
 /* ---- The time strip: the session's memory along the bottom of a view, with a mark for each event
    and the page's cursor on it. It is docked there with the list of events over it, and both stay

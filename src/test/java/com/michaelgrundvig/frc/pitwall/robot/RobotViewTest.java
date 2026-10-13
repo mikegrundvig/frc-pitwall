@@ -473,7 +473,9 @@ class RobotViewTest {
                 List.of("claw beam clear", "arm stowed"),
                 "piece in is false: claw beam clear, arm stowed"),
             new RobotView.GateRow("ready", Moment.Held.HOLDS, List.of(), ""));
-    assertThat(view.fired()).containsExactly("operator right trigger starts Intake while held");
+    assertThat(view.fired())
+        .extracting(Moment.Fired::binding)
+        .containsExactly("operator right trigger starts Intake while held");
     assertThat(view.enabled()).isEqualTo(Moment.Enabled.ENABLED);
     assertThat(view.mode()).isEqualTo(Moment.Mode.TELEOPERATED);
     assertThat(view.robot()).isEqualTo("test");

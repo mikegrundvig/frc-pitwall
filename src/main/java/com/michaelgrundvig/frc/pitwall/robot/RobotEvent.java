@@ -15,7 +15,8 @@ import java.util.Optional;
  * @param kind what happened
  * @param subject what kind of thing it is about
  * @param about which ones, by their names: a joint's label (every joint a move moved, for a move
- *     that ended), a sensor's label, a gate's name, a gamepad's port; empty for the robot itself
+ *     that ended), a sensor's label, a gate's name, the port of the gamepad a binding is on ("0"
+ *     for the driver's, "1" for the operator's); empty for the robot itself
  * @param severity whether it is a problem, to be seen at a glance
  * @param sentence what happened, in words: the model's own sentence of the fact as it then stood,
  *     after the name of what it is about

@@ -115,6 +115,8 @@ class RobotFeedTest {
     feed.patch();
     assertThat(in(feed.sent(), "fired"))
         .containsEntry("bindings", List.of("operator right trigger starts Intake"))
+        .containsEntry(
+            "controls", List.of(Map.of("port", 1, "control", "RIGHT_TRIGGER", "button", -1)))
         .containsEntry("timestampNanos", firedAt);
 
     for (int more = 0; more < 60; more++) {

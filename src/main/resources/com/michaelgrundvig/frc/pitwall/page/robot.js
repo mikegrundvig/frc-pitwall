@@ -315,23 +315,41 @@ function renderGates(view) {
 }
 
 function renderPads(view) {
+  const fired = view.fired || {};
   replace(ui.pads, Object.entries(view.gamepads || {}).map(([port, pad]) => {
-    const down = pad.down.map((button) => BUTTON_NAMES[button] || "Button " + button);
+    // The controls on this gamepad that just fired a binding, as the robot says them: a button by
+    // its index, a trigger by its axis. Each is marked, and shown even once it is let go.
+    const just = (fired.controls || []).filter((control) => String(control.port) === port);
+    const firedButtons = just.filter((control) => control.control === "BUTTON")
+      .map((control) => control.button);
+    const firedAxes = just.map((control) => TRIGGER_AXES[control.control])
+      .filter((axis) => axis !== undefined);
+    const buttons = [...new Set([...pad.down, ...firedButtons])].sort((a, b) => a - b);
+    const axes = pad.axes.map((value, axis) => [axis, value])
+      .filter(([axis, value]) => value !== 0 || firedAxes.includes(axis));
     // WPILib's POV is 0 while centered; -1 is a gamepad the record has no POV of.
-    if (pad.pov > 0) down.push("POV " + pad.pov);
-    const axes = pad.axes.map((value, axis) => [AXIS_NAMES[axis] || "Axis " + axis, value])
-      .filter(([, value]) => value !== 0);
     return h("div", { class: "rv-pad" },
       h("div", { class: "rv-pad-name" }, "Port " + port),
       h("div", { class: "chips" },
-        down.map((name) => h("span", { class: "tag edit" }, name)),
-        axes.map(([name, value]) => h("span", { class: "tag plain num" },
-          name + " " + value.toFixed(2))),
-        !down.length && !axes.length && h("span", { class: "meta" }, "Nothing pressed")));
+        buttons.map((button) => control(BUTTON_NAMES[button] || "Button " + button, "tag edit",
+          firedButtons.includes(button))),
+        pad.pov > 0 && h("span", { class: "tag edit" }, "POV " + pad.pov),
+        axes.map(([axis, value]) => control((AXIS_NAMES[axis] || "Axis " + axis) + " "
+          + value.toFixed(2), "tag plain num", firedAxes.includes(axis))),
+        !buttons.length && !axes.length && !(pad.pov > 0)
+          && h("span", { class: "meta" }, "Nothing pressed")));
   }));
-  const fired = (view.fired && view.fired.bindings) || [];
-  replace(ui.fired, fired.map((binding) => h("li", { class: "rv-just" }, "▶ " + binding)),
-    !fired.length && h("li", { class: "meta" }, "Nothing in the last second."));
+  const bindings = fired.bindings || [];
+  replace(ui.fired, bindings.map((binding) => h("li", { class: "rv-just" }, "▶ " + binding)),
+    !bindings.length && h("li", { class: "meta" }, "Nothing in the last second."));
+}
+
+/** The axis of each trigger, as the robot names the control that fired a binding. */
+const TRIGGER_AXES = { LEFT_TRIGGER: 4, RIGHT_TRIGGER: 5 };
+
+/** One control of a gamepad, marked if it just fired a binding. */
+function control(name, classes, fired) {
+  return h("span", { class: classes + (fired ? " rv-fired-by" : "") }, (fired ? "▶ " : "") + name);
 }
 
 export default { id: "robot", title: "Robot", mount, show, hide, offered };

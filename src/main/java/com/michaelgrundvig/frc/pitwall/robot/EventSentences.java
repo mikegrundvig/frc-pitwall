@@ -55,8 +55,7 @@ final class EventSentences {
         switch (kind) {
           case ENABLED, DISABLED, MODE_CHANGED ->
               new Said(Subject.ROBOT, List.of(), ofTheRobot(kind, moment), Optional.empty());
-          case BINDING_FIRED ->
-              new Said(Subject.GAMEPAD, List.of(), firedBinding(moment, about), Optional.empty());
+          case BINDING_FIRED -> ofABinding(moment, about);
           case SENSOR_LOST, SENSOR_ANSWERED, SENSOR_TRIPPED, SENSOR_CLEARED ->
               ofASensor(plan, kind, about);
           case GATE_HELD, GATE_FELL -> ofAGate(plan.definition(), moment, gate);
@@ -74,9 +73,16 @@ final class EventSentences {
         said.result());
   }
 
-  /** A binding that fired, as the robot's list of its bindings says it. */
-  private static String firedBinding(Moment moment, int which) {
-    return which < moment.fired().size() ? moment.fired().get(which) : "";
+  /**
+   * A binding that fired, as the robot's list of its bindings says it, which names its gamepad and
+   * its control: it is about that gamepad, by its port.
+   */
+  private static Said ofABinding(Moment moment, int which) {
+    if (which >= moment.fired().size()) {
+      return new Said(Subject.GAMEPAD, List.of(), "", Optional.empty());
+    }
+    Moment.Fired fired = moment.fired().get(which);
+    return Said.of(Subject.GAMEPAD, String.valueOf(fired.port()), fired.binding());
   }
 
   private static String ofTheRobot(Kind kind, Moment moment) {

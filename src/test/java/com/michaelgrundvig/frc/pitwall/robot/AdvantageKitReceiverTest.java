@@ -153,7 +153,14 @@ class AdvantageKitReceiverTest {
     assertThat(pivot.lastMove())
         .isEqualTo(
             new Moment.LastMove("pivot → out", List.of(A_MOVE), "", List.of(Holder.interlock(0))));
-    assertThat(moment.fired()).containsExactly("operator right trigger: while held: Intake");
+    assertThat(moment.fired())
+        .as("a fired binding in its words, with the control on the gamepad that fired it")
+        .containsExactly(
+            new Moment.Fired(
+                "operator right trigger: while held: Intake",
+                1,
+                BindingFired.Control.RIGHT_TRIGGER,
+                Identity.NONE));
     assertThat(pivot.link()).isEqualTo(Moment.Link.ANSWERS);
     assertThat(moment.sensors()).hasSize(2);
     assertThat(moment.gates()).hasSize(4);

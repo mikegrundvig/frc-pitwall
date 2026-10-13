@@ -1,5 +1,7 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
+import com.michaelgrundvig.frc.world.record.BindingFired;
+import com.michaelgrundvig.frc.world.record.BindingStart;
 import com.michaelgrundvig.frc.world.record.GateTerm;
 import com.michaelgrundvig.frc.world.record.Holder;
 import com.michaelgrundvig.frc.world.record.MoveOutcome;
@@ -48,7 +50,7 @@ final class Recorded {
           .put(key + LogKeys.BLOCKING, gate.blocking().toArray(new GateTerm[0]))
           .put(key + LogKeys.BLOCKING_TEXT, gate.blockingText().toArray(new String[0]));
     }
-    record.fired(moment.fired().toArray(new String[0]));
+    putFired(record, moment);
     for (Moment.OfGamepad gamepad : moment.gamepads()) {
       float[] axes = new float[gamepad.axes().size()];
       for (int axis = 0; axis < axes.length; axis++) {
@@ -61,6 +63,19 @@ final class Recorded {
           .put(in + LogKeys.POVS, new long[] {gamepad.pov()});
     }
     return record;
+  }
+
+  /** The bindings that fired, each a fact that points into the robot's list of its bindings. */
+  private static void putFired(FakeRecord record, Moment moment) {
+    BindingFired[] fired = new BindingFired[moment.fired().size()];
+    String[] bindings = new String[fired.length];
+    for (int each = 0; each < fired.length; each++) {
+      Moment.Fired one = moment.fired().get(each);
+      bindings[each] = one.binding();
+      fired[each] =
+          new BindingFired(each, one.port(), one.control(), one.button(), BindingStart.WHILE_HELD);
+    }
+    record.put(LogKeys.BINDINGS, bindings).put(LogKeys.FIRED, fired);
   }
 
   private static void putJoint(FakeRecord record, Moment.OfJoint joint) {

@@ -3,6 +3,7 @@ package com.michaelgrundvig.frc.pitwall.robot;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import com.michaelgrundvig.frc.world.record.BindingFired;
 import com.michaelgrundvig.frc.world.record.GateTerm;
 import com.michaelgrundvig.frc.world.record.Holder;
 import com.michaelgrundvig.frc.world.record.Identity;
@@ -126,7 +127,13 @@ class RobotSessionTest {
                 Moment.Held.DOES_NOT_HOLD,
                 List.of(GateTerm.text(0), GateTerm.text(1)),
                 List.of("not aimed at the Hub", "shooter not at goal")));
-    assertThat(moment.fired()).containsExactly("operator right trigger: while held: Intake");
+    assertThat(moment.fired())
+        .containsExactly(
+            new Moment.Fired(
+                "operator right trigger: while held: Intake",
+                1,
+                BindingFired.Control.RIGHT_TRIGGER,
+                Identity.NONE));
     Moment.OfGamepad operator = moment.gamepads().get(1);
     assertThat(operator.isDown(7)).isTrue();
     assertThat(operator.isDown(6)).isFalse();
@@ -213,9 +220,35 @@ class RobotSessionTest {
 
     assertThat(session.lastFiring(9)).as("before it fired").isEmpty();
     assertThat(session.lastFiring(10).orElseThrow().fired())
+        .extracting(Moment.Fired::binding)
         .containsExactly("driver A starts Shoot");
     assertThat(session.lastFiring(60).orElseThrow().timestampNanos()).isEqualTo(200_000_000);
     assertThat(session.lastFiring(61)).as("more than fifty loops on").isEmpty();
+  }
+
+  /** The control that fired a binding is kept with it: the gamepad's port, and which button. */
+  @Test
+  void theControlThatFiredABindingIsKeptWithIt() {
+    List<Moment.Fired> fired =
+        List.of(
+            new Moment.Fired("driver face up: on press: Deploy", 0, BindingFired.Control.BUTTON, 3),
+            new Moment.Fired(
+                "driver left trigger: while held: Aim",
+                0,
+                BindingFired.Control.LEFT_TRIGGER,
+                Identity.NONE),
+            new Moment.Fired(
+                "operator back and start: on press: Climb",
+                1,
+                BindingFired.Control.COMBINED,
+                Identity.NONE),
+            new Moment.Fired(
+                "operator button 25: on release: Stow", 1, BindingFired.Control.BUTTON, 25));
+    Moments robot = Moments.atRest();
+    fired.forEach(each -> robot.fired(each.binding(), each.port(), each.control(), each.button()));
+    Recorded.take(session, robot.build());
+
+    assertThat(session.newest().orElseThrow().fired()).containsExactlyElementsOf(fired);
   }
 
   /**
@@ -226,9 +259,9 @@ class RobotSessionTest {
   @Test
   void itsMemoryIsFixedHoweverMuchTheRecordHas() {
     assertThat(session.capacity()).as("five minutes at 50 loops a second").isEqualTo(15_000);
-    // Six joints and two sensors: 20 doubles, 42 floats, 161 shorts and 3 longs.
-    assertThat(session.bytesPerMoment()).isEqualTo(20 * 8 + 42 * 4 + 161 * 2 + 3 * 8);
-    assertThat(session.bytes()).isEqualTo(674L * 15_000);
+    // Six joints and two sensors: 20 doubles, 42 floats, 165 shorts and 3 longs.
+    assertThat(session.bytesPerMoment()).isEqualTo(20 * 8 + 42 * 4 + 165 * 2 + 3 * 8);
+    assertThat(session.bytes()).isEqualTo(682L * 15_000);
 
     for (int gate = 0; gate < SessionMemory.GATES + 3; gate++) {
       record.gate("gate " + gate, true);

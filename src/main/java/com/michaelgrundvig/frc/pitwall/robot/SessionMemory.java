@@ -1,5 +1,6 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
+import com.michaelgrundvig.frc.world.record.BindingFired;
 import com.michaelgrundvig.frc.world.record.GateTerm;
 import com.michaelgrundvig.frc.world.record.Holder;
 import com.michaelgrundvig.frc.world.record.Identity;
@@ -33,6 +34,15 @@ final class SessionMemory {
 
   /** How many of the bindings that fired in one loop it keeps. */
   static final int FIRED = 4;
+
+  /** A fired binding's shorts: its sentence, and the control that fired it. */
+  private static final int FIRED_SHORTS = 2;
+
+  // The control that fired a binding, in one short that is never zero: its kind and one, the
+  // gamepad's port, and its button's index and one, zero for a control that is no button.
+  private static final int FIRED_PORT_SHIFT = 4;
+  private static final int FIRED_BUTTON_SHIFT = 8;
+  private static final BindingFired.Control[] CONTROLS = BindingFired.Control.values();
 
   /** How many gamepads it keeps: the driver's and the operator's, on ports 0 and 1. */
   static final int GAMEPADS = 2;
@@ -142,7 +152,7 @@ final class SessionMemory {
     sensorShorts = joints * JOINT_SHORTS;
     gateShorts = sensorShorts + sensors;
     firedShorts = gateShorts + GATES * GATE_SHORTS;
-    povShorts = firedShorts + FIRED;
+    povShorts = firedShorts + FIRED * FIRED_SHORTS;
     loopShort = povShorts + GAMEPADS;
     shortsEach = loopShort + 1;
     longsEach = 1 + GAMEPADS;
@@ -315,11 +325,23 @@ final class SessionMemory {
     return index >= 0 && index < text.length ? text[index] : "";
   }
 
-  /** Puts the bindings that fired in this loop: the first {@link #FIRED} of so many. */
-  void putFired(String[] fired, int howMany) {
+  /**
+   * Puts the bindings that fired in this loop, the first {@link #FIRED} of so many: each as the
+   * robot's list of its bindings says it, with the control on the gamepad that fired it.
+   *
+   * @param bindings each binding's sentence, in the order of the facts
+   * @param fired the facts the robot logged of them
+   */
+  void putFired(String[] bindings, BindingFired[] fired, int howMany) {
     int s = slot * shortsEach + firedShorts;
     for (int each = 0; each < FIRED && each < howMany; each++) {
-      shorts[s + each] = words.numberOf(fired[each]);
+      BindingFired fact = fired[each];
+      shorts[s + each * FIRED_SHORTS] = words.numberOf(bindings[each]);
+      shorts[s + each * FIRED_SHORTS + 1] =
+          (short)
+              (fact.control().ordinal() + 1
+                  | (fact.port() & 0xF) << FIRED_PORT_SHIFT
+                  | (fact.button() + 1) << FIRED_BUTTON_SHIFT);
     }
   }
 
@@ -394,7 +416,7 @@ final class SessionMemory {
     long from = Math.max(oldest(), upTo - within);
     for (long index = Math.min(upTo, taken - 1); index >= from; index--) {
       int s = (int) (index % capacity) * shortsEach + firedShorts;
-      if (shorts[s] != 0) {
+      if (shorts[s + 1] != 0) {
         return index;
       }
     }
@@ -531,7 +553,7 @@ final class SessionMemory {
   /** How many bindings fired in a loop, of the {@link #FIRED} it keeps. */
   int firedIn(long index) {
     int fired = 0;
-    while (fired < FIRED && shortOf(index, firedShorts + fired) != 0) {
+    while (fired < FIRED && shortOf(index, firedShorts + fired * FIRED_SHORTS + 1) != 0) {
       fired++;
     }
     return fired;
@@ -601,7 +623,7 @@ final class SessionMemory {
         joints,
         sensors,
         gates,
-        texts(s + firedShorts, FIRED),
+        readFired(s + firedShorts),
         gamepads);
   }
 
@@ -668,12 +690,18 @@ final class SessionMemory {
         moves.moveOf(shorts[s + LAST_MOVE]));
   }
 
-  /** The texts kept in some places in a row, up to the first empty one. */
-  private List<String> texts(int from, int most) {
-    List<String> texts = new ArrayList<>();
-    for (int each = 0; each < most && shorts[from + each] != 0; each++) {
-      texts.add(words.textOf(shorts[from + each]));
+  /** The bindings that fired, kept from a place on, up to the first place with none. */
+  private List<Moment.Fired> readFired(int from) {
+    List<Moment.Fired> fired = new ArrayList<>();
+    for (int each = 0; each < FIRED && shorts[from + each * FIRED_SHORTS + 1] != 0; each++) {
+      int control = shorts[from + each * FIRED_SHORTS + 1];
+      fired.add(
+          new Moment.Fired(
+              words.textOf(shorts[from + each * FIRED_SHORTS]),
+              control >> FIRED_PORT_SHIFT & 0xF,
+              CONTROLS[(control & 0xF) - 1],
+              (control >> FIRED_BUTTON_SHIFT & 0x7F) - 1));
     }
-    return texts;
+    return fired;
   }
 }

@@ -1,5 +1,6 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
+import com.michaelgrundvig.frc.world.record.BindingFired;
 import com.michaelgrundvig.frc.world.record.GateTerm;
 import com.michaelgrundvig.frc.world.record.Holder;
 import com.michaelgrundvig.frc.world.record.JointOwner;
@@ -21,8 +22,8 @@ import java.util.List;
  * @param joints each driven joint the record has, by its label, in the model's order
  * @param sensors each switch and rangefinder the record has, by its label
  * @param gates each gate, by its name, in the order the record first had them
- * @param fired the bindings a press or a release started in this loop, each as the robot's list of
- *     its bindings says it
+ * @param fired the bindings a press or a release started in this loop, each with the control on the
+ *     gamepad that fired it
  * @param gamepads the gamepads, by port from 0
  */
 public record Moment(
@@ -32,7 +33,7 @@ public record Moment(
     List<OfJoint> joints,
     List<OfSensor> sensors,
     List<OfGate> gates,
-    List<String> fired,
+    List<Fired> fired,
     List<OfGamepad> gamepads) {
   public Moment {
     joints = List.copyOf(joints);
@@ -183,6 +184,19 @@ public record Moment(
       blockingText = List.copyOf(blockingText);
     }
   }
+
+  /**
+   * One binding that a press or a release started in one loop.
+   *
+   * @param binding the binding, as the robot's list of its bindings says it: "operator right
+   *     trigger: while held: Intake"
+   * @param port the Driver Station port of the gamepad it is on: 0 for the driver's, 1 for the
+   *     operator's
+   * @param control what kind of control on the gamepad started it
+   * @param button for a button, its index as WPILib's gamepad numbers its buttons; {@code
+   *     Identity.NONE} for every other control
+   */
+  public record Fired(String binding, int port, BindingFired.Control control, int button) {}
 
   /**
    * One gamepad in one loop.

@@ -26,7 +26,8 @@ import java.util.List;
  * @param sensors the robot's switches and rangefinders, beyond each joint's own limit switches
  * @param gates each gate, with why it does not hold
  * @param gamepads the gamepads
- * @param fired the bindings a press or a release started in this loop
+ * @param fired the bindings a press or a release started in this loop, each with the control on the
+ *     gamepad that fired it
  */
 public record RobotView(
     String robot,
@@ -37,7 +38,7 @@ public record RobotView(
     List<SensorRow> sensors,
     List<GateRow> gates,
     List<GamepadRow> gamepads,
-    List<String> fired) {
+    List<Moment.Fired> fired) {
   public RobotView {
     joints = List.copyOf(joints);
     sensors = List.copyOf(sensors);

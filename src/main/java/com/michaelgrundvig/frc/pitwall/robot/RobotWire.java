@@ -33,7 +33,7 @@ import java.util.Optional;
  *  "gateOrder": [name, ...],
  *  "gates": {name: {"held", "blocking": [term], "why"}},
  *  "gamepads": {port: {"down": [button], "axes": [number], "pov"}},
- *  "fired": {"bindings": [text], "timestampNanos"}}
+ *  "fired": {"bindings": [text], "controls": [{"port", "control", "button"}], "timestampNanos"}}
  * }</pre>
  *
  * <p>Live, the page is sent that with {@code "session"} beside it ({@link #wire(RobotSession)}). A
@@ -41,7 +41,10 @@ import java.util.Optional;
  * what changed in that loop, where the session holds the loop before it too.
  *
  * <p>{@code fired} is the latest firing of a binding within about a second before the moment, with
- * when it was: a firing lasts one loop, and the page keeps it in sight for a second.
+ * when it was: a firing lasts one loop, and the page keeps it in sight for a second. Beside each
+ * binding is the control that fired it, so the page marks it on its gamepad: the gamepad's port,
+ * the kind of control ({@code BUTTON}, {@code LEFT_TRIGGER}, {@code RIGHT_TRIGGER}, {@code
+ * COMBINED}), and for a button its index, else -1.
  */
 public final class RobotWire {
   private RobotWire() {}
@@ -96,8 +99,18 @@ public final class RobotWire {
       gamepads.put(String.valueOf(gamepad.port()), shown);
     }
     wire.put("gamepads", gamepads);
+    List<Moment.Fired> firing = lastFiring.map(Moment::fired).orElse(List.of());
+    List<Object> controls = new ArrayList<>();
+    for (Moment.Fired each : firing) {
+      Map<String, Object> control = new LinkedHashMap<>();
+      control.put("port", each.port());
+      control.put("control", each.control().name());
+      control.put("button", each.button());
+      controls.add(control);
+    }
     Map<String, Object> fired = new LinkedHashMap<>();
-    fired.put("bindings", lastFiring.map(Moment::fired).orElse(List.of()));
+    fired.put("bindings", firing.stream().map(Moment.Fired::binding).toList());
+    fired.put("controls", controls);
     fired.put("timestampNanos", lastFiring.map(Moment::timestampNanos).orElse(0L));
     wire.put("fired", fired);
     return wire;

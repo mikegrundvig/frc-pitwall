@@ -106,8 +106,8 @@ class RobotViewStreamTest {
         .containsEntry("oldest", 0L)
         .containsEntry("newest", 9L)
         .containsEntry("rememberedLoops", 15_000L)
-        .containsEntry("bytesPerLoop", 674L)
-        .containsEntry("bytes", 10_110_000L)
+        .containsEntry("bytesPerLoop", 682L)
+        .containsEntry("bytes", 10_230_000L)
         .containsEntry("newestNanos", clock.get())
         .containsKeys("oldestNanos", "meanTakeMicros", "slowestTakeMicros", "texts");
 

@@ -270,12 +270,11 @@ final class Extraction {
 
   /**
    * Takes the bindings that fired in this loop, each as its sentence in the robot's list of its
-   * bindings, which a fired binding points into.
+   * bindings, which a fired binding points into, with the control on the gamepad that fired it.
    */
   private void takeFired(LoopRecord record) {
     BindingFired[] fired = record.facts(LogKeys.FIRED, NONE_FIRED);
     if (fired.length == 0) {
-      memory.putFired(LoopRecord.NO_TEXTS, 0);
       return;
     }
     String[] bindings = record.texts(LogKeys.BINDINGS);
@@ -284,7 +283,7 @@ final class Extraction {
       int binding = fired[each].binding();
       firedSentences[each] = binding >= 0 && binding < bindings.length ? bindings[binding] : "";
     }
-    memory.putFired(firedSentences, taken);
+    memory.putFired(firedSentences, fired, taken);
   }
 
   private static Moment.Link link(boolean connected, boolean fresh) {

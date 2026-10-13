@@ -1,5 +1,6 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
+import com.michaelgrundvig.frc.world.record.BindingFired;
 import com.michaelgrundvig.frc.world.record.GateTerm;
 import com.michaelgrundvig.frc.world.record.Holder;
 import com.michaelgrundvig.frc.world.record.Identity;
@@ -57,7 +58,7 @@ final class Moments {
   private final Map<String, OfJoint> joints = new LinkedHashMap<>();
   private final Map<String, Moment.OfSensor> sensors = new LinkedHashMap<>();
   private final List<Moment.OfGate> gates = new ArrayList<>();
-  private final List<String> fired = new ArrayList<>();
+  private final List<Moment.Fired> fired = new ArrayList<>();
 
   private Moments() {
     for (Joint joint : ROBOT.joints()) {
@@ -243,8 +244,14 @@ final class Moments {
     return this;
   }
 
+  /** A binding fired on the operator's right trigger, as the robot's list of bindings says it. */
   Moments fired(String binding) {
-    fired.add(binding);
+    return fired(binding, 1, BindingFired.Control.RIGHT_TRIGGER, Identity.NONE);
+  }
+
+  /** A binding fired on a control of the gamepad on a port. */
+  Moments fired(String binding, int port, BindingFired.Control control, int button) {
+    fired.add(new Moment.Fired(binding, port, control, button));
     return this;
   }
 
