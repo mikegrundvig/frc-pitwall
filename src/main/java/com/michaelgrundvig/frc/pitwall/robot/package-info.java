@@ -6,7 +6,10 @@
  * record ({@link com.michaelgrundvig.frc.pitwall.robot.LoopRecord}); {@link
  * com.michaelgrundvig.frc.pitwall.robot.Extraction} takes from it a compact {@link
  * com.michaelgrundvig.frc.pitwall.robot.Moment}, which {@link
- * com.michaelgrundvig.frc.pitwall.robot.SessionMemory} keeps for the last few minutes.
+ * com.michaelgrundvig.frc.pitwall.robot.SessionMemory} keeps for the last few minutes. The view is
+ * a function of the robot's definition and one moment ({@link
+ * com.michaelgrundvig.frc.pitwall.robot.RobotView}), so the same code draws the newest moment and
+ * any earlier one.
  *
  * <p>The keys it reads are the runtime's ({@link com.michaelgrundvig.frc.pitwall.robot.LogKeys}).
  * Nothing here names AdvantageKit: a robot program without it has no record, and no Robot view.

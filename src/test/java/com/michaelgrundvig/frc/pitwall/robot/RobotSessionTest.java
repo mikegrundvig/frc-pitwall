@@ -152,6 +152,8 @@ class RobotSessionTest {
     assertThat(brief.nearest(9 * 20_000_000L + 11_000_000)).isEqualTo(10);
     assertThat(brief.nearest(0)).as("before all it holds: the oldest").isEqualTo(7);
     assertThat(brief.nearest(Long.MAX_VALUE)).as("after all it holds: the newest").isEqualTo(11);
+    assertThat(brief.view(11)).isPresent();
+    assertThat(brief.view(3)).isEmpty();
   }
 
   /** A firing lasts one loop; the session finds the latest within about a second before a loop. */

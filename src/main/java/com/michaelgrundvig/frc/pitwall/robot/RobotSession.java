@@ -41,8 +41,12 @@ public final class RobotSession {
 
   private final AtomicLong slowestNanos = new AtomicLong();
 
+  /** What the view needs of the definition, worked out once. */
+  private final RobotPlan plan;
+
   private RobotSession(RobotDefinition definition, double loopSeconds, double rememberedSeconds) {
     this.definition = definition;
+    plan = RobotPlan.of(definition, loopSeconds);
     int capacity = (int) Math.max(1, Math.round(rememberedSeconds / loopSeconds));
     List<String> joints = Parts.jointLabels(definition);
     List<String> sensors = Parts.sensorLabels(definition);
@@ -108,6 +112,11 @@ public final class RobotSession {
   /** The index of the loop whose time is nearest a time on the robot's clock, or -1 with none. */
   public long nearest(long timestampNanos) {
     return memory.nearest(timestampNanos);
+  }
+
+  /** The robot as the loop with an index had it, or empty when it holds no such loop. */
+  public Optional<RobotView> view(long index) {
+    return moment(index).map(moment -> RobotView.of(plan, moment));
   }
 
   /**
