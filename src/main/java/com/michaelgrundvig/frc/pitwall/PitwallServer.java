@@ -1026,16 +1026,30 @@ public final class PitwallServer implements AutoCloseable {
      * {"scene", "shape", "title", "details": [{"label", "value"}], "actions": [action]}}, each
      * action as {@code /api/actions} gives it (one that isn't an action is left out). 404 when
      * there's nothing to say: no such scene, or a shape gone for more than two seconds.
+     *
+     * <p>With {@code ?index=} it says what the shape was in that loop of the robot's session, from
+     * the session's memory: 404 when the scene has nothing to say of the shape in that loop.
      */
     private void inspect(HttpExchange exchange, String scene, String shape) throws IOException {
       if (!state.scenes().has(scene)) {
         throw new Problem(404, "No such scene", "There is no scene " + scene);
       }
+      Map<String, String> asked = query(exchange.getRequestURI().getRawQuery());
+      boolean ofALoop = asked.containsKey("index");
       Optional<Inspection> said;
       try {
-        said = state.scenes().inspect(scene, shape);
+        if (ofALoop) {
+          long loop = wholeNumber("index", asked.get("index"));
+          said = state.scenes().inspectAt(scene, loop, shape);
+        } else {
+          said = state.scenes().inspect(scene, shape);
+        }
       } catch (RuntimeException e) {
         throw new Problem(500, "Couldn't inspect", shape + ": " + e);
+      }
+      if (said.isEmpty() && ofALoop) {
+        throw new Problem(
+            404, "Nothing to say", "Nothing is known of " + shape + " in that loop of the session");
       }
       if (said.isEmpty()) {
         throw new Problem(

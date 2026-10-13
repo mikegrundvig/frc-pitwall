@@ -146,6 +146,45 @@ class WorldAtTheCursorTest {
         .contains("\"id\":\"ray.front.7.bad\"");
   }
 
+  /** A click names the loop the page shows, and is answered from that loop, in live's words. */
+  @Test
+  void aClickAtALoopSaysWhatThatLoopHad() throws Exception {
+    loop(1);
+    record.sightings(
+        "front",
+        new Sighting[] {new Sighting(7, 0, Sighting.Fate.REJECTED, 1, 1)},
+        FakeRecord.measured(45.2, 13.8, 0.8, 6.2, 4.1, 0));
+    loop(2);
+    record.sightings("front", new Sighting[0], new double[0]);
+    restsOn = "DEAD_RECKONING";
+    for (int each = 0; each < 30; each++) {
+      loop(3);
+    }
+
+    HttpResponse<String> line = get("/api/scenes/world/inspect/ray.front.7.bad?index=1");
+    assertThat(line.statusCode()).isEqualTo(200);
+    assertThat(line.body())
+        .contains("\"title\":\"front → tag 7\"")
+        .contains("\"value\":\"rejected: gate: 45.2 > 13.8\"")
+        .contains("0.80 m from the estimate, before this measurement moved it");
+    assertThat(get("/api/scenes/world/inspect/ray.front.7.bad?index=31").statusCode())
+        .as("the line was gone by then")
+        .isEqualTo(404);
+    assertThat(get("/api/scenes/world/inspect/uncertainty.ellipse?index=1").body())
+        .contains("\"value\":\"tracking\"");
+    assertThat(get("/api/scenes/world/inspect/uncertainty.ellipse?index=31").body())
+        .contains("\"value\":\"dead reckoning\"");
+    assertThat(get("/api/scenes/world/inspect/uncertainty.ellipse").body())
+        .as("with no loop named, the newest")
+        .contains("\"value\":\"dead reckoning\"");
+    assertThat(get("/api/scenes/world/inspect/camera.front.stub?index=1").body())
+        .as("a camera's mount is the same in every loop")
+        .contains("\"title\":\"Camera front\"");
+    assertThat(get("/api/scenes/world/inspect/tag.7.square?index=99").statusCode())
+        .as("a tag says the same of any loop")
+        .isEqualTo(200);
+  }
+
   @Test
   void aLoopTheSessionDoesNotHoldAndASceneThatIsNotThereAreNotFound() throws Exception {
     loop(1);

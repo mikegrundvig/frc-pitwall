@@ -68,6 +68,9 @@ public final class Pitwall implements AutoCloseable {
   private final Broadcaster broadcaster;
   private final @Nullable Simulator simulator;
 
+  /** The robot's session, or null when Pitwall was started without one. */
+  private final @Nullable RobotSession session;
+
   /** The Robot view's live feed, with a robot's session; null without one. */
   private final @Nullable RobotFeed robotFeed;
 
@@ -154,6 +157,7 @@ public final class Pitwall implements AutoCloseable {
     // Scenes' patches are timed on the robot's clock too: at most 20 a second, while a page shows.
     scenes = new Scenes(RobotController::getTime, System.out::println);
     // The Robot view is timed on the robot's clock as the scenes are: at most 20 patches a second.
+    this.session = session;
     robotFeed = session == null ? null : new RobotFeed(session, RobotController::getTime);
     page =
         new Page(
@@ -321,6 +325,14 @@ public final class Pitwall implements AutoCloseable {
    */
   public Scenes scenes() {
     return scenes;
+  }
+
+  /**
+   * The robot's session, which the Robot view and a scene drawn from the record are made from;
+   * empty when Pitwall was started without one.
+   */
+  public Optional<RobotSession> session() {
+    return Optional.ofNullable(session);
   }
 
   /**
