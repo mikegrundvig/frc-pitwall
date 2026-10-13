@@ -1,10 +1,13 @@
 # Pitwall
 
 Pitwall is the robot program's own web page: status, actions, live tuning, experiments, devices,
-and the simulator's controls, served by the program itself on port 5820 (http://localhost:5820 in
-the simulator). It's a library of its own (`com.michaelgrundvig.frc.pitwall`), free of robot code:
-the robot program contributes to it, as data. The robot template's README describes each
-part; this file is for contributors, and covers its scenes: the World view.
+the robot's joints drawn live, and the simulator's controls, served by the program itself on port
+5820 (http://localhost:5820 in the simulator). It's a library of its own
+(`com.michaelgrundvig.frc.pitwall`), free of any team's robot code. It reads the robot model
+(`com.michaelgrundvig.frc:frc-robot-model`): handed a robot's definition, it draws that robot's
+joints as the model says them. Everything else the robot program contributes to it, as data. The
+robot template's README describes each part; this file is for contributors, and covers its Robot
+view and its scenes: the World view.
 
 **Another port:** `Pitwall.start(name)` serves on 5820 unless the `pitwall.port` system property
 names another (`-Dpitwall.port=5920`; 0 picks a free one, and Pitwall prints the one it took). In
@@ -19,17 +22,23 @@ build (a Gradle composite build), so there is no version to bump:
 
 ```
 git submodule add https://github.com/mikegrundvig/frc-pitwall.git pitwall
+git submodule add https://github.com/mikegrundvig/frc-robot-model.git model
 ```
 
 ```groovy
 // settings.gradle
 includeBuild("pitwall")
+includeBuild("model") // Pitwall reads the robot model, and uses the build's own
 
 // build.gradle
 dependencies {
     implementation "com.michaelgrundvig.frc:frc-pitwall"
 }
 ```
+
+Pitwall carries the model as a submodule of its own too (`model/`), which is built only when
+Pitwall is the build that runs: its own `./gradlew ci`. A build that includes Pitwall provides the
+model itself, since Gradle refuses two builds that provide one module.
 
 WPILib, Commands v3 and AdvantageKit are the robot program's own: Pitwall compiles against them and
 doesn't bring them, so the program that uses it must have them (a WPILib project does). AdvantageKit
@@ -40,25 +49,115 @@ build that uses it commits the submodule's new commit.
 
 Java 25, which Gradle downloads if it's missing. The build needs no robot program and no GradleRIO:
 it declares the WPILib and AdvantageKit libraries it compiles against itself, and its tests run
-without WPILib's native libraries.
+without WPILib's native libraries. It does need the robot model, its submodule: clone with
+`--recurse-submodules`, or run `git submodule update --init`.
 
 | Command | Does |
 |---|---|
-| `./gradlew ci` | Everything CI checks: formatting (Spotless), static analysis (Error Prone, NullAway), the tests, coverage (JaCoCo, floors in `coverage-floor.properties`), the Javadoc. |
+| `./gradlew ci` | Everything CI checks: formatting (Spotless), static analysis (Error Prone, NullAway), the tests, coverage (JaCoCo, floors in `coverage-floor.properties`), the Javadoc; and the model's own `ci`. |
 | `./gradlew test --tests '*PitwallServerTest'` | Some of the tests. |
 | `./gradlew test -Pquick --continuous` | The fast edit-test loop: skips formatting, static analysis and coverage. |
 
 The tests of the classes that need WPILib's native HAL or AdvantageKit's running logger (`Pitwall`,
 `AdvantageKitLog`, `simulator/WpilibHal`) run in the robot program that uses Pitwall, not here:
-those three files are left out of the per-file coverage floor.
+those three files are left out of the per-file coverage floor. `AdvantageKitLog`'s receiver is
+tested here all the same, on AdvantageKit's own table (`robot/AdvantageKitReceiverTest`).
 
 The tests read the configuration records' documentation as files in
 `src/test/resources/META-INF/pitwall/docs`, which `ParameterDocsTest` says how to write again.
 
+## The Robot view
+
+The robot's joints as its model says them, live: one card for each joint, drawn by its kind, with
+the same facts under it in words. It is drawn from the robot program's own log, so it shows what
+the program read and decided, loop by loop, and it is the same on a robot and in the simulator.
+
+A robot program makes the robot's session before its log starts (`RobotSession.of(definition)`),
+hands AdvantageKit a receiver for it (`AdvantageKitLog.receiver(session)`, beside the log's file and
+its stream), and starts Pitwall with it (`Pitwall.start(name, session)`). The runtime's `Robot`
+does all three.
+
+Without a session the page has no Robot view. It needs AdvantageKit: the session is filled by
+AdvantageKit's log, and by nothing else.
+
+### What a card shows
+
+| A joint that | Is drawn as |
+|---|---|
+| turns between stops and holds positions (a pivot, an arm) | an **arc**, its travel between its hard stops, turned the way the joint turns: seen from the robot's side, front to the right, from where its link points at zero |
+| turns a whole turn or more and holds positions (a turret) | a **full circle** |
+| is run at speeds (a roller, a flywheel) | a **speedometer**, from nothing at the left to its free speed at the right; with an output that runs it backward, nothing is at the top and the needle swings either way |
+| slides (an elevator, a slide) | a **straight bar**, upright for one that slides up |
+
+On each: a tick for every named place or output, with its name and value ("out 130°", "intaking
+2000 rpm"); the soft limits, where they are inside the stops; a band for each keep-out's region; a
+solid needle where the joint is, a dashed one where it was told to go, and a small ring where its
+profile has it. Under it: where it is and between which places, where it was told to go, who owns
+it (a command, or idle and what it does idle), how its last move ended, what holds it, and how its
+motor controller, its absolute encoder and its limit switches are. Beside the joints: the robot's
+other sensors, its gates with what each waits for, the gamepads, and the bindings that fired in
+the last second.
+
+### Cause, across cards
+
+An interlock on one joint whose condition is about another is drawn on **both** cards. The roller
+that runs only when the pivot is at least 110° has, on the pivot's card, a mark from 110° up, named
+"◆ roller". A keep-out is a band on its own joint's card, and its condition a mark on the card of
+the joint it depends on. Each is drawn by how it stands, and says so in words in the card's list:
+
+| | Run-only-when | Keep-out |
+|---|---|---|
+| quiet: thin and dotted | met | open |
+| in force: solid | not met, and nothing asks the joint to run | closed |
+| waited for: thick, in the color of trouble | it holds the joint short of what a command asked | it holds the joint at its edge |
+
+What holds a joint is not read from the log's sentence. `Causes` reads each condition from the
+loop's positions and sensors, as the runtime does (a joint that doesn't know where it is, or a lost
+sensor, reads as unknown, and restricts), and the model's own `InterlockEnforcement` decides.
+
+### From the log to the page
+
+- **A loop's record.** AdvantageKit hands every receiver a copy of the whole log table at the end
+  of each loop, on a thread of its own. `AdvantageKitLog.receiver(session)` is one. The only class
+  that names AdvantageKit is still `AdvantageKitLog`; the session reads a `LoopRecord`, which a
+  test fills by hand.
+- **The keys** are the runtime's, and `robot/LogKeys` is the one place they are written: the
+  contract between the two. `robot/Prose` is the one place that reads what the runtime logs in
+  words (a joint's state, who asked it, how its last move ended).
+- **A moment** is what the view shows of one loop: the time, the mode, each joint's readings and
+  what it was told, each sensor, each gate with what blocks it, the bindings that fired, and the
+  gamepads. Taking one reads about a hundred values and allocates nothing.
+- **The session's memory** is a ring of the last five minutes of moments, in arrays taken once: 602
+  bytes a loop for a robot with eight joints and two sensors, 9 MB in all. It keeps at most 16
+  gates with two blocking terms each, four fired bindings a loop, two gamepads, and 4096 different
+  texts; past those it keeps the first and says how many it left out (`GET /api/robot`).
+- **The view** is a function of the robot's definition and one moment (`RobotView.of`), so any loop
+  the session holds is drawn by the same code as the newest.
+- **Live,** the newest loop's view goes to the pages that show it, as the `robot` view, at most 20
+  times a second and only what changed, at `robotView.live` in the page's state (`RobotWire` says
+  its shape). With no page showing it, the robot loop does nothing for it.
+- **Any loop:** `GET /api/robot/view` answers with the newest, `?index=` a loop by its index, and
+  `?at=` the loop nearest a time on the robot's clock, in nanoseconds.
+
+### The page
+
+`page/robot.js` is the view and `page/robot-draw.js` draws a joint, in SVG, with no library. The
+drawing module imports nothing and knows nothing of the page, so it draws a saved moment as well as
+the live one. Labels are placed beside what they name and then moved apart until none overlaps: a
+place at a stop ("in 1.5°" at the 0° stop) keeps its spot, and the stop's value moves beside it.
+
+### Planned, and not built
+
+A **session timeline**: a cursor over the remembered five minutes, to scrub and step through, with
+an event strip, and the World view following the same cursor. The session, its indexes and the
+route that answers for any loop are there for it; the page shows only the newest loop today.
+
+Opening a saved log file stays AdvantageScope's job, as charts do.
+
 ## Scenes: the World view
 
 A **scene** is the world drawn in 3D on the page, from what the robot program says is there: a
-field, the robot on it, what its cameras see. Pitwall knows nothing of fields or robots: a scene
+field, the robot on it, what its cameras see. A scene knows nothing of fields or robots: it
 is named frames and shapes in them, grouped into layers the page can switch on and off,
 and the page draws every shape itself. With no scene added, the page has no World view. A robot
 program adds its scenes to `pitwall.scenes()`, as Pitwall's own `ScenesTest` does:
@@ -198,8 +297,9 @@ a canvas. three.js's license is in [`licenses/`](licenses/three.js-License.md).
 
 ### Not building
 
-The World view draws the code's beliefs, to act on: no timeline, scrubbing, log loading, CAD, game
-pieces, or charts. AdvantageScope does those.
+The World view draws the code's beliefs, to act on: no log loading, CAD, game pieces, or charts.
+AdvantageScope does those. It shows the present only, for now: the session timeline that is planned
+for the Robot view (above) will move the World view with it.
 
 ## The template's World
 

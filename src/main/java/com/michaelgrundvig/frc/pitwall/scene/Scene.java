@@ -6,8 +6,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * A view of the world the page draws in 3D, from data the robot program gives it: named frames,
- * shapes in them, grouped into {@link Layer}s the page can switch on and off. Pitwall knows nothing
- * of fields or robots: a scene is whatever its layers say.
+ * shapes in them, grouped into {@link Layer}s the page can switch on and off. A scene knows nothing
+ * of fields or robots: it is whatever its layers say.
  *
  * {@snippet :
  * scenes.add(

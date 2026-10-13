@@ -14,7 +14,8 @@
  *       a module, the robot itself) and its {@link
  *       com.michaelgrundvig.frc.pitwall.simulator.Fault}s, each with its {@link
  *       com.michaelgrundvig.frc.pitwall.simulator.Parameter}s, and the scenarios made of them. The
- *       robot's simulation declares them; Pitwall knows nothing of any robot's parts.
+ *       robot's simulation declares them; the simulator's controls know nothing of any robot's
+ *       parts.
  * </ul>
  */
 package com.michaelgrundvig.frc.pitwall.simulator;
