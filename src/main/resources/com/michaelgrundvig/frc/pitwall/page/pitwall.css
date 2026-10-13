@@ -845,3 +845,14 @@ button.rv-name[aria-pressed="true"] { text-decoration: underline; text-decoratio
                                       color: var(--edit); }
 button.rv-name[aria-pressed="true"]::after { content: " ▾ its events"; font-weight: 400;
                                              font-size: var(--meta); }
+
+/* ---- What changed in the loop the cursor is on, from the loop before: the row is tinted, with a
+   mark before its name, so it isn't told by color alone. ---- */
+
+.rv-facts dt.changed, .rv-facts dd.changed, .rv-list li.changed, .rv-state.changed {
+  background: var(--edit-tint); }
+.rv-facts dt.changed { box-shadow: -6px 0 0 var(--edit-tint); }
+.rv-facts dt.changed::before, .rv-list li.changed .k::before, .rv-state.changed::before {
+  content: "▸ "; color: var(--edit); font-weight: 700; }
+.rv-facts dd.changed { font-weight: 600; }
+.rv-state.changed { padding: 0 var(--s1); border-radius: 4px; }

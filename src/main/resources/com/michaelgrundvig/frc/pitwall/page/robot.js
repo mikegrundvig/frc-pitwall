@@ -127,6 +127,11 @@ function render() {
   }, near.filter((index) => index >= held.oldest && index <= held.newest));
 }
 
+/**
+ * Draws one loop's view. A loop the page asked for comes with what changed in it from the loop
+ * before (view.changed), and those rows are marked, so going loop by loop shows a cause and then
+ * its effect; the newest loop, live, comes without.
+ */
 function draw(view, at) {
   ui.waiting.hidden = Boolean(view);
   ui.joints.parentElement.hidden = !view;
@@ -135,6 +140,7 @@ function draw(view, at) {
     return;
   }
   ui.state.textContent = (at.live ? "Live" : "Loop " + view.index) + " · " + modeWords(view);
+  ui.state.classList.toggle("changed", Boolean(view.changed && view.changed.robot));
   ui.view.classList.toggle("earlier", !at.live);
   renderJoints(view);
   renderSensors(view);
@@ -160,7 +166,8 @@ function renderJoints(view) {
       return card.el;
     }));
   }
-  for (const label of order) updateCard(cards.get(label), view.joints[label]);
+  const changed = (view.changed && view.changed.joints) || {};
+  for (const label of order) updateCard(cards.get(label), view.joints[label], changed[label] || []);
 }
 
 function makeCard(label, joint) {
@@ -182,8 +189,13 @@ function makeCard(label, joint) {
   return card;
 }
 
-/** Shows a joint as it is now: its drawing built again only when more than its needles changed. */
-function updateCard(card, joint) {
+/**
+ * Shows a joint as it is in one loop: its drawing built again only when more than its needles
+ * changed.
+ *
+ * @param changed the rows that changed in this loop, as the robot names them
+ */
+function updateCard(card, joint, changed) {
   const from = builtFrom(joint);
   if (card.builtFrom !== from) {
     card.builtFrom = from;
@@ -201,16 +213,19 @@ function updateCard(card, joint) {
     held && h("span", { class: "tag refused" }, "✗ held"),
     !ready && h("span", { class: "tag tuned" }, "● " + facts.standing.toLowerCase()),
     !recorded && h("span", { class: "tag plain" }, "not in the record"));
+  const did = (row) => changed.includes(row);
   replace(card.facts,
-    fact("At", facts.at),
-    recorded && fact("Told", facts.told),
-    recorded && fact("Owned by", facts.ownedBy),
-    recorded && fact("Last move", facts.lastMove),
-    facts.heldBy.map((rule) => held ? fact("Held by", rule, "bad")
-      : fact("Restricted by", rule + ", while nothing asks it to run")),
-    !ready && fact("State", facts.state, "warn"),
+    fact("At", facts.at, "", did("AT")),
+    recorded && fact("Told", facts.told, "", did("TOLD")),
+    recorded && fact("Owned by", facts.ownedBy, "", did("OWNED_BY")),
+    recorded && fact("Last move", facts.lastMove, "", did("LAST_MOVE")),
+    facts.heldBy.map((rule) => held ? fact("Held by", rule, "bad", did("HELD_BY"))
+      : fact("Restricted by", rule + ", while nothing asks it to run", "", did("HELD_BY"))),
+    // What held it and holds it no longer has no row of its own left to mark.
+    did("HELD_BY") && !facts.heldBy.length && fact("Held by", "nothing", "", true),
+    (!ready || did("STATE")) && fact("State", facts.state, ready ? "" : "warn", did("STATE")),
     joint.sensors.map((sensor) => fact(capital(sensor.label), sensor.reading,
-      sensor.health === "FINE" ? "" : "bad")));
+      sensor.health === "FINE" ? "" : "bad", did(SENSOR_ROWS[sensor.label] || "LIMIT_SWITCHES"))));
   replace(card.rules,
     joint.bands.map((band) => rule(band.emphasis, "▮ Keep-out " + band.shown + ", "
         + standing(band.emphasis, "KEEPS_OUT") + ": " + band.rule)),
@@ -218,8 +233,14 @@ function updateCard(card, joint) {
         + standing(mark.emphasis, mark.rule) + reading(mark.reading))));
 }
 
-function fact(name, value, state) {
-  return [h("dt", null, name), h("dd", { class: state || null }, value)];
+/** The rows of a joint's own sensors, as the robot names them: any other is a limit switch. */
+const SENSOR_ROWS = { "motor controller": "MOTOR_CONTROLLER",
+                      "absolute encoder": "ABSOLUTE_ENCODER" };
+
+/** One row of a card: a name and what it says, marked if it changed in this loop. */
+function fact(name, value, state, changed) {
+  const classes = [state, changed && "changed"].filter(Boolean).join(" ") || null;
+  return [h("dt", { class: changed ? "changed" : null }, name), h("dd", { class: classes }, value)];
 }
 
 function rule(emphasis, words) {
@@ -249,10 +270,11 @@ function capital(words) {
 // ---- Beside the joints ----
 
 function renderSensors(view) {
+  const changed = (view.changed && view.changed.sensors) || [];
   replace(ui.sensors, (view.sensorOrder || []).map((label) => {
     const sensor = view.sensors[label];
     const fine = sensor.health === "FINE";
-    return h("li", null,
+    return h("li", { class: changed.includes(label) ? "changed" : null },
       h("div", { class: "rv-row" },
         h("span", { class: "sev " + (fine ? "ok" : "bad"), "aria-hidden": "true" },
           fine ? "●" : "✗"),
@@ -278,10 +300,11 @@ function rangeBar(sensor) {
 }
 
 function renderGates(view) {
+  const changed = (view.changed && view.changed.gates) || [];
   replace(ui.gates, (view.gateOrder || []).map((name) => {
     const gate = view.gates[name];
     const holds = gate.held === "HOLDS";
-    return h("li", null,
+    return h("li", { class: changed.includes(name) ? "changed" : null },
       h("div", { class: "rv-row" },
         h("span", { class: "sev " + (holds ? "ok" : "bad"), "aria-hidden": "true" },
           holds ? "✓" : "✗"),

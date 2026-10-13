@@ -497,7 +497,7 @@ final class JointCards {
    * joint to move, so a joint at rest is only restricted; it is held once a command, or code
    * outside any command, asks something of it.
    */
-  private static Hold hold(Moment.OfJoint now) {
+  static Hold hold(Moment.OfJoint now) {
     if (now.heldBy().isEmpty()) {
       return Hold.FREE;
     }

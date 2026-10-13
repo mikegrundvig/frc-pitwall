@@ -118,6 +118,17 @@ class RobotViewStreamTest {
     assertThat(now(nearest)).as("the loop nearest a time").isEqualTo(50);
     assertThat(asMap(JSON.fromJson(nearest.body()))).containsEntry("index", 5L);
 
+    Map<String, Object> third = asMap(JSON.fromJson(get("/api/robot/view?index=3").body()));
+    assertThat(in(third, "changed"))
+        .as("a loop comes with what changed in it: here the pivot, idle, held another angle")
+        .containsEntry("robot", false)
+        .containsEntry("joints", Map.of("pivot", List.of("TOLD")))
+        .containsEntry("sensors", List.of())
+        .containsEntry("gates", List.of());
+    assertThat(asMap(JSON.fromJson(get("/api/robot/view?index=0").body())))
+        .as("the first loop has no loop before it")
+        .doesNotContainKey("changed");
+
     assertThat(get("/api/robot/view?index=10").statusCode()).as("not taken yet").isEqualTo(404);
     assertThat(get("/api/robot/view?index=10").body()).contains("holds loops 0 to 9, not 10");
     assertThat(get("/api/robot/view?index=soon").statusCode()).isEqualTo(400);

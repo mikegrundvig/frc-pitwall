@@ -87,8 +87,8 @@ import org.wpilib.hardware.hal.RobotMode;
  *   <li>{@code GET /api/robot/view}: the robot's joints as one loop had them, as {@link RobotWire}
  *       says: the newest loop, or {@code ?index=} a loop by its index, or {@code ?at=} the loop
  *       nearest a time on the robot's clock, in nanoseconds; 404 when the session holds no such
- *       loop. Live, the page is sent the same at {@code robotView.live}, named as the view {@code
- *       robot}.
+ *       loop. With it, as {@code "changed"}, what changed in that loop from the loop before. Live,
+ *       the page is sent the same at {@code robotView.live}, named as the view {@code robot}.
  *   <li>{@code GET /api/robot/events}: the session's events, the loops in which something changed,
  *       each as {@link RobotWire#wire(RobotEvent)} says, in order: {@code {"found", "oldest",
  *       "newest", "events": [event]}}, with how many events the session has found and the loops it
@@ -930,7 +930,9 @@ public final class PitwallServer implements AutoCloseable {
                               + (session.taken() - 1)
                               + ", not "
                               + loop));
-      sendJson(exchange, 200, RobotWire.wire(view, loop, session.lastFiring(loop)));
+      Map<String, Object> wire = RobotWire.wire(view, loop, session.lastFiring(loop));
+      session.changed(loop).ifPresent(changed -> wire.put("changed", RobotWire.wire(changed)));
+      sendJson(exchange, 200, wire);
     }
 
     /** The most events one answer holds. */

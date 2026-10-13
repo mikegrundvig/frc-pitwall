@@ -36,7 +36,9 @@ import java.util.Optional;
  *  "fired": {"bindings": [text], "timestampNanos"}}
  * }</pre>
  *
- * <p>Live, the page is sent that with {@code "session"} beside it ({@link #wire(RobotSession)}).
+ * <p>Live, the page is sent that with {@code "session"} beside it ({@link #wire(RobotSession)}). A
+ * loop asked for by its index has {@code "changed"} beside it instead ({@link #wire(Changed)}):
+ * what changed in that loop, where the session holds the loop before it too.
  *
  * <p>{@code fired} is the latest firing of a binding within about a second before the moment, with
  * when it was: a firing lasts one loop, and the page keeps it in sight for a second.
@@ -98,6 +100,25 @@ public final class RobotWire {
     fired.put("bindings", lastFiring.map(Moment::fired).orElse(List.of()));
     fired.put("timestampNanos", lastFiring.map(Moment::timestampNanos).orElse(0L));
     wire.put("fired", fired);
+    return wire;
+  }
+
+  /**
+   * What changed in a loop, compared with the loop before it, as the page is sent it with a loop it
+   * asked for: {@code {"robot", "joints": {label: [row]}, "sensors": [label], "gates": [name]}},
+   * each row one of {@link Changed.Row}.
+   */
+  public static Map<String, Object> wire(Changed changed) {
+    Map<String, Object> joints = new LinkedHashMap<>();
+    changed
+        .joints()
+        .forEach(
+            (label, rows) -> joints.put(label, rows.stream().map(Enum::name).sorted().toList()));
+    Map<String, Object> wire = new LinkedHashMap<>();
+    wire.put("robot", changed.robot());
+    wire.put("joints", joints);
+    wire.put("sensors", changed.sensors());
+    wire.put("gates", changed.gates());
     return wire;
   }
 

@@ -141,6 +141,19 @@ public final class RobotSession {
   }
 
   /**
+   * What changed in the loop with an index, compared with the loop before it, among the rows the
+   * view shows; empty when the session holds no such loop, or not the loop before it.
+   */
+  public Optional<Changed> changed(long index) {
+    Optional<Moment> before = moment(index - 1);
+    Optional<Moment> now = moment(index);
+    if (before.isEmpty() || now.isEmpty()) {
+      return Optional.empty();
+    }
+    return Optional.of(Changed.between(plan, before.get(), now.get()));
+  }
+
+  /**
    * The latest firing of a binding at or before a loop, and no more than about a second before it:
    * what the page keeps showing after the press, since the firing itself lasts one loop.
    */
