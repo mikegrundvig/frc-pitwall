@@ -217,6 +217,8 @@ final class SightLines extends WorldLayer {
   private Inspection inspection(Line line) {
     Moment.Sighted sighted = line.sighted();
     String camera = line.camera().name();
+    // Inspection's own Javadoc shows the first lines and the last line of this as its example of
+    // an inspection, and the runtime's build checks that they are here as it shows them.
     Inspection said =
         Inspection.of(SightingSentences.title(camera, sighted.tag()))
             .detail("Verdict", SightingSentences.verdict(sighted, words));

@@ -9,10 +9,10 @@ import java.util.List;
  *
  * {@snippet :
  * Inspection said =
- *     Inspection.of(line.camera + " → tag " + line.tag)
- *         .detail("Verdict", verdict.accepted() ? "accepted" : "rejected: " + verdict.reason())
+ *     Inspection.of(SightingSentences.title(camera, sighted.tag()))
+ *         .detail("Verdict", SightingSentences.verdict(sighted, words));
  *         ...
- * return calibrate.isPresent() ? said.action(calibrate.get()) : said;
+ * return offersCalibration ? said.action(calibrate.get()) : said;
  * }
  *
  * <p>An action is one of the page's actions, by name ({@code pitwall.actions()}): it runs as it

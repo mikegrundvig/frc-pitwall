@@ -177,8 +177,8 @@ class WorldSceneTest {
 
     assertThat(state.poses().get("robot"))
         .containsExactly(new double[] {3, 4, 0.05, 0, 0, Math.toRadians(30)}, within(1e-6));
-    assertThat(state.poses().get("module.front-left")[5])
-        .isCloseTo(Math.toRadians(45), within(1e-6));
+    assertThat(state.poses().get("module.front-left"))
+        .containsExactly(new double[] {0.2889, 0.2381, 0, 0, 0, Math.toRadians(45)}, within(1e-3));
     assertThat(state.values().get("speed.front-left")).isCloseTo(0.4, within(1e-6));
     assertThat(state.values().get("speed.back-right")).isZero();
     assertThat(state.poses().get("truth"))
@@ -344,6 +344,44 @@ class WorldSceneTest {
             tuple("Cameras", "12 accepted, 3 rejected; last accepted 0.1 s ago"),
             tuple("Drawn", "two standard deviations across, about the estimate"));
     assertThat(world.inspect(moment, "tag.7.square")).as("the same in every loop").isEmpty();
+  }
+
+  /** What never moves answers a click from the robot's definition, the same at any loop. */
+  @Test
+  void aClickOnACameraASensorOrTheGyroSaysWhatItIsAndWhereItIsMounted() {
+    onAPage();
+
+    Inspection camera = scenes.inspect(WorldScene.ID, "camera.front.view").orElseThrow();
+    assertThat(camera.title()).isEqualTo("Camera front");
+    assertThat(camera.details())
+        .extracting(Inspection.Detail::label, Inspection.Detail::value)
+        .contains(
+            tuple("Mounted", "0.254 m forward, 0.203 m left, 0.508 m up"),
+            tuple("Turned", "yaw 20.0°, tilted up 10.0°, roll 0.0°"),
+            tuple("Sees", "80° across its diagonal, 1280 × 800, out to 7 m"));
+    assertThat(camera.actions()).containsExactly("Calibrate front");
+
+    Inspection beam = scenes.inspect(WorldScene.ID, "sensor.0.block").orElseThrow();
+    assertThat(beam.title()).isEqualTo("claw beam");
+    assertThat(beam.details())
+        .extracting(Inspection.Detail::label, Inspection.Detail::value)
+        .contains(tuple("Is", "a beam break"))
+        .anySatisfy(detail -> assertThat(detail.toList().get(1).toString()).startsWith("on pivot"));
+
+    Inspection hopper = scenes.inspect(WorldScene.ID, "sensor.1.cone").orElseThrow();
+    assertThat(hopper.details())
+        .extracting(Inspection.Detail::value)
+        .contains("a rangefinder: to 1.30 m, in a 27.0° cone");
+
+    Inspection gyro = scenes.inspect(WorldScene.ID, "imu.gyro.block").orElseThrow();
+    assertThat(gyro.title()).isEqualTo("Gyro IMU");
+    assertThat(gyro.details())
+        .extracting(Inspection.Detail::label)
+        .containsExactly("Mounted", "Turned", "Accelerometer", "From");
+    assertThat(gyro.details().get(2).value()).startsWith("not yet checked");
+    assertThat(scenes.inspect(WorldScene.ID, "tag.7.square").orElseThrow().details())
+        .extracting(Inspection.Detail::value)
+        .contains("x 16.500 m, y 3.000 m, 1.400 m up", "180.0°");
   }
 
   // ---- On a page: live from the newest loop, and any loop the session holds when asked ----
