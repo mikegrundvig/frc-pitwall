@@ -1,18 +1,155 @@
 package com.michaelgrundvig.frc.pitwall;
 
 import com.michaelgrundvig.frc.pitwall.experiment.ExperimentInputs;
+import com.michaelgrundvig.frc.pitwall.robot.LoopRecord;
+import com.michaelgrundvig.frc.pitwall.robot.RobotSession;
+import java.util.Map;
 import java.util.function.Consumer;
+import org.littletonrobotics.junction.LogDataReceiver;
 import org.littletonrobotics.junction.LogTable;
 import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.inputs.LoggableInputs;
 
 /**
- * Pitwall's requests as AdvantageKit inputs, recorded as they happen and read back in their place
- * during a replay, so the replay makes the same requests at the same moments. Loaded only when the
- * robot program has AdvantageKit ({@link Pitwall} checks first).
+ * Everything of Pitwall's that names AdvantageKit, so that a robot program without AdvantageKit
+ * never loads a class that does.
+ *
+ * <p>Pitwall's requests are AdvantageKit inputs, recorded as they happen and read back in their
+ * place during a replay, so the replay makes the same requests at the same moments. Those parts are
+ * loaded only when the robot program has AdvantageKit ({@link Pitwall} checks first).
+ *
+ * <p>And the log reaches Pitwall through here: {@link #receiver} is what a robot program hands
+ * AdvantageKit so that every loop's record is taken into the robot's session, which the page's
+ * Robot view is drawn from. Only a program that has AdvantageKit calls it.
  */
-final class AdvantageKitLog {
+public final class AdvantageKitLog {
   private AdvantageKitLog() {}
+
+  /**
+   * What takes each loop's record into a robot's session. Hand it to AdvantageKit ({@code
+   * Logger.addDataReceiver}) before the log starts, beside the log's file and its stream.
+   *
+   * <p>AdvantageKit hands it a copy of the whole record at the end of every loop, on a thread of
+   * its own and never the robot loop's. Taking a loop reads a few dozen values out of the record
+   * and makes nothing new.
+   */
+  public static LogDataReceiver receiver(RobotSession session) {
+    return new SessionReceiver(session);
+  }
+
+  /**
+   * AdvantageKit's record of one loop, read as the session reads it. There is one of these for the
+   * session, pointed at each loop's table in turn, so that none is made each loop.
+   *
+   * <p>A value is looked up in the table's own map of every key, by the key as the log names it.
+   * The table's {@code get} would put its prefix before the key first, which builds a text for
+   * every value read. And each value is read with what to answer otherwise, because AdvantageKit's
+   * readers that take none make an empty array to answer with, every time.
+   */
+  private static final class SessionReceiver implements LogDataReceiver, LoopRecord {
+    private final RobotSession session;
+    private long timestampNanos;
+    private Map<String, LogTable.LogValue> values = Map.of();
+
+    SessionReceiver(RobotSession session) {
+      this.session = session;
+    }
+
+    @Override
+    public void putTable(LogTable table) {
+      timestampNanos = table.getTimestamp();
+      values = table.getAll(false);
+      session.take(this);
+    }
+
+    @Override
+    public long timestampNanos() {
+      return timestampNanos;
+    }
+
+    @Override
+    public boolean has(String key) {
+      return values.containsKey(key);
+    }
+
+    @Override
+    public boolean flag(String key, boolean otherwise) {
+      LogTable.LogValue value = values.get(key);
+      if (value == null || value.type != LogTable.LoggableType.Boolean) {
+        return otherwise;
+      }
+      return value.getBoolean(otherwise);
+    }
+
+    @Override
+    public double number(String key, double otherwise) {
+      LogTable.LogValue value = values.get(key);
+      if (value == null) {
+        return otherwise;
+      }
+      return switch (value.type) {
+        case Double -> value.getDouble(otherwise);
+        case Float -> value.getFloat((float) otherwise);
+        case Integer -> value.getInteger(0);
+        default -> otherwise;
+      };
+    }
+
+    @Override
+    public long whole(String key, long otherwise) {
+      LogTable.LogValue value = values.get(key);
+      if (value == null || value.type != LogTable.LoggableType.Integer) {
+        return otherwise;
+      }
+      return value.getInteger(otherwise);
+    }
+
+    @Override
+    public String text(String key, String otherwise) {
+      LogTable.LogValue value = values.get(key);
+      if (value == null || value.type != LogTable.LoggableType.String) {
+        return otherwise;
+      }
+      return value.getString(otherwise);
+    }
+
+    @Override
+    public String[] texts(String key) {
+      LogTable.LogValue value = values.get(key);
+      if (value == null || value.type != LogTable.LoggableType.StringArray) {
+        return NO_TEXTS;
+      }
+      return value.getStringArray(NO_TEXTS);
+    }
+
+    @Override
+    public float[] floats(String key) {
+      LogTable.LogValue value = values.get(key);
+      if (value == null || value.type != LogTable.LoggableType.FloatArray) {
+        return NO_FLOATS;
+      }
+      return value.getFloatArray(NO_FLOATS);
+    }
+
+    @Override
+    public long[] wholes(String key) {
+      LogTable.LogValue value = values.get(key);
+      if (value == null || value.type != LogTable.LoggableType.IntegerArray) {
+        return NO_WHOLES;
+      }
+      return value.getIntegerArray(NO_WHOLES);
+    }
+
+    @Override
+    public int keyCount() {
+      return values.size();
+    }
+
+    @Override
+    public void forEachKey(Consumer<String> each) {
+      values.keySet().forEach(each);
+    }
+  }
 
   /** Whether AdvantageKit is replaying a log, when the page must not start. */
   static boolean replaying() {
