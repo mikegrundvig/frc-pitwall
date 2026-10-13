@@ -25,6 +25,9 @@ junit = "6.1.3"
 assertj = "3.27.7"
 archunit = "1.5.1"
 three = "0.181.1"
+# The robot model's records are annotated for the builders generated beside them: the compiler
+# reads the annotations, so they are on Pitwall's compile classpath, at the model's version.
+recordbuilder = "53"
 
 [libraries]
 # WPILib's units appear in the tuner's API, so they are Pitwall's own (api); the rest the robot
@@ -49,6 +52,7 @@ assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
 # three.js, which draws Pitwall's scenes, as its WebJar: the build takes the few files the page
 # loads out of it (build.gradle).
+recordbuilder-core = { module = "io.soabase.record-builder:record-builder-core", version.ref = "recordbuilder" }
 three-webjar = { module = "org.webjars.npm:three", version.ref = "three" }
 
 [plugins]

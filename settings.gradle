@@ -13,3 +13,17 @@ plugins {
 }
 
 rootProject.name = "frc-pitwall"
+
+// What this build is made of: the robot model (model/), a repository of its own and a git submodule
+// here. Whatever asks for com.michaelgrundvig.frc:frc-robot-model gets what the folder holds.
+// Pitwall reads the robot's definition from it, to draw the robot's joints as the model says them.
+//
+// It is included only when this is the build that runs. A build that includes this one (the
+// runtime's, or a robot program's) has its own model/, and Gradle refuses two builds that provide
+// the same module, so it provides the model and this build asks for what it finds.
+if (gradle.parent == null) {
+    if (!file("model/settings.gradle").exists()) {
+        throw new GradleException("The robot model isn't checked out (model/ is empty). Run: git submodule update --init")
+    }
+    includeBuild("model")
+}
