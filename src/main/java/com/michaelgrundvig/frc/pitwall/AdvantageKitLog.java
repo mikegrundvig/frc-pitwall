@@ -3,6 +3,9 @@ package com.michaelgrundvig.frc.pitwall;
 import com.michaelgrundvig.frc.pitwall.experiment.ExperimentInputs;
 import com.michaelgrundvig.frc.pitwall.robot.LoopRecord;
 import com.michaelgrundvig.frc.pitwall.robot.RobotSession;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -48,6 +51,13 @@ public final class AdvantageKitLog {
    * readers that take none make an empty array to answer with, every time.
    */
   private static final class SessionReceiver implements LogDataReceiver, LoopRecord {
+    private static final double[] NO_DOUBLES = new double[0];
+    private static final byte[] NO_BYTES = new byte[0];
+
+    /** Reads a number out of a struct's bytes, where WPILib's struct format puts it. */
+    private static final VarHandle DOUBLES =
+        MethodHandles.byteArrayViewVarHandle(double[].class, ByteOrder.LITTLE_ENDIAN);
+
     /**
      * A fact as it was last read out of the log: the log's value it was made from, and the fact.
      *
@@ -157,6 +167,30 @@ public final class AdvantageKitLog {
         return NO_WHOLES;
       }
       return value.getIntegerArray(NO_WHOLES);
+    }
+
+    @Override
+    public int numbers(String key, double[] into) {
+      LogTable.LogValue value = values.get(key);
+      if (value == null) {
+        return 0;
+      }
+      if (value.type == LogTable.LoggableType.DoubleArray) {
+        double[] held = value.getDoubleArray(NO_DOUBLES);
+        System.arraycopy(held, 0, into, 0, Math.min(held.length, into.length));
+        return held.length;
+      }
+      if (value.type != LogTable.LoggableType.Raw) {
+        return 0;
+      }
+      // A struct made of numbers alone is those numbers one after another, eight bytes each, the
+      // lowest byte first: WPILib's struct format. Read where they lie, nothing is made.
+      byte[] bytes = value.getRaw(NO_BYTES);
+      int held = bytes.length / Double.BYTES;
+      for (int each = 0; each < held && each < into.length; each++) {
+        into[each] = (double) DOUBLES.get(bytes, each * Double.BYTES);
+      }
+      return held;
     }
 
     @Override

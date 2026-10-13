@@ -1,6 +1,8 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.assertj.core.api.Assertions.within;
 
 import com.michaelgrundvig.frc.pitwall.AdvantageKitLog;
 import com.michaelgrundvig.frc.world.record.BindingFired;
@@ -23,6 +25,10 @@ import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.littletonrobotics.junction.LogDataReceiver;
 import org.littletonrobotics.junction.LogTable;
+import org.wpilib.math.geometry.Pose3d;
+import org.wpilib.math.geometry.Rotation2d;
+import org.wpilib.math.geometry.Rotation3d;
+import org.wpilib.math.kinematics.SwerveModuleVelocity;
 
 /**
  * AdvantageKit's own table of a loop, taken into the session through the receiver a robot program
@@ -40,13 +46,17 @@ class AdvantageKitReceiverTest {
   private static final long MOST_BYTES_A_LOOP = 16;
 
   private static final String[] JOINTS = {"pivot", "roller", "elevator", "arm", "shooter", "claw"};
+  private static final String[] CAMERAS = {"front", "on-arm"};
+
+  /** How sure a pose is, as the runtime logs it: a record of four numbers. */
+  private record Covariance(double xx, double xy, double yy, double heading) {}
 
   private final RobotSession session = RobotSession.of(TestRobot.definition());
   private final LogDataReceiver receiver = AdvantageKitLog.receiver(session);
 
   /**
    * The log as the robot fills it in one loop: every key the session reads, with each fact a
-   * record, as the runtime logs them.
+   * record, as the runtime logs them. What changes every loop is put by {@link #loop}.
    */
   private static LogTable everything() {
     LogTable table = new LogTable(0);
@@ -88,6 +98,20 @@ class AdvantageKitReceiverTest {
       table.put(key + LogKeys.BLOCKING, new GateTerm[] {GateTerm.text(0), GateTerm.settling()});
       table.put(key + LogKeys.BLOCKING_TEXT, new String[] {"not yet"});
     }
+    table.put(LogKeys.RESTS_ON.substring(1), "TRACKING");
+    table.put(LogKeys.MEASUREMENTS_ACCEPTED.substring(1), 12);
+    table.put(LogKeys.MEASUREMENTS_REJECTED.substring(1), 3);
+    table.put(LogKeys.RECOVERIES.substring(1), 0);
+    table.put(LogKeys.PLACEMENTS.substring(1), 1);
+    table.put(LogKeys.PLACED_BECAUSE.substring(1), "placed on Center");
+    for (String camera : CAMERAS) {
+      table.put(
+          LogKeys.camera(camera).substring(1) + LogKeys.SIGHTINGS,
+          new Sighting[] {
+            new Sighting(7, 0, Sighting.Fate.ACCEPTED, 0, 1),
+            new Sighting(8, 0, Sighting.Fate.REJECTED, 1, 1)
+          });
+    }
     table.put(
         LogKeys.BINDINGS.substring(1), new String[] {"operator right trigger: while held: Intake"});
     table.put(
@@ -107,6 +131,27 @@ class AdvantageKitReceiverTest {
     LogTable table = LogTable.clone(log);
     table.setTimestamp(nanos);
     table.put(LogKeys.joint("pivot").substring(1) + LogKeys.POSITION, pivotRadians);
+    // The robot drives: its pose, how sure it is, its wheels and its cameras' measurements are new
+    // every loop, as structs and lists of numbers.
+    double along = pivotRadians;
+    Pose3d estimated =
+        new Pose3d(3 + along, 4, 0.02, new Rotation3d(0.01, 0.02, Math.toRadians(30) + along));
+    table.put(LogKeys.ESTIMATED_POSE.substring(1), estimated);
+    table.put(
+        LogKeys.TRUE_POSE.substring(1), new Pose3d(3.05 + along, 4, 0, new Rotation3d(0, 0, 0.5)));
+    table.put(
+        LogKeys.COVARIANCE.substring(1), new Covariance(0.0004 + along, 0.0001, 0.0009, 0.0001));
+    table.put(LogKeys.VISION_AGE.substring(1), 0.1 + along);
+    SwerveModuleVelocity[] modules = new SwerveModuleVelocity[4];
+    for (int module = 0; module < modules.length; module++) {
+      modules[module] = new SwerveModuleVelocity(1.5 + along, new Rotation2d(0.25 * module));
+    }
+    table.put(LogKeys.MODULES.substring(1), modules);
+    for (String camera : CAMERAS) {
+      double[] numbers = new double[2 * Sighting.NUMBERS];
+      java.util.Arrays.fill(numbers, 1 + along);
+      table.put(LogKeys.camera(camera).substring(1) + LogKeys.SIGHTING_NUMBERS, numbers);
+    }
     for (int port = 0; port < 2; port++) {
       String in = LogKeys.gamepad(port).substring(1);
       table.put(in + LogKeys.BUTTONS, triggerDown && port == 1 ? 1 << 10 : 0);
@@ -176,6 +221,35 @@ class AdvantageKitReceiverTest {
     assertThat(moment.gamepads().get(0).pov()).isEqualTo(0);
   }
 
+  /** A pose, a covariance and the wheels are structs in the log, read as the numbers they are. */
+  @Test
+  void theWorldsStructsReachTheSessionsMoment() throws InterruptedException {
+    receiver.putTable(loop(everything(), 1_234_000_000L, 0.75, false));
+
+    Moment.OfWorld world = session.newest().orElseThrow().world();
+    Moment.OfEstimate estimate = world.estimate().orElseThrow();
+    assertThat(estimate.pose().getX()).isCloseTo(3.75, within(1e-6));
+    assertThat(estimate.pose().getZ()).isCloseTo(0.02, within(1e-6));
+    assertThat(estimate.pose().getRotation().getX()).isCloseTo(0.01, within(1e-6));
+    assertThat(estimate.pose().getRotation().getY()).isCloseTo(0.02, within(1e-6));
+    assertThat(estimate.pose().getRotation().getZ())
+        .isCloseTo(Math.toRadians(30) + 0.75, within(1e-6));
+    assertThat(estimate.spread().orElseThrow().xx()).isCloseTo(0.7504, within(1e-6));
+    assertThat(estimate.spread().orElseThrow().yy()).isCloseTo(0.0009, within(1e-9));
+    assertThat(estimate.rests()).isEqualTo(Moment.Rests.TRACKING);
+    assertThat(estimate.tally().orElseThrow().accepted()).isEqualTo(12);
+    assertThat(estimate.placedBecause()).isEqualTo("placed on Center");
+    assertThat(world.truth().orElseThrow().getX()).isCloseTo(3.8, within(1e-6));
+    assertThat(world.modules()).hasSize(4);
+    assertThat(world.modules().get(3).metersPerSecond()).isCloseTo(2.25, within(1e-6));
+    assertThat(world.modules().get(3).radians()).isCloseTo(0.75, within(1e-6));
+    assertThat(world.cameras().get(1).sightings())
+        .extracting(Moment.Sighted::tag, Moment.Sighted::fate)
+        .containsExactly(tuple(8, Sighting.Fate.REJECTED), tuple(7, Sighting.Fate.ACCEPTED));
+    assertThat(world.cameras().get(1).sightings().get(0).innovationMeters())
+        .isCloseTo(1.75, within(1e-6));
+  }
+
   /**
    * Taking a loop, and finding its events, makes nothing new on the receiver's thread once the
    * robot runs, so the session costs the robot's garbage collector nothing however long it runs.
@@ -204,7 +278,7 @@ class AdvantageKitReceiverTest {
     long bytes = THREADS.getThreadAllocatedBytes(thread) - before;
 
     System.out.printf(
-        "Taking a loop of a six-joint robot, and finding its events: %.2f µs and %.1f bytes a"
+        "Taking a loop of a six-joint robot with two cameras, and finding its events: %.2f µs and %.1f bytes a"
             + " loop; %d bytes kept a loop, %.1f MB for %d loops; %.1f KB more for %d events%n",
         nanos / 1e3 / measured,
         (double) bytes / measured,

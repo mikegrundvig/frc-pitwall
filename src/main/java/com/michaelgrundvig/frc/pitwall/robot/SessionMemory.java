@@ -17,7 +17,8 @@ import org.jspecify.annotations.Nullable;
  * <p>Its memory is taken once, as it is made, and never grows: a moment is kept as plain numbers in
  * four arrays: a fact's fields each in their place, and its texts and its moves' outcomes as small
  * numbers ({@link Words}, {@link Moves}). When the ring is full, each new loop replaces the oldest.
- * A {@link Moment} is put together only when one is asked for.
+ * A {@link Moment} is put together only when one is asked for. Where the robot was on the field is
+ * kept beside it, loop for loop ({@link WorldMemory}).
  *
  * <p>A loop is known by its index, which counts from 0 at the first loop taken and never repeats,
  * so an index names the same loop for as long as the ring still holds it.
@@ -123,6 +124,7 @@ final class SessionMemory {
   private final float[] floats;
   private final short[] shorts;
 
+  private final WorldMemory world;
   private final Words words = new Words();
   private final Moves moves = new Moves();
   private final List<String> gateNames = new ArrayList<>();
@@ -136,9 +138,11 @@ final class SessionMemory {
   /**
    * @param jointLabels the robot's joints, in the model's order
    * @param sensorLabels the robot's switches and rangefinders
+   * @param cameraNames the robot's cameras
    * @param capacity how many loops it keeps
    */
-  SessionMemory(List<String> jointLabels, List<String> sensorLabels, int capacity) {
+  SessionMemory(
+      List<String> jointLabels, List<String> sensorLabels, List<String> cameraNames, int capacity) {
     this.jointLabels = List.copyOf(jointLabels);
     this.sensorLabels = List.copyOf(sensorLabels);
     this.capacity = capacity;
@@ -161,6 +165,7 @@ final class SessionMemory {
     doubles = new double[capacity * doublesEach];
     floats = new float[capacity * floatsEach];
     shorts = new short[capacity * shortsEach];
+    world = new WorldMemory(cameraNames, capacity);
   }
 
   // ---- What it costs ----
@@ -170,7 +175,8 @@ final class SessionMemory {
     return longsEach * Long.BYTES
         + doublesEach * Double.BYTES
         + floatsEach * Float.BYTES
-        + shortsEach * Short.BYTES;
+        + shortsEach * Short.BYTES
+        + world.bytesPerMoment();
   }
 
   /** How many loops it keeps. */
@@ -184,6 +190,7 @@ final class SessionMemory {
   void open(long timestampNanos, Moment.Enabled enabled, Moment.Mode mode) {
     slot = (int) (taken % capacity);
     java.util.Arrays.fill(shorts, slot * shortsEach, (slot + 1) * shortsEach, (short) 0);
+    world.open(slot);
     longs[slot * longsEach] = timestampNanos;
     int flags = (enabled == Moment.Enabled.ENABLED ? ENABLED : 0) | mode.ordinal() << MODE_SHIFT;
     shorts[slot * shortsEach + loopShort] = (short) flags;
@@ -355,6 +362,31 @@ final class SessionMemory {
     shorts[slot * shortsEach + povShorts + gamepad] = (short) pov;
   }
 
+  /** Where the robot was, loop for loop: written between {@link #open} and {@link #close}. */
+  WorldMemory world() {
+    return world;
+  }
+
+  /** The slot being written, between {@link #open} and {@link #close}. */
+  int slot() {
+    return slot;
+  }
+
+  /** The slot a loop it holds is kept in. */
+  int slotOf(long index) {
+    return (int) (index % capacity);
+  }
+
+  /** The number a text is known by, given one if it is new. */
+  short word(String text) {
+    return words.numberOf(text);
+  }
+
+  /** The text a number stands for. */
+  String textOf(short number) {
+    return words.textOf(number);
+  }
+
   /** Ends the loop being written: it is now the newest. */
   void close() {
     taken++;
@@ -382,7 +414,7 @@ final class SessionMemory {
     if (index < oldest() || index >= taken) {
       return null;
     }
-    return read((int) (index % capacity));
+    return read(index);
   }
 
   /**
@@ -574,7 +606,8 @@ final class SessionMemory {
     return gateNames.get(gate);
   }
 
-  private Moment read(int from) {
+  private Moment read(long index) {
+    int from = slotOf(index);
     int s = from * shortsEach;
     int loop = shorts[s + loopShort];
     List<Moment.OfJoint> joints = new ArrayList<>();
@@ -624,7 +657,8 @@ final class SessionMemory {
         sensors,
         gates,
         readFired(s + firedShorts),
-        gamepads);
+        gamepads,
+        world.read(index, this));
   }
 
   private Moment.OfGate readGate(int gate, int g) {

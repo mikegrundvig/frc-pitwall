@@ -45,6 +45,17 @@ public interface LoopRecord {
   long[] wholes(String key);
 
   /**
+   * Reads the numbers a key holds into an array a caller keeps: a list of numbers, or a value that
+   * is made of numbers alone, such as a pose (x, y and heading) or a list of poses. Nothing is
+   * made.
+   *
+   * @param into where the numbers go, from its start; what it has no room for is left out
+   * @return how many numbers the key holds: 0 for a key the record does not have, or that holds
+   *     something else. It may be more than {@code into} has room for.
+   */
+  int numbers(String key, double[] into);
+
+  /**
    * A fact, one of the model's records, or what to answer otherwise. The same fact is handed back
    * for as long as the log holds the same value, so reading one every loop makes nothing new.
    */

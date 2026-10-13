@@ -59,6 +59,7 @@ final class Moments {
   private final Map<String, Moment.OfSensor> sensors = new LinkedHashMap<>();
   private final List<Moment.OfGate> gates = new ArrayList<>();
   private final List<Moment.Fired> fired = new ArrayList<>();
+  private Moment.OfWorld world = Moment.OfWorld.NONE;
 
   private Moments() {
     for (Joint joint : ROBOT.joints()) {
@@ -76,6 +77,12 @@ final class Moments {
   /** The test robot at rest, enabled. */
   static Moments atRest() {
     return new Moments();
+  }
+
+  /** Where the robot is on the field, and what its cameras see. */
+  Moments world(Moment.OfWorld where) {
+    world = where;
+    return this;
   }
 
   Moments disabled() {
@@ -329,7 +336,8 @@ final class Moments {
         List.copyOf(sensors.values()),
         gates,
         fired,
-        List.of(new Moment.OfGamepad(0, 0, List.of(0.0, 0.0), -1)));
+        List.of(new Moment.OfGamepad(0, 0, List.of(0.0, 0.0), -1)),
+        world);
   }
 
   /** The test robot's view of this moment. */

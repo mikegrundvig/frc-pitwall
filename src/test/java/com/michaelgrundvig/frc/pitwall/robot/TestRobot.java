@@ -5,14 +5,17 @@ import static com.michaelgrundvig.frc.world.robot.MechanismWiring.Controller.TAL
 import static org.wpilib.units.Units.Degrees;
 import static org.wpilib.units.Units.DegreesPerSecond;
 import static org.wpilib.units.Units.DegreesPerSecondPerSecond;
+import static org.wpilib.units.Units.Hertz;
 import static org.wpilib.units.Units.Inches;
 import static org.wpilib.units.Units.KilogramSquareMeters;
 import static org.wpilib.units.Units.Kilograms;
 import static org.wpilib.units.Units.Meters;
+import static org.wpilib.units.Units.Milliseconds;
 import static org.wpilib.units.Units.Rotations;
 
 import com.michaelgrundvig.frc.world.physical.Inertia;
 import com.michaelgrundvig.frc.world.robot.Body;
+import com.michaelgrundvig.frc.world.robot.CameraConfig;
 import com.michaelgrundvig.frc.world.robot.Driven.AbsoluteEncoder;
 import com.michaelgrundvig.frc.world.robot.DrivetrainGeometry;
 import com.michaelgrundvig.frc.world.robot.Gearing;
@@ -125,6 +128,46 @@ public final class TestRobot {
           .runsOnlyWhen(CLAW_BEAM.clear())
           .control(MechanismControl.velocity(0.02));
 
+  private static final CameraConfig.Sensor CAMERA =
+      CameraConfig.Sensor.builder()
+          .widthPixels(1280)
+          .heightPixels(800)
+          .fieldOfView(Degrees.of(80))
+          .fieldOfViewAcross(CameraConfig.Across.DIAGONAL)
+          .frameRate(Hertz.of(30))
+          .latency(Milliseconds.of(30))
+          .sightRange(Meters.of(7))
+          .build();
+
+  /** A camera on the chassis, facing forward and to the left, tilted up. */
+  static final CameraConfig FRONT_CAMERA =
+      CameraConfig.builder()
+          .name("front")
+          .forward(Inches.of(10))
+          .left(Inches.of(8))
+          .up(Inches.of(20))
+          .roll(Degrees.of(0))
+          .tiltUp(Degrees.of(10))
+          .yaw(Degrees.of(20))
+          .sensor(CAMERA)
+          .noiseScale(1.0)
+          .build();
+
+  /** A camera that rides on the arm, so it is where the elevator and the arm put it. */
+  static final CameraConfig ARM_CAMERA =
+      CameraConfig.builder()
+          .name("on-arm")
+          .forward(Inches.of(4))
+          .left(Inches.of(0))
+          .up(Inches.of(2))
+          .roll(Degrees.of(0))
+          .tiltUp(Degrees.of(0))
+          .yaw(Degrees.of(0))
+          .sensor(CAMERA)
+          .noiseScale(1.0)
+          .joint(ARM)
+          .build();
+
   /** The robot. */
   public static RobotDefinition definition() {
     return RobotDefinition.builder()
@@ -134,6 +177,7 @@ public final class TestRobot {
         .imus(Imus.UNCHECKED)
         .joints(List.of(PIVOT, ROLLER, ELEVATOR, ARM, SHOOTER, CLAW))
         .sensors(List.of(CLAW_BEAM, HOPPER))
+        .cameras(List.of(FRONT_CAMERA, ARM_CAMERA))
         .build();
   }
 

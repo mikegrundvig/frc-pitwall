@@ -101,6 +101,53 @@ public final class FakeRecord implements LoopRecord {
     return put(LogKeys.FIRED, fired);
   }
 
+  /**
+   * Logs where localization believes the robot is, as the runtime does: its pose level on the
+   * floor, what it rests on, how sure it is, and how its cameras' measurements have fared.
+   */
+  public FakeRecord estimate(double x, double y, double headingRadians, String restsOn) {
+    return put(LogKeys.ESTIMATED_POSE, pose(x, y, headingRadians))
+        .put(LogKeys.RESTS_ON, restsOn)
+        .put(LogKeys.COVARIANCE, new double[] {0.0004, 0.0001, 0.0009, 0.0001})
+        .put(LogKeys.MEASUREMENTS_ACCEPTED, 12L)
+        .put(LogKeys.MEASUREMENTS_REJECTED, 3L)
+        .put(LogKeys.VISION_AGE, 0.1)
+        .put(LogKeys.RECOVERIES, 0L)
+        .put(LogKeys.PLACEMENTS, 0L)
+        .put(LogKeys.PLACED_BECAUSE, "");
+  }
+
+  /** Logs where the robot really is, as a simulator does. */
+  public FakeRecord truth(double x, double y, double headingRadians) {
+    return put(LogKeys.TRUE_POSE, pose(x, y, headingRadians));
+  }
+
+  /** A pose level on the floor as the numbers a {@code Pose3d} is logged as. */
+  public static double[] pose(double x, double y, double headingRadians) {
+    return new double[] {x, y, 0, Math.cos(headingRadians / 2), 0, 0, Math.sin(headingRadians / 2)};
+  }
+
+  /**
+   * Logs what a camera's images saw in a loop, as the runtime does: the tags as facts, and their
+   * measurements beside them. A loop without an image logs no measurements, and the facts stay.
+   */
+  public FakeRecord sightings(String camera, Sighting[] sighted, double[] numbers) {
+    String out = LogKeys.camera(camera);
+    if (sighted.length > 0) {
+      put(out + LogKeys.SIGHTINGS, sighted);
+    }
+    return put(out + LogKeys.SIGHTING_NUMBERS, numbers);
+  }
+
+  /**
+   * One sighting's numbers, in the order the runtime logs them: a measurement compared with the
+   * estimate, with its χ² as its verdict's number.
+   */
+  public static double[] measured(
+      double chiSquared, double gate, double innovationMeters, double x, double y, double heading) {
+    return new double[] {chiSquared, gate, innovationMeters, chiSquared, x, y, heading};
+  }
+
   @Override
   public long timestampNanos() {
     return timestampNanos;
@@ -144,6 +191,16 @@ public final class FakeRecord implements LoopRecord {
   @Override
   public long[] wholes(String key) {
     return values.get(key) instanceof long[] wholes ? wholes : NO_WHOLES;
+  }
+
+  /** A test sets a pose, a covariance or a list of numbers as the numbers it is made of. */
+  @Override
+  public int numbers(String key, double[] into) {
+    if (!(values.get(key) instanceof double[] numbers)) {
+      return 0;
+    }
+    System.arraycopy(numbers, 0, into, 0, Math.min(numbers.length, into.length));
+    return numbers.length;
   }
 
   @Override

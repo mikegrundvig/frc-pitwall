@@ -1,5 +1,6 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
+import com.michaelgrundvig.frc.world.robot.CameraConfig;
 import com.michaelgrundvig.frc.world.robot.RobotDefinition;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +35,7 @@ public final class RobotSession {
   static final int FIRED_SHOWN_LOOPS = 50;
 
   private final RobotDefinition definition;
+  private final SightingWords words;
   private final SessionMemory memory;
   private final Extraction extraction;
 
@@ -50,15 +52,21 @@ public final class RobotSession {
   /** When the first loop taken was, on the robot's clock; read from other threads. */
   private volatile long startedNanos = Long.MIN_VALUE;
 
-  private RobotSession(RobotDefinition definition, double loopSeconds, double rememberedSeconds) {
+  private RobotSession(
+      RobotDefinition definition,
+      double loopSeconds,
+      double rememberedSeconds,
+      SightingWords words) {
     this.definition = definition;
+    this.words = words;
     plan = RobotPlan.of(definition);
     int capacity = (int) Math.max(1, Math.round(rememberedSeconds / loopSeconds));
     List<String> joints = Parts.jointLabels(definition);
     List<String> sensors = Parts.sensorLabels(definition);
-    memory = new SessionMemory(joints, sensors, capacity);
+    List<String> cameras = definition.cameras().stream().map(CameraConfig::name).toList();
+    memory = new SessionMemory(joints, sensors, cameras, capacity);
     events = new RobotEvents(plan, memory, RobotEvents.KEPT);
-    extraction = new Extraction(memory, events, joints, sensors);
+    extraction = new Extraction(memory, events, joints, sensors, cameras);
   }
 
   /** A session of a robot whose loop runs 50 times a second, remembering five minutes. */
@@ -72,7 +80,26 @@ public final class RobotSession {
    */
   public static RobotSession of(
       RobotDefinition definition, double loopSeconds, double rememberedSeconds) {
-    return new RobotSession(definition, loopSeconds, rememberedSeconds);
+    return of(definition, loopSeconds, rememberedSeconds, SightingWords.NONE);
+  }
+
+  /**
+   * @param loopSeconds how long one of the robot's loops lasts, in seconds
+   * @param rememberedSeconds how much of the session to remember, in seconds
+   * @param words the robot program's own words for what became of a camera's image, which its log
+   *     holds as numbers
+   */
+  public static RobotSession of(
+      RobotDefinition definition,
+      double loopSeconds,
+      double rememberedSeconds,
+      SightingWords words) {
+    return new RobotSession(definition, loopSeconds, rememberedSeconds, words);
+  }
+
+  /** The robot program's own words for what became of a camera's image. */
+  public SightingWords words() {
+    return words;
   }
 
   /** The robot's definition. */

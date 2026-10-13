@@ -1,9 +1,9 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
 /**
- * The log keys the Robot view reads. This is the contract with the runtime: the runtime writes
- * these keys every loop, and Pitwall reads them from each loop's record. A key renamed on one side
- * must be renamed here.
+ * The log keys the Robot view and the World view read. This is the contract with the runtime: the
+ * runtime writes these keys every loop, and Pitwall reads them from each loop's record. A key
+ * renamed on one side must be renamed here.
  *
  * <p>Each key is written as the log names it, from its root, with the slash first: {@code
  * /Joints/pivot/Position}. AdvantageKit's record is looked up by exactly these, so reading one
@@ -166,4 +166,65 @@ public final class LogKeys {
 
   /** Every standing binding in its own words, which a fired binding points into: strings. */
   public static final String BINDINGS = OUTPUTS + "Controls/Bindings";
+
+  // ---- Where the robot is: localization, the drivetrain, the cameras, and the simulator ----
+
+  /**
+   * The estimated pose, raised to the ground under it and tilted as the IMU says: a {@code Pose3d},
+   * which is seven numbers (x, y, z, and its rotation's w, x, y, z).
+   */
+  public static final String ESTIMATED_POSE = OUTPUTS + "Localization/Pose3d";
+
+  /**
+   * How sure the estimate is, where the localizer says: the position's covariance and the heading's
+   * variance, four numbers (xx, xy, yy, heading) in square meters and square radians.
+   */
+  public static final String COVARIANCE = OUTPUTS + "Localization/Covariance";
+
+  /** What the estimate rests on, by its name ("TRACKING"), where the localizer says. */
+  public static final String RESTS_ON = OUTPUTS + "Localization/Mode";
+
+  /** How many camera measurements the estimator has accepted: a whole number. */
+  public static final String MEASUREMENTS_ACCEPTED = OUTPUTS + "Localization/Accepted";
+
+  /** How many camera measurements the estimator has rejected: a whole number. */
+  public static final String MEASUREMENTS_REJECTED = OUTPUTS + "Localization/Rejected";
+
+  /** How long ago the newest image the estimate rests on was taken, in seconds. */
+  public static final String VISION_AGE = OUTPUTS + "Localization/VisionAgeSeconds";
+
+  /** How often the estimate has jumped to agree with its cameras: a whole number. */
+  public static final String RECOVERIES = OUTPUTS + "Localization/Recoveries";
+
+  /** How often the robot has been placed: a whole number. */
+  public static final String PLACEMENTS = OUTPUTS + "Localization/Placements";
+
+  /** Why the robot was last placed, as the robot program says it: "placed on Center". */
+  public static final String PLACED_BECAUSE = OUTPUTS + "Localization/PlacedBecause";
+
+  /**
+   * Each swerve module's measured speed and angle, in the drivetrain's order: {@code
+   * SwerveModuleVelocity}s, each two numbers (meters a second, radians).
+   */
+  public static final String MODULES = OUTPUTS + "Drive/ModuleVelocities";
+
+  /** In the simulator, where the robot really is: a {@code Pose3d}, seven numbers. */
+  public static final String TRUE_POSE = OUTPUTS + "Sim/TruePose3d";
+
+  /** A camera's outputs, under its name: {@code /RealOutputs/Vision/front-left}. */
+  public static String camera(String name) {
+    return OUTPUTS + "Vision/" + name;
+  }
+
+  /**
+   * Under a camera's outputs: the tags of its latest images and what became of each: {@link
+   * Sighting}s, written when they change.
+   */
+  public static final String SIGHTINGS = "/Sightings";
+
+  /**
+   * Under a camera's outputs: the measurements of this loop's sightings, {@link Sighting#NUMBERS}
+   * numbers for each in the sightings' order, and empty in a loop without an image.
+   */
+  public static final String SIGHTING_NUMBERS = "/SightingNumbers";
 }

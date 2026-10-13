@@ -8,10 +8,14 @@ import com.michaelgrundvig.frc.world.record.JointPlace;
 import com.michaelgrundvig.frc.world.record.JointState;
 import com.michaelgrundvig.frc.world.record.MoveOutcome;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import org.wpilib.math.geometry.Pose3d;
 
 /**
- * One loop of the robot, as much of it as the Robot view shows: compact, typed, and never changed
- * once made. The view is a function of the robot's definition and one of these.
+ * One loop of the robot, as much of it as the Robot view and the World view show: compact, typed,
+ * and never changed once made. Each view is a function of the robot's definition and one of these,
+ * and the World view of the field too.
  *
  * <p>Numbers are in the model's units: radians or meters for where a joint is, and those a second
  * for how fast. A number the record did not have is NaN.
@@ -25,6 +29,7 @@ import java.util.List;
  * @param fired the bindings a press or a release started in this loop, each with the control on the
  *     gamepad that fired it
  * @param gamepads the gamepads, by port from 0
+ * @param world where the robot was on the field, and what its cameras saw
  */
 public record Moment(
     long timestampNanos,
@@ -34,7 +39,8 @@ public record Moment(
     List<OfSensor> sensors,
     List<OfGate> gates,
     List<Fired> fired,
-    List<OfGamepad> gamepads) {
+    List<OfGamepad> gamepads,
+    OfWorld world) {
   public Moment {
     joints = List.copyOf(joints);
     sensors = List.copyOf(sensors);
@@ -218,11 +224,182 @@ public record Moment(
     }
   }
 
+  /**
+   * Where the robot was on the field in one loop, as far as the record says: where localization
+   * believed it was, where it really was in the simulator, how its wheels stood, and what each
+   * camera saw.
+   *
+   * @param estimate where localization believed the robot was; empty when the record has no pose
+   * @param truth where the robot really was, which only a simulator's record has
+   * @param modules each swerve module's measured speed and angle, in the drivetrain's order
+   * @param cameras each camera of the robot's definition, in its order, with what it saw
+   */
+  public record OfWorld(
+      Optional<OfEstimate> estimate,
+      Optional<Pose3d> truth,
+      List<OfModule> modules,
+      List<OfCamera> cameras) {
+    /** A record that says nothing of where the robot was. */
+    public static final OfWorld NONE =
+        new OfWorld(Optional.empty(), Optional.empty(), List.of(), List.of());
+
+    public OfWorld {
+      modules = List.copyOf(modules);
+      cameras = List.copyOf(cameras);
+    }
+  }
+
+  /** What the estimate rested on, as the localizer's own mode names it. */
+  public enum Rests {
+    /** The localizer does not say. */
+    NOT_REPORTED,
+    /** Not yet placed or seen: the pose is a placeholder. */
+    INITIALIZING,
+    /** Recent camera measurements agree with odometry. */
+    TRACKING,
+    /** No recent camera measurement: odometry alone. */
+    DEAD_RECKONING,
+    /** The cameras agree with each other and not with the estimate. */
+    LOST,
+    /** The gyro is lost: heading comes from the wheels. */
+    IMU_FAULT;
+
+    /** In the page's words: "dead reckoning". */
+    public String words() {
+      return name().toLowerCase(Locale.ROOT).replace('_', ' ');
+    }
+
+    /** Whether the estimate is not to be trusted as drawn: it is lost, or the gyro is. */
+    public boolean isWrong() {
+      return this == LOST || this == IMU_FAULT;
+    }
+  }
+
+  /**
+   * Where localization believed the robot was in one loop.
+   *
+   * @param pose the estimated pose, raised to the ground under it and tilted as the IMU said
+   * @param spread how sure the pose was, where the localizer says
+   * @param rests what the pose rested on
+   * @param tally how the cameras' measurements had fared so far, where the localizer says
+   * @param recoveries how often the estimate had jumped to agree with its cameras; -1 where the
+   *     localizer does not say
+   * @param placements how often the robot had been placed
+   * @param placedBecause why it was last placed, as the robot program says it: "placed on Center"
+   */
+  public record OfEstimate(
+      Pose3d pose,
+      Optional<Spread> spread,
+      Rests rests,
+      Optional<Tally> tally,
+      int recoveries,
+      int placements,
+      String placedBecause) {}
+
+  /**
+   * How sure a pose is: the covariance of its position and the variance of its heading.
+   *
+   * @param xx the variance along the field's x, in square meters
+   * @param xy the covariance of x and y
+   * @param yy the variance along y
+   * @param heading the variance of the heading, in square radians; infinite when unknown
+   */
+  public record Spread(double xx, double xy, double yy, double heading) {
+    /**
+     * The position's spread along its most uncertain direction, in meters: the square root of the
+     * larger eigenvalue of {@code [xx xy; xy yy]}.
+     */
+    public double largestStdDev() {
+      return Math.sqrt((xx + yy) / 2 + Math.hypot((xx - yy) / 2, xy));
+    }
+  }
+
+  /**
+   * How the cameras' measurements had fared since the robot started.
+   *
+   * @param accepted how many the estimator accepted
+   * @param rejected how many it rejected
+   * @param visionAgeSeconds how long ago the newest image the estimate rests on was taken; infinite
+   *     before any
+   */
+  public record Tally(int accepted, int rejected, double visionAgeSeconds) {}
+
+  /**
+   * One swerve module in one loop.
+   *
+   * @param metersPerSecond its wheel's measured speed
+   * @param radians its measured angle
+   */
+  public record OfModule(double metersPerSecond, double radians) {}
+
+  /**
+   * One camera in one loop: the tags its images saw in this loop, and those it measured a moment
+   * before ({@link Sighted#loopsAgo}), newest first.
+   *
+   * @param name the camera's name, as the robot's definition has it
+   * @param sightings its tags, newest first
+   * @param dropped how many of this loop's tags the memory had no room for
+   */
+  public record OfCamera(String name, List<Sighted> sightings, int dropped) {
+    public OfCamera {
+      sightings = List.copyOf(sightings);
+    }
+  }
+
+  /**
+   * One tag as a camera saw it, with what became of its measurement.
+   *
+   * @param tag the tag's number
+   * @param fate what became of it
+   * @param verdict why, by the verdict's number in the robot program's list ({@link SightingWords})
+   * @param solver how its image was solved, by the solver's number; -1 for none
+   * @param image which of its loop's images of the camera saw it
+   * @param loopsAgo how many loops before this one it was seen: 0 for this loop's
+   * @param value the verdict's own number; NaN where it has none
+   * @param threshold the limit that number was held to; NaN where it has none
+   * @param innovationMeters how far the measurement was from the estimate; NaN if not compared
+   * @param chiSquared its χ² against the estimate; NaN if not compared
+   * @param measuredX the measured pose's x, in meters; NaN for an image that was left out
+   * @param measuredY the measured pose's y
+   * @param measuredHeading the measured pose's heading, in radians
+   */
+  public record Sighted(
+      int tag,
+      Sighting.Fate fate,
+      int verdict,
+      int solver,
+      int image,
+      int loopsAgo,
+      double value,
+      double threshold,
+      double innovationMeters,
+      double chiSquared,
+      double measuredX,
+      double measuredY,
+      double measuredHeading) {
+    /** Whether the image became a measurement the estimator was given: a sight line is drawn. */
+    public boolean measured() {
+      return fate == Sighting.Fate.ACCEPTED
+          || fate == Sighting.Fate.REJECTED
+          || fate == Sighting.Fate.GIVEN;
+    }
+  }
+
   /** The joint with a label, or null when the record has none. */
   public @org.jspecify.annotations.Nullable OfJoint joint(String label) {
     for (OfJoint joint : joints) {
       if (joint.label().equals(label)) {
         return joint;
+      }
+    }
+    return null;
+  }
+
+  /** The camera with a name, or null when the record has none. */
+  public @org.jspecify.annotations.Nullable OfCamera camera(String name) {
+    for (OfCamera camera : world.cameras()) {
+      if (camera.name().equals(name)) {
+        return camera;
       }
     }
     return null;

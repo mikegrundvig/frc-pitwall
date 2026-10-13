@@ -259,9 +259,12 @@ class RobotSessionTest {
   @Test
   void itsMemoryIsFixedHoweverMuchTheRecordHas() {
     assertThat(session.capacity()).as("five minutes at 50 loops a second").isEqualTo(15_000);
-    // Six joints and two sensors: 20 doubles, 42 floats, 165 shorts and 3 longs.
-    assertThat(session.bytesPerMoment()).isEqualTo(20 * 8 + 42 * 4 + 165 * 2 + 3 * 8);
-    assertThat(session.bytes()).isEqualTo(682L * 15_000);
+    // Six joints and two sensors: 20 doubles, 42 floats, 165 shorts and 3 longs. And where the
+    // robot was, with two cameras: 31 floats and 3 shorts, and 28 floats and 13 shorts a camera.
+    int joints = 20 * 8 + 42 * 4 + 165 * 2 + 3 * 8;
+    int world = (31 + 2 * 28) * 4 + (3 + 2 * 13) * 2;
+    assertThat(session.bytesPerMoment()).isEqualTo(joints + world);
+    assertThat(session.bytes()).isEqualTo(1088L * 15_000);
 
     for (int gate = 0; gate < SessionMemory.GATES + 3; gate++) {
       record.gate("gate " + gate, true);
