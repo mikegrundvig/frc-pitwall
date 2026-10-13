@@ -6,6 +6,7 @@ import com.michaelgrundvig.frc.pitwall.robot.RobotSession;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -60,12 +61,33 @@ public final class AdvantageKitLog {
 
     /**
      * A fact as it was last read out of the log: the log's value it was made from, and the fact.
-     *
-     * @param from the value in the log, which stays the same object from loop to loop until the
-     *     robot writes the key again
-     * @param fact the record, or the array of records, made from it
+     * The value in the log stays the same object from loop to loop until the robot writes the key
+     * again. Written again with the same bytes, it is the same fact, and is not made again.
      */
-    private record Read(LogTable.LogValue from, Object fact) {}
+    private static final class Read {
+      private LogTable.LogValue from;
+      private Object fact;
+
+      Read(LogTable.LogValue from, Object fact) {
+        this.from = from;
+        this.fact = fact;
+      }
+
+      /** Whether a value in the log is the one this fact was made from, or says the same. */
+      boolean isOf(LogTable.LogValue value) {
+        if (from == value) {
+          return true;
+        }
+        boolean same =
+            value.type == LogTable.LoggableType.Raw
+                && from.type == LogTable.LoggableType.Raw
+                && Arrays.equals(value.getRaw(NO_BYTES), from.getRaw(NO_BYTES));
+        if (same) {
+          from = value;
+        }
+        return same;
+      }
+    }
 
     private final RobotSession session;
     private long timestampNanos;
@@ -200,13 +222,13 @@ public final class AdvantageKitLog {
         return otherwise;
       }
       Read read = facts.get(key);
-      if (read == null || read.from() != value) {
+      if (read == null || !read.isOf(value)) {
         // The table reads by a key without its first slash, under its own prefix, which is one.
         read = new Read(value, table.get(key.substring(1), otherwise));
         facts.put(key, read);
       }
       @SuppressWarnings("unchecked") // the fact was made as what is asked for here
-      R fact = (R) read.fact();
+      R fact = (R) read.fact;
       return fact;
     }
 
@@ -217,12 +239,12 @@ public final class AdvantageKitLog {
         return otherwise;
       }
       Read read = facts.get(key);
-      if (read == null || read.from() != value) {
+      if (read == null || !read.isOf(value)) {
         read = new Read(value, table.get(key.substring(1), otherwise));
         facts.put(key, read);
       }
       @SuppressWarnings("unchecked") // the facts were made as what is asked for here
-      R[] made = (R[]) read.fact();
+      R[] made = (R[]) read.fact;
       return made;
     }
 
