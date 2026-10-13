@@ -232,6 +232,7 @@ class PitwallServerTest {
             "robot-moments.js",
             "timeline.js",
             "session-events.js",
+            "event-list.js",
             "robot-draw.js");
   }
 

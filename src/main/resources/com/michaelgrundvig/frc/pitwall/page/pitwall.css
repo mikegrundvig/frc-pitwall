@@ -767,13 +767,26 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .rv-just { color: var(--edit); font-weight: 600; }
 
 /* ---- The time strip: the session's memory along the bottom of a view, with a mark for each event
-   and the page's cursor on it. It stays in sight while the view scrolls under it. A problem's mark
-   is taller, thicker and crossed, never told by its color alone; the cursor is a line with a
+   and the page's cursor on it. It is docked there with the list of events over it, and both stay
+   in sight while the view scrolls under them. A problem's mark
+   is thicker and crossed, never told by its color alone; the cursor is a line with a
    head, solid while live and in the color of an edit while it stands on an earlier loop. ---- */
 
-.ts { position: sticky; bottom: 0; z-index: 2; margin: var(--s3) calc(-1 * var(--s2)) calc(-1 * var(--s4));
-      padding: var(--s2) var(--s3); background: var(--surface); border: 1px solid var(--line-strong);
-      border-radius: 10px 10px 0 0; box-shadow: var(--shadow); }
+.dock { position: sticky; bottom: 0; z-index: 2; margin: var(--s3) calc(-1 * var(--s2)) calc(-1 * var(--s4));
+        pointer-events: none; }
+.dock > * { pointer-events: auto; background: var(--surface); border: 1px solid var(--line-strong);
+            box-shadow: var(--shadow); }
+.dock > :first-child { border-radius: 10px 10px 0 0; }
+@media (max-width: 719px) { .dock { margin-bottom: calc(-1 * var(--s3)); } }
+/* On a laptop the strip and the list sit side by side, the list standing taller, so together they
+   cover a corner of the cards and not half of them; a folded list leaves the strip the width. */
+@media (min-width: 1100px) {
+  .dock { display: grid; align-items: end; grid-template-columns: minmax(0, 1fr) minmax(360px, 34%); }
+  .dock:has(.el:not([open])) { grid-template-columns: minmax(0, 1fr) auto; }
+  .dock .ts { grid-column: 1; grid-row: 1; border-radius: 10px 0 0 0; }
+  .dock .el { grid-column: 2; grid-row: 1; border-left: none; border-radius: 10px 10px 0 0; }
+}
+.ts { padding: var(--s2) var(--s3); }
 .ts-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
           gap: var(--s1) var(--s3); margin-bottom: var(--s1); }
 .ts-where { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); min-width: 0; }
@@ -799,3 +812,36 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .ts-cursor path { fill: var(--edit); }
 .ts-cursor.live line { stroke: var(--ok); }
 .ts-cursor.live path { fill: var(--ok); }
+
+/* ---- The list of events, over the time strip: a few rows around the cursor, which scroll. The
+   events of the cursor's own loop are marked with a bar and bold, and a problem with a cross and
+   the word, never by color alone. ---- */
+
+.el { padding: var(--s1) var(--s3); }
+.el summary { cursor: pointer; display: flex; align-items: baseline; gap: var(--s2); min-height: 28px;
+              font-weight: 700; }
+.el summary::before { content: "▸"; color: var(--text-2); }
+.el[open] summary::before { content: "▾"; }
+.el summary::-webkit-details-marker { display: none; }
+.el-count { font-weight: 400; }
+.el-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2);
+             margin: 2px 0 var(--s1); }
+.el-filter .chip { min-height: 26px; font-size: var(--meta); }
+.el-list { list-style: none; margin: 0; padding: 0; height: 148px; overflow: auto; position: relative;
+           font-size: var(--meta); border-top: 1px solid var(--line); }
+.el-row { display: grid; grid-template-columns: 64px 14px minmax(0, 1fr); gap: var(--s1);
+          width: 100%; padding: 2px var(--s1); border-left: 3px solid transparent; border-radius: 0; }
+button.el-row:hover:not(:disabled) { background: var(--surface-2); text-decoration: none; }
+.el-row:focus-visible { outline-offset: -3px; }
+.el-time { color: var(--text-2); text-align: right; }
+.el-said { overflow-wrap: anywhere; }
+.el-row[aria-current="true"] { border-left-color: var(--edit); background: var(--edit-tint); font-weight: 700; }
+.el-list .problem .el-said, .el-list .problem .el-mark { color: var(--bad); font-weight: 600; }
+.el-now { display: flex; align-items: center; gap: var(--s2); padding: 1px var(--s1); color: var(--edit);
+          font-size: 12px; font-weight: 600; }
+.el-now::before, .el-now::after { content: ""; flex: 1; border-top: 1px dashed var(--edit); }
+.el-empty { margin: var(--s1) 0; }
+button.rv-name[aria-pressed="true"] { text-decoration: underline; text-decoration-thickness: 2px;
+                                      color: var(--edit); }
+button.rv-name[aria-pressed="true"]::after { content: " ▾ its events"; font-weight: 400;
+                                             font-size: var(--meta); }

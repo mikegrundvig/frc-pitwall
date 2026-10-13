@@ -16,12 +16,15 @@
 // It draws the moment the page's cursor is on (cursor.js): the newest loop while the cursor is
 // live, and otherwise that loop's view, asked of the robot and kept (robot-moments.js). Every card
 // is drawn from one loop's view alone, the same way whichever loop it is. The time strip along its
-// bottom (timeline.js) moves the cursor.
+// bottom (timeline.js) moves the cursor, and the list of events over it (event-list.js) says what
+// happened around the cursor, in order; a joint's name on its card shows that joint's events only.
 
 import { robot, onChange, showViews, h, replace } from "./core.js";
 import { cursor, onCursor, span, noteTime } from "./cursor.js";
 import { wantView, forgetViews } from "./robot-moments.js";
 import { makeTimeline } from "./timeline.js";
+import { makeEventList } from "./event-list.js";
+import { eventFilter, setEventFilter, onEvents } from "./session-events.js";
 import { drawJoint, drawRange, builtFrom } from "./robot-draw.js";
 import { AXIS_NAMES, BUTTON_NAMES } from "./sim-drive.js";
 
@@ -69,7 +72,7 @@ function mount(view) {
         h("section", { class: "card", "aria-label": "Gates" }, h("h2", null, "Gates"), ui.gates),
         h("section", { class: "card", "aria-label": "Gamepads" }, h("h2", null, "Gamepads"),
           ui.pads, h("h3", { class: "rv-sub" }, "Fired"), ui.fired))),
-    makeTimeline().element);
+    h("div", { class: "dock" }, makeEventList().element, makeTimeline().element));
   onChange((patch, snapshot) => {
     if (!visible || !(snapshot || "robotView" in patch)) return;
     // A snapshot may be the first to say there is a Robot view: name it then, to be sent it.
@@ -80,6 +83,15 @@ function mount(view) {
   onCursor(() => {
     if (visible) render();
   });
+  onEvents(showFilter);
+}
+
+/** Marks the card of the joint the list of events is filtered to, if it is to one. */
+function showFilter() {
+  const about = eventFilter().about;
+  for (const [label, card] of cards) {
+    card.name.setAttribute("aria-pressed", String(label === about));
+  }
 }
 
 function show() {
@@ -158,8 +170,13 @@ function makeCard(label, joint) {
   card.stage = h("div", { class: "rv-stage" });
   card.facts = h("dl", { class: "rv-facts" });
   card.rules = h("ul", { class: "rv-rules" });
+  // Its name shows the events about this joint only, in the list of events, and all of them again.
+  card.name = h("button", { type: "button", class: "link rv-name",
+    "aria-pressed": String(eventFilter().about === label),
+    title: "Show this joint's events only",
+    onclick: () => setEventFilter({ about: eventFilter().about === label ? "" : label }) }, label);
   card.el = h("section", { class: "card rv-card", "aria-label": label },
-    h("h2", null, h("span", { class: "rv-name" }, label), card.on, card.tags),
+    h("h2", null, card.name, card.on, card.tags),
     card.stage, card.facts, card.rules);
   card.on.textContent = joint.carriedBy ? "on the " + joint.carriedBy : "";
   return card;
