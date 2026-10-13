@@ -299,7 +299,10 @@ class RobotEventsTest {
     }
   }
 
-  /** Every kind of event there is has a change that makes it, above. */
+  /**
+   * Every kind of event there is has a change that makes it, above; the four about where the robot
+   * is have theirs in {@code WorldEventsTest}.
+   */
   @Test
   void everyKindOfEventIsCovered() {
     List<Kind> made = new ArrayList<>();
@@ -308,6 +311,12 @@ class RobotEventsTest {
         made.add(event.kind());
       }
     }
+    made.addAll(
+        List.of(
+            Kind.SIGHTING_REFUSED,
+            Kind.ESTIMATE_RESTS_CHANGED,
+            Kind.ESTIMATE_RECOVERED,
+            Kind.ROBOT_PLACED));
     assertThat(made).contains(Kind.values());
   }
 

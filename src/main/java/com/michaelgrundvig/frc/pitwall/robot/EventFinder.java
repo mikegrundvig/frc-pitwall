@@ -16,7 +16,8 @@ import com.michaelgrundvig.frc.world.record.MoveResult;
  * which nothing changed costs a few dozen comparisons on the thread that takes the loops.
  *
  * <p>In one loop the events are in the order a cause runs: the robot's mode, the bindings that
- * fired, the sensors, the gates, and then each joint in the model's order.
+ * fired, the sensors, the gates, each joint in the model's order, and then where the robot is: its
+ * placing, its cameras, and its estimate.
  */
 final class EventFinder {
   private EventFinder() {}
@@ -47,6 +48,59 @@ final class EventFinder {
     for (int joint = 0; joint < memory.joints(); joint++) {
       findAJoints(memory, before, loop, joint, into);
     }
+    findTheWorlds(memory, before, loop, into);
+  }
+
+  /**
+   * How long a camera must go without a refused measurement before the next one is news, in loops:
+   * about a second. A camera at the edge of what it can see is refused and accepted by turns, and a
+   * run of that is one event, its first.
+   */
+  static final int REFUSALS_APART_LOOPS = 50;
+
+  /**
+   * Where the robot is: it was placed, a camera's measurement was refused, the estimate recovered,
+   * or what it rests on changed.
+   */
+  private static void findTheWorlds(SessionMemory memory, long before, long loop, EventRing into) {
+    WorldMemory world = memory.world();
+    int now = memory.slotOf(loop);
+    int was = memory.slotOf(before);
+    boolean estimated = world.hasPose(now) && world.hasPose(was);
+    if (estimated && world.placementsIn(now) > world.placementsIn(was)) {
+      into.add(loop, Kind.ROBOT_PLACED, 0, Severity.ROUTINE);
+    }
+    for (int camera = 0; camera < world.cameras(); camera++) {
+      if (world.firstRefusedIn(now, camera) >= 0 && beginsARun(memory, loop, camera)) {
+        into.add(loop, Kind.SIGHTING_REFUSED, camera, Severity.ROUTINE);
+      }
+    }
+    if (!estimated) {
+      return;
+    }
+    boolean recoveriesCounted = world.recoveriesIn(was) >= 0;
+    if (recoveriesCounted && world.recoveriesIn(now) > world.recoveriesIn(was)) {
+      into.add(loop, Kind.ESTIMATE_RECOVERED, 0, Severity.PROBLEM);
+    }
+    Moment.Rests rests = world.restsIn(now);
+    if (rests != world.restsIn(was)) {
+      Severity severity = rests.isWrong() ? Severity.PROBLEM : Severity.ROUTINE;
+      into.add(loop, Kind.ESTIMATE_RESTS_CHANGED, 0, severity);
+    }
+  }
+
+  /**
+   * Whether a camera's refused measurement in a loop is the first of a run: none of that camera's
+   * was refused in the {@link #REFUSALS_APART_LOOPS} before it.
+   */
+  private static boolean beginsARun(SessionMemory memory, long loop, int camera) {
+    long earliest = Math.max(memory.oldest(), loop - REFUSALS_APART_LOOPS);
+    for (long earlier = loop - 1; earlier >= earliest; earlier--) {
+      if (memory.world().firstRefusedIn(memory.slotOf(earlier), camera) >= 0) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

@@ -65,7 +65,7 @@ public final class RobotSession {
     List<String> sensors = Parts.sensorLabels(definition);
     List<String> cameras = definition.cameras().stream().map(CameraConfig::name).toList();
     memory = new SessionMemory(joints, sensors, cameras, capacity);
-    events = new RobotEvents(plan, memory, RobotEvents.KEPT);
+    events = new RobotEvents(plan, words, memory, RobotEvents.KEPT);
     extraction = new Extraction(memory, events, joints, sensors, cameras);
   }
 

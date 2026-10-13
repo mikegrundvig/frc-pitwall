@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Says an event in words, from the moment of the loop it happened in. An event is a fact that
@@ -71,6 +72,111 @@ final class EventSentences {
         severity,
         said.sentence(),
         said.result());
+  }
+
+  /** Whether an event is about where the robot is: its placing, its cameras, its estimate. */
+  static boolean isOfTheWorld(Kind kind) {
+    return switch (kind) {
+      case SIGHTING_REFUSED, ESTIMATE_RESTS_CHANGED, ESTIMATE_RECOVERED, ROBOT_PLACED -> true;
+      default -> false;
+    };
+  }
+
+  /**
+   * One event about where the robot is, in words.
+   *
+   * @param words the robot program's own words for what became of a camera's image
+   * @param before the moment of the loop before the event's, or null when the memory holds none
+   * @param moment the moment of the event's loop
+   * @param about for a camera's event, the camera's place in the robot's definition
+   */
+  static RobotEvent ofTheWorld(
+      SightingWords words,
+      long number,
+      long loop,
+      @Nullable Moment before,
+      Moment moment,
+      Kind kind,
+      int about,
+      Severity severity) {
+    Said said =
+        switch (kind) {
+          case SIGHTING_REFUSED -> ofASighting(words, moment, about);
+          case ESTIMATE_RECOVERED -> ofTheEstimate(recovered(before, moment));
+          case ROBOT_PLACED -> new Said(Subject.ROBOT, List.of(), placed(moment), Optional.empty());
+          default -> ofTheEstimate(restsOn(moment));
+        };
+    return new RobotEvent(
+        number,
+        loop,
+        moment.timestampNanos(),
+        kind,
+        said.subject(),
+        said.about(),
+        severity,
+        said.sentence(),
+        Optional.empty());
+  }
+
+  private static Said ofTheEstimate(String sentence) {
+    return new Said(Subject.ESTIMATE, List.of(), sentence, Optional.empty());
+  }
+
+  /**
+   * A camera's first refused tag of the loop, as its sight line says it when clicked: "front-left →
+   * tag 7 rejected: gate: 45.2 > 13.8".
+   */
+  private static Said ofASighting(SightingWords words, Moment moment, int camera) {
+    List<Moment.OfCamera> cameras = moment.world().cameras();
+    if (camera >= cameras.size()) {
+      return new Said(Subject.CAMERA, List.of(), "", Optional.empty());
+    }
+    Moment.OfCamera seen = cameras.get(camera);
+    // The sightings are newest first, so the loop's first refused tag is the last one found.
+    Moment.Sighted first = null;
+    for (Moment.Sighted sighted : seen.sightings()) {
+      boolean refused =
+          sighted.fate() == Sighting.Fate.REJECTED || sighted.fate() == Sighting.Fate.LEFT_OUT;
+      if (sighted.loopsAgo() == 0 && refused) {
+        first = sighted;
+      }
+    }
+    if (first == null) {
+      return Said.of(Subject.CAMERA, seen.name(), seen.name());
+    }
+    String sentence =
+        SightingSentences.title(seen.name(), first.tag())
+            + " "
+            + SightingSentences.verdict(first, words);
+    return Said.of(Subject.CAMERA, seen.name(), sentence);
+  }
+
+  /** What the estimate rests on now, in the words a click on its ellipse says it in. */
+  private static String restsOn(Moment moment) {
+    Moment.Rests rests =
+        moment.world().estimate().map(Moment.OfEstimate::rests).orElse(Moment.Rests.NOT_REPORTED);
+    if (rests == Moment.Rests.NOT_REPORTED) {
+      return "localization no longer says what its estimate rests on";
+    }
+    return "localization is now " + rests.words();
+  }
+
+  /** How far the estimate jumped as it recovered: from where the loop before had it. */
+  private static String recovered(@Nullable Moment before, Moment moment) {
+    Optional<Moment.OfEstimate> now = moment.world().estimate();
+    Optional<Moment.OfEstimate> was = before == null ? Optional.empty() : before.world().estimate();
+    if (now.isEmpty() || was.isEmpty()) {
+      return "the estimate jumped to agree with the cameras";
+    }
+    double jumped =
+        now.get().pose().getTranslation().getDistance(was.get().pose().getTranslation());
+    return "the estimate jumped " + SightingSentences.meters(jumped) + " to agree with the cameras";
+  }
+
+  /** That the robot was placed, with the robot program's own reason: "placed on Center". */
+  private static String placed(Moment moment) {
+    String because = moment.world().estimate().map(Moment.OfEstimate::placedBecause).orElse("");
+    return because.isEmpty() ? "the robot was placed" : "the robot was " + because;
   }
 
   /**

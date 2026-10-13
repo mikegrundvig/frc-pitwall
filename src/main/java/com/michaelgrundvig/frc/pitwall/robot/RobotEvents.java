@@ -62,11 +62,16 @@ public final class RobotEvents {
   }
 
   private final RobotPlan plan;
+  private final SightingWords words;
   private final SessionMemory memory;
   private final EventRing ring;
 
-  RobotEvents(RobotPlan plan, SessionMemory memory, int capacity) {
+  /**
+   * @param words the robot program's own words for what became of a camera's image
+   */
+  RobotEvents(RobotPlan plan, SightingWords words, SessionMemory memory, int capacity) {
     this.plan = plan;
+    this.words = words;
     this.memory = memory;
     ring = new EventRing(capacity);
   }
@@ -192,7 +197,7 @@ public final class RobotEvents {
    */
   List<RobotEvent> foundAgain() {
     synchronized (memory) {
-      RobotEvents again = new RobotEvents(plan, memory, (int) Math.max(1, countAgain()));
+      RobotEvents again = new RobotEvents(plan, words, memory, (int) Math.max(1, countAgain()));
       for (long loop = memory.oldest(); loop < memory.taken(); loop++) {
         again.findIn(loop);
       }
@@ -242,6 +247,11 @@ public final class RobotEvents {
     }
     boolean ofAGate = kind == Kind.GATE_HELD || kind == Kind.GATE_FELL;
     String gate = ofAGate ? memory.gateName(about) : "";
+    if (EventSentences.isOfTheWorld(kind)) {
+      // A recovery says how far the estimate jumped: from where the loop before had it.
+      return EventSentences.ofTheWorld(
+          words, number, loop, memory.at(loop - 1), moment, kind, about, ring.severityOf(number));
+    }
     return EventSentences.event(
         plan, number, loop, moment, kind, about, gate, ring.severityOf(number));
   }

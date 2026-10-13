@@ -15,8 +15,9 @@ import java.util.Optional;
  * @param kind what happened
  * @param subject what kind of thing it is about
  * @param about which ones, by their names: a joint's label (every joint a move moved, for a move
- *     that ended), a sensor's label, a gate's name, the port of the gamepad a binding is on ("0"
- *     for the driver's, "1" for the operator's); empty for the robot itself
+ *     that ended), a sensor's label, a gate's name, a camera's name, the port of the gamepad a
+ *     binding is on ("0" for the driver's, "1" for the operator's); empty for the robot itself and
+ *     for its estimate of where it is
  * @param severity whether it is a problem, to be seen at a glance
  * @param sentence what happened, in words: the model's own sentence of the fact as it then stood,
  *     after the name of what it is about
@@ -82,7 +83,18 @@ public record RobotEvent(
      */
     HOLD_BEGAN,
     /** Nothing holds a joint short of what it is asked any more. */
-    HOLD_ENDED
+    HOLD_ENDED,
+    /**
+     * A camera's measurement of a tag was refused, by the estimator or before it became a
+     * measurement, after a second or more in which none of that camera's was: the first of a run.
+     */
+    SIGHTING_REFUSED,
+    /** What the estimate rests on changed: tracking, dead reckoning, lost. */
+    ESTIMATE_RESTS_CHANGED,
+    /** The estimate jumped to agree with camera measurements it had been refusing. */
+    ESTIMATE_RECOVERED,
+    /** The robot was placed: the drive team, or the code, said where it is. */
+    ROBOT_PLACED
   }
 
   /** What kind of thing an event is about. */
@@ -91,7 +103,9 @@ public record RobotEvent(
     GAMEPAD,
     SENSOR,
     GATE,
-    JOINT
+    JOINT,
+    CAMERA,
+    ESTIMATE
   }
 
   /** Whether an event is a problem. */
@@ -100,7 +114,8 @@ public record RobotEvent(
     ROUTINE,
     /**
      * A move that timed out or was refused, a joint that faulted or stopped answering, a sensor or
-     * an encoder that was lost: what a person looking for a failure is looking for.
+     * an encoder that was lost, an estimate that was lost or had to recover: what a person looking
+     * for a failure is looking for.
      */
     PROBLEM
   }
