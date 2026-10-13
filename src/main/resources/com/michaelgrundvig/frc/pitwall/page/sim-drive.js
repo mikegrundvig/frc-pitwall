@@ -13,8 +13,12 @@
 // field (typing "w" into a value never drives), the window loses the keyboard, or the tab is
 // hidden. A hidden tab can't be trusted to read a gamepad either (browsers throttle it), so the
 // page polls gamepads only while it's visible, and centers its joysticks when it's hidden. Nothing
-// here listens to anything until driving is first switched on, which only Sim, in the simulator,
-// can do: on a robot it never runs.
+// here listens to anything until driving is first switched on, which only the simulator's
+// controls can do (sim-driving.js, in the Sim view and the Sim panel): on a robot it never runs.
+//
+// Once on, the keys drive whatever view is showing: the listeners are the page's, not a view's.
+// The state bar says so on every view, with Switch off (bar.js), and the time strip's own arrow
+// keys stand aside for as long (timeline.js).
 
 import { robot, api, onConnection, typing } from "./core.js";
 

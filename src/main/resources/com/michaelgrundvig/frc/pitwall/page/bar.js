@@ -10,7 +10,7 @@
 // is sim-state.js's isSimulator(), and the control is not even built until it says yes.
 
 import { robot, onChange, onConnection, send, h, byId, say, announce } from "./core.js";
-import { onDrive } from "./sim-drive.js";
+import { onDrive, release } from "./sim-drive.js";
 import { isSimulator, onSim, ALL } from "./sim-state.js";
 import { makeEnable } from "./sim-enable.js";
 
@@ -21,6 +21,7 @@ let connection;
 let since;
 let mode;
 let driving;
+let drivingText;
 let enabler = null; // Enable and Disable, built only in the simulator
 let notDriving = false;
 let title = "Pitwall";
@@ -43,7 +44,13 @@ export function mountBar() {
   since = h("span");
   connection = h("span", { class: "conn" }, "Connecting to the robot…");
   mode = h("a", { class: "mode", hidden: true });
-  driving = h("a", { href: "#sim", class: "pill driving", hidden: true });
+  // While this page drives the simulator, the bar says so on every view, with the way to stop: a
+  // page that takes the keys must never do it out of sight.
+  drivingText = h("span");
+  driving = h("span", { class: "pill driving", hidden: true, role: "status" }, drivingText,
+    h("button", { type: "button", onclick: release,
+                  title: "Stop driving from this page: the keys type as usual again" },
+      "Switch off"));
   tuningButton = h("button", { type: "button", onclick: switchTuning });
   tuningPill = h("span", { class: "pill", hidden: true });
   uncommitted = h("a", { href: "#changes", class: "uncommitted", hidden: true });
@@ -104,8 +111,9 @@ function render(patch, snapshot) {
 }
 
 /**
- * Says in the bar whether this page drives the simulator: "⌨ Driving", or why it isn't now. While
- * the tab is hidden, its title says so too: that's all of the page anyone sees then.
+ * Says in the bar whether this page drives the simulator: "⌨ Keys drive the robot", or why it
+ * isn't driving now, with Switch off beside it. While the tab is hidden, its title says so too:
+ * that's all of the page anyone sees then.
  *
  * @param text what to say; null when this page doesn't drive
  * @param live whether it drives right now
@@ -113,11 +121,12 @@ function render(patch, snapshot) {
  */
 function showDriving(text, live, hidden) {
   const className = "pill driving " + (live ? "on" : "locked");
-  if (driving.textContent !== (text || "") || driving.className !== className) {
+  if (drivingText.textContent !== (text || "") || driving.className !== className) {
     driving.hidden = !text;
-    driving.textContent = text || "";
+    drivingText.textContent = text || "";
     driving.className = className;
-    driving.title = "Driving the simulator from this page: see Sim";
+    driving.title = "This page drives the simulator, from any view: the driving keys go to the "
+        + "robot, not to the page. Its switches are in Sim controls.";
   }
   notDriving = Boolean(text) && hidden;
   showTitle();
@@ -153,10 +162,12 @@ function showPill(status) {
   }
   const keysOnly = status.keyboard.on && !status.gamepad.on;
   const why = status.hidden ? "Not driving: tab hidden"
-    : keysOnly && status.keyboard.paused === "field" ? "Paused: typing"
-    : keysOnly && status.keyboard.paused === "window" ? "Paused: window"
+    : keysOnly && status.keyboard.paused === "field" ? "Paused: typing in a field"
+    : keysOnly && status.keyboard.paused === "window" ? "Paused: click the page"
     : null;
-  showDriving(marks + " " + (why || "Driving"), !why, status.hidden);
+  const what = status.keyboard.on && status.gamepad.on ? "Keys and gamepad drive"
+    : status.keyboard.on ? "Keys drive the robot" : "Gamepad drives the robot";
+  showDriving(marks + " " + (why || what), !why, status.hidden);
 }
 
 /**

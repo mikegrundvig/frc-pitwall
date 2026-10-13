@@ -195,7 +195,9 @@ input[readonly] { background: var(--surface-2); }
 .enabler { display: inline-flex; gap: var(--s1); }
 .enabler button { min-height: 34px; padding: 2px 12px; font-weight: 600; display: inline-flex;
                   align-items: center; gap: 6px; }
-.pill.driving { text-decoration: none; padding-right: 10px; }
+/* This page is driving the simulator: filled in, on every view, since it has taken the keys. */
+.pill.driving.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.pill.driving.on button { border-color: var(--accent-ink); }
 .pill { display: inline-flex; align-items: center; gap: var(--s2); padding: 3px 4px 3px 10px;
         border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface);
         font-weight: 600; min-height: 34px; }
