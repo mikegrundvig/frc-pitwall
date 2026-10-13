@@ -13,9 +13,8 @@
 // full and, compact, in the Sim panel beside any other view (sim-panel.js): one of each, never a
 // copy. What they read and ask is sim-state.js.
 
-import { h, typing } from "./core.js";
-import { isSimulator, isEnabled, disable, keepDrawn } from "./sim-state.js";
-import { status as driving } from "./sim-drive.js";
+import { h } from "./core.js";
+import { isSimulator, keepDrawn } from "./sim-state.js";
 import { makeEnable } from "./sim-enable.js";
 import { makeStation } from "./sim-station.js";
 import { makeTime } from "./sim-time.js";
@@ -23,7 +22,6 @@ import { makeDriving } from "./sim-driving.js";
 import { makeFaults } from "./sim-faults.js";
 
 let drawn = null;
-let visible = false;
 
 function mount(view) {
   const enabler = makeEnable();
@@ -43,29 +41,14 @@ function mount(view) {
       h("div", null, drive.element)),
     faults.element);
   drawn = keepDrawn([enabler, station, time, drive, faults]);
-  document.addEventListener("keydown", escape);
 }
 
 function show() {
-  visible = true;
   drawn.show(true);
 }
 
 function hide() {
-  visible = false;
   drawn.show(false);
-}
-
-/** Esc disables: in Sim always, and anywhere while this page drives, outside a field. */
-function escape(event) {
-  if (event.key !== "Escape" || event.defaultPrevented || document.querySelector("dialog[open]")) {
-    return;
-  }
-  if (!isEnabled()) return; // nothing to disable: Esc keeps its other meanings
-  const drives = driving().inputs.some(Boolean) && !typing(event.target);
-  if (!visible && !drives) return;
-  event.preventDefault();
-  disable();
 }
 
 export default { id: "sim", title: "Sim", simulatorOnly: true, mount, show, hide,

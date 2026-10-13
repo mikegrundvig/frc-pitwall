@@ -2,7 +2,8 @@
 // back to the same place and a link can be sent. Each view is its own module; this starts them
 // and follows the robot.
 
-import { robot, connect, onChange, byId, h, running, send, announce, say } from "./core.js";
+import { robot, connect, onChange, byId, h } from "./core.js";
+import { startKeys } from "./keys.js";
 import { mountBar } from "./bar.js";
 import { mountApplyBar, showIn } from "./applybar.js";
 import pit from "./pit.js";
@@ -108,25 +109,7 @@ onChange((patch, snapshot) => {
 });
 document.addEventListener("pitwall-offered", reoffer);
 
-// Esc stops whatever is running on the robot, anywhere on the page: an experiment's run, and any
-// action. (With nothing running, Esc in a value drops its edit: see rows.js. In the simulator, Esc
-// in Sim, or anywhere outside a field while this page drives the robot, disables it instead: see
-// sim.js.)
-document.addEventListener("keydown", async (event) => {
-  if (event.key !== "Escape" || event.defaultPrevented || document.querySelector("dialog[open]")) {
-    return;
-  }
-  const now = running();
-  if (now.length === 0) return;
-  event.preventDefault();
-  announce("Stopping " + now.map((thing) => thing.name).join(", ") + ".", true);
-  for (const thing of now) {
-    const result = thing.kind === "experiment"
-      ? await send("POST", "/api/experiments", { cancel: thing.name, run: thing.run })
-      : await send("POST", "/api/actions", { cancel: thing.name });
-    if (!result.ok && result.status !== 409) say(thing.name + ": " + result.problem.detail, true);
-  }
-});
+startKeys();
 
 window.addEventListener("hashchange", route);
 connect();

@@ -3,9 +3,16 @@
 // aren't committed yet; in the simulator, whether this page drives it. It answers "can I, and on
 // what?", the question asked most, whose wrong answer costs most (tuning the simulator while the
 // robot sits unchanged).
+//
+// In the simulator, and only there, Enable and Disable stand beside the mode, on every view (the
+// same control as the Sim view's: sim-enable.js). On a real robot the bar shows the mode and has
+// nothing to press about it: the Driver Station enables a robot, never this page. The one switch
+// is sim-state.js's isSimulator(), and the control is not even built until it says yes.
 
 import { robot, onChange, onConnection, send, h, byId, say, announce } from "./core.js";
 import { onDrive } from "./sim-drive.js";
+import { isSimulator, onSim, ALL } from "./sim-state.js";
+import { makeEnable } from "./sim-enable.js";
 
 let name;
 let badge;
@@ -14,6 +21,7 @@ let connection;
 let since;
 let mode;
 let driving;
+let enabler = null; // Enable and Disable, built only in the simulator
 let notDriving = false;
 let title = "Pitwall";
 let tuningPill;
@@ -51,6 +59,7 @@ export function mountBar() {
   onChange(render);
   onConnection(renderConnection);
   onDrive(showPill);
+  onSim(renderEnabler);
   // How long since the robot was last heard, written in place each second: nothing around it is
   // rebuilt.
   setInterval(renderSince, 1000);
@@ -109,6 +118,24 @@ function showDriving(text, live, hidden) {
   }
   notDriving = Boolean(text) && hidden;
   showTitle();
+}
+
+/**
+ * Enable and Disable beside the mode, in the simulator only: built when the page first knows it is
+ * the simulator, and taken away again if a robot that isn't one answers at this address.
+ */
+function renderEnabler(what) {
+  if (!isSimulator()) {
+    if (enabler) enabler.element.remove();
+    enabler = null;
+    return;
+  }
+  if (!enabler) {
+    enabler = makeEnable({ small: true });
+    mode.after(enabler.element);
+    what = ALL;
+  }
+  enabler.render(what);
 }
 
 /**

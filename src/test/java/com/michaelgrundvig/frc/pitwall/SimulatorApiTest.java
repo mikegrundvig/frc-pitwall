@@ -155,6 +155,28 @@ class SimulatorApiTest {
   }
 
   /**
+   * The state bar's Enable and Disable are one request each, with nothing else in it: the robot is
+   * enabled in the mode the Driver Station already has, and disabled whatever the mode.
+   */
+  @Test
+  void enableAndDisableAreOneRequestEachAndChangeNothingElse() throws Exception {
+    send("PATCH", "/api/simulator", MERGE_PATCH, "{\"mode\": \"TELEOPERATED\"}");
+
+    var enabled = send("PATCH", "/api/simulator", MERGE_PATCH, "{\"enabled\": true}");
+
+    assertThat(enabled.statusCode()).isEqualTo(200);
+    assertThat(enabled.body()).contains("\"enabled\":true", "\"mode\":\"TELEOPERATED\"");
+    assertThat(hal.driverStation().enabled()).isTrue();
+
+    var disabled = send("PATCH", "/api/simulator", MERGE_PATCH, "{\"enabled\": false}");
+
+    assertThat(disabled.statusCode()).isEqualTo(200);
+    assertThat(disabled.body()).contains("\"enabled\":false", "\"mode\":\"TELEOPERATED\"");
+    assertThat(hal.driverStation().enabled()).isFalse();
+    assertThat(hal.driverStation().mode()).isEqualTo(RobotMode.TELEOPERATED);
+  }
+
+  /**
    * A body of the wrong type or shape is 400; a name that isn't there or a value out of range 422.
    */
   @Test

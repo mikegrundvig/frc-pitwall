@@ -183,17 +183,20 @@ class PitwallServerTest {
     assertThat(send("POST", "/page/main.js", null, null).statusCode()).isEqualTo(405);
   }
 
+  /** Every module of the page: main.js, and all it imports, and all they import. */
+  private List<String> modulesOfThePage() throws Exception {
+    return modulesOfThePage(new ArrayList<>());
+  }
+
   /**
-   * A module a view imports but the jar lacks would leave the page blank: each one is here, those
-   * loaded only when needed ({@code import("./scene-render.js")}) too, and the third-party modules
-   * they import from their fixed routes.
+   * Every module of the page, each served: main.js, and all it imports, and all they import.
+   *
+   * @param third takes the third-party modules they import from their fixed routes
    */
-  @Test
-  void everyModuleThePageImportsIsServed() throws Exception {
+  private List<String> modulesOfThePage(List<String> third) throws Exception {
     Pattern imports =
         Pattern.compile("(?:from |import\\()\"(\\./|/three/)([A-Za-z][A-Za-z0-9.-]*\\.js)\"");
     List<String> seen = new ArrayList<>(List.of("main.js"));
-    List<String> third = new ArrayList<>();
     for (int i = 0; i < seen.size(); i++) {
       var module = get("/page/" + seen.get(i), "*/*");
       assertThat(module.statusCode()).as(seen.get(i)).isEqualTo(200);
@@ -205,6 +208,18 @@ class PitwallServerTest {
         }
       }
     }
+    return seen;
+  }
+
+  /**
+   * A module a view imports but the jar lacks would leave the page blank: each one is here, those
+   * loaded only when needed ({@code import("./scene-render.js")}) too, and the third-party modules
+   * they import from their fixed routes.
+   */
+  @Test
+  void everyModuleThePageImportsIsServed() throws Exception {
+    List<String> third = new ArrayList<>();
+    List<String> seen = modulesOfThePage(third);
     for (String module : third) {
       var served = get("/three/" + module, "*/*");
       assertThat(served.statusCode()).as(module).isEqualTo(200);
@@ -221,6 +236,7 @@ class PitwallServerTest {
             "experiment.js",
             "changes.js",
             "sim.js",
+            "keys.js",
             "sim-state.js",
             "sim-enable.js",
             "sim-station.js",
@@ -827,6 +843,46 @@ class PitwallServerTest {
       }
     }
     assertThat(page.sections()).doesNotContainKeys("simulator", "components", "scenarios");
+  }
+
+  /**
+   * On a robot the page can't enable or disable: the request is refused, whatever it asks, and the
+   * page is never told there is a simulator, which is the one thing its Enable and Disable are
+   * built on (sim-state.js's {@code isSimulator()}: a simulated robot with a simulator section,
+   * and a robot's page has no such section). The Driver Station enables a robot.
+   */
+  @Test
+  void aRobotsPageCanNeitherEnableNorDisableIt() throws Exception {
+    for (String body :
+        List.of(
+            "{\"enabled\": true}",
+            "{\"enabled\": false}",
+            "{\"mode\": \"AUTONOMOUS\", \"enabled\": true}")) {
+      var answer = send("PATCH", "/api/simulator", MERGE_PATCH, body);
+      assertThat(answer.statusCode()).as(body).isEqualTo(404);
+      assertThat(answer.body()).contains("a robot has no simulator controls");
+    }
+    assertThat(page.sections()).doesNotContainKey("simulator");
+  }
+
+  /**
+   * Enabling is asked in one place on the page, behind the one check that this is the simulator: no
+   * other module sends {@code enabled: true}, so no view can enable as a side effect.
+   */
+  @Test
+  void onlyOneModuleOfThePageAsksToEnable() throws Exception {
+    List<String> asking = new ArrayList<>();
+    for (String module : modulesOfThePage()) {
+      if (get("/page/" + module, "*/*").body().contains("enabled: true")) {
+        asking.add(module);
+      }
+    }
+
+    assertThat(asking).containsExactly("sim-state.js");
+    String state = get("/page/sim-state.js", "*/*").body();
+    assertThat(state.indexOf("if (!isSimulator()"))
+        .as("the check that this is the simulator comes before the request")
+        .isBetween(0, state.indexOf("enabled: true"));
   }
 
   /**

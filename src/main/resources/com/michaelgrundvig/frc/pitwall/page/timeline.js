@@ -11,9 +11,11 @@
 // on an earlier loop the strip holds still under it, and moves only to keep the cursor in sight.
 // Marks that would touch are drawn as one with their count, and a problem among them always shows.
 //
-// Keys, while the strip is on screen, no field has the focus, and the Sim view's keyboard driving
-// is off (it drives with the arrows): Left and Right go one loop, with Shift one event; Space
-// plays and pauses; Esc or L goes back to live. None of them reaches the robot.
+// Keys, while the strip is on screen, no field has the focus, and keyboard driving is off (it
+// drives with the arrows and L): Left and Right go one loop, with Shift one event; Space plays and
+// pauses; Esc or L goes back to live. None of them reaches the robot. Esc is the robot's first:
+// while a simulated robot is enabled it disables it, and while something runs it stops it
+// (keys.js), and only otherwise is it the strip's.
 
 import { robot, onChange, running, typing, h } from "./core.js";
 import { cursor, onCursor, span, timeOf, loopAt, seek, step, goLive, play, pause, RATES }
@@ -195,7 +197,8 @@ export function makeTimeline() {
       + (at.live ? "" : " · −" + seconds(behind, 1) + " · loop " + at.index);
     ui.note.textContent = at.agedOut
       ? "That moment left the memory. This is the oldest one it holds."
-      : paused ? "The simulator is paused, so live stands still. Step, in Sim, runs a new loop."
+      : paused ? "The simulator is paused, so live stands still. Step one new loop, in Sim "
+        + "controls, runs one."
       : driving().keyboard.on ? "The keyboard drives the robot, so the keys here are off."
       : "";
     ui.play.textContent = at.playing ? "❚❚ Pause" : "▶ Play";
@@ -339,9 +342,9 @@ export function makeTimeline() {
 
   /**
    * The strip's keys. They move only what the page shows, and they stand aside for everything that
-   * reaches the robot: typing in a field, a dialog, the Sim view's keyboard driving (which drives
-   * with the arrows and L), and Esc while something runs or this page drives, which stops or
-   * disables it (main.js, sim.js).
+   * reaches the robot: typing in a field, a dialog, keyboard driving (which drives with the arrows
+   * and L), and Esc while a simulated robot is enabled or something runs, which disables or stops
+   * it (keys.js: that Esc never arrives here).
    */
   document.addEventListener("keydown", (event) => {
     if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -364,7 +367,7 @@ export function makeTimeline() {
         togglePlay();
         break;
       case "Escape":
-        if (at.live || running().length > 0 || driving().inputs.some(Boolean)) return;
+        if (at.live || running().length > 0) return;
         goLive();
         break;
       case "l":

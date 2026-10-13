@@ -66,6 +66,7 @@
 /* On a touch screen, everything pressed is at least 44 px tall: a finger, standing, one hand. */
 @media (pointer: coarse) {
   button, input, select, summary, .chip, .tab, .mode, .uncommitted, .pill.driving { min-height: 44px; }
+  .enabler button { min-height: 44px; }
   button.link { min-height: 44px; }
   .switch { min-height: 44px; }
 }
@@ -146,6 +147,11 @@ input[readonly] { background: var(--surface-2); }
 /* In the simulator, an enabled robot's mode is filled in: unmistakable from across the room. */
 .mode.enabled { background: var(--ok); color: var(--surface); padding: 3px 10px; border-radius: 999px;
                 text-decoration: none; }
+/* Enable and Disable in the bar, in the simulator only: small, and Disable filled in while there
+   is a robot to disable. */
+.enabler { display: inline-flex; gap: var(--s1); }
+.enabler button { min-height: 34px; padding: 2px 12px; font-weight: 600; display: inline-flex;
+                  align-items: center; gap: 6px; }
 .pill.driving { text-decoration: none; padding-right: 10px; }
 .pill { display: inline-flex; align-items: center; gap: var(--s2); padding: 3px 4px 3px 10px;
         border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface);
@@ -547,9 +553,10 @@ table { border-collapse: collapse; }
 .dsbuttons button { min-height: 56px; }
 .dsbar .disable { min-width: 10em; font-size: var(--value); font-weight: 700; display: inline-flex;
                   align-items: center; justify-content: center; gap: var(--s2); }
-.dsbar .disable.armed { background: var(--bad); border-color: var(--bad); color: var(--surface); }
-.dsbar .disable.armed:hover:not(:disabled) { background: var(--bad); filter: brightness(1.08); }
-.dsbar .disable kbd { font-size: 12px; font-weight: 400; border-color: currentColor; }
+.disable.armed { background: var(--bad); border-color: var(--bad); color: var(--surface); }
+.disable.armed:hover:not(:disabled) { background: var(--bad); filter: brightness(1.08); }
+.disable kbd { font-size: 12px; font-weight: 400; border-color: currentColor; }
+.dsbar .message { flex: 1 1 100%; margin: 0; }
 .dsbar .gate { flex: 1 1 100%; margin: 0; }
 @media (max-width: 719px) {
   .dsbar { margin: 0 calc(-1 * var(--s3)) var(--s3); padding: var(--s2) var(--s3); }

@@ -45,7 +45,8 @@ export function makeRow(path, context, options = {}) {
       event.preventDefault(); // a number has no "?": it asks what the value means
       select("key");
     } else if (event.key === "Escape" && running().length === 0) {
-      // Esc stops whatever is running, anywhere (main.js); when nothing is, it drops this edit.
+      // Esc disables an enabled simulated robot and stops whatever is running, anywhere
+      // (keys.js); only when neither is so does it reach here, and drop this edit.
       event.preventDefault();
       unstage(path);
       row.input.value = shown(robot.doc.values[path]);
