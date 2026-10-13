@@ -8,7 +8,8 @@ a library of its own
 (`com.michaelgrundvig.frc:frc-robot-model`): handed a robot's definition, it draws that robot's
 joints as the model says them, and its world on the field. Everything else the robot program
 contributes to it, as data. The robot template's README describes each part; this file is for
-contributors, and covers its Robot view and its scenes: the World view.
+contributors, and covers the simulator's controls as they reach every view, the page's keys, its
+Robot view, and its scenes: the World view.
 
 **Another port:** `Pitwall.start(name)` serves on 5820 unless the `pitwall.port` system property
 names another (`-Dpitwall.port=5920`; 0 picks a free one, and Pitwall prints the one it took). In
@@ -66,6 +67,77 @@ tested here all the same, on AdvantageKit's own table (`robot/AdvantageKitReceiv
 
 The tests read the configuration records' documentation as files in
 `src/test/resources/META-INF/pitwall/docs`, which `ParameterDocsTest` says how to write again.
+
+## The simulator's controls, on every view
+
+The World and Robot views are where a simulated robot is watched, so its controls are reachable
+from them: nobody leaves the view they are watching to enable, drive, run an auto or fail a part.
+All of it is simulator only, and one check decides that for the whole page: `sim-state.js`'s
+`isSimulator()`, true for a simulated robot whose state has a `simulator` section. A robot's page
+has no such section and none of the routes (they answer 404), so none of these controls is built.
+
+- **Enable and Disable in the state bar**, beside the mode, on every view (`sim-enable.js`, the
+  same control as the *Sim* view's bar, small). Enable is a button, pressed: no key enables, and
+  nothing enables as a side effect. On a robot the bar shows the mode and has nothing to press
+  about it; the Driver Station enables a robot.
+- **The side dock** (`side-dock.js`) is a place beside every view that the page owns. A panel
+  registers with `addPanel({id, title, label, offered(), mount(element), show(), hide()})` and the
+  dock gives it a button in the state bar, opens and closes it, sets its width (drag its edge, or
+  the arrow keys with the edge focused), and remembers in this browser which panel was open and how
+  wide. One panel shows at a time. On a wide screen the dock is a column and the view reflows
+  beside it: a view's breakpoints ask the views' own width (`@container views`), not the window's.
+  Under 900 px it lies over the bottom half of the page and closes with one press. The Sim panel
+  is its first panel; a second (a compact Robot view, say) is one more `addPanel`.
+- **The Sim panel** (`sim-panel.js`) is the simulator's controls, compact, in the order they are
+  used while watching: the mode and alliance station, driving, the auto to run, the simulator's
+  clock, and what fails. It mounts the very modules the *Sim* view mounts, each with `{compact:
+  true}`: `sim-station.js`, `sim-driving.js`, `sim-auto.js`, `sim-time.js`, `sim-faults.js`. A
+  section is a function that returns `{element, render(what)}`, so it can be mounted in more than
+  one place, and `keepDrawn` draws it only while its place is on screen. There is one of each
+  control, never a copy.
+- **Driving from any view:** keyboard driving, once switched on, drives whatever view is showing
+  (`sim-drive.js` listens on the page, not on a view). The state bar says "⌨ Keys drive the robot"
+  on every view while it does, or why it isn't driving now, with Switch off beside it.
+- **The auto to run** (`sim-auto.js`): the robot program marks the device whose card is what
+  autonomous runs (`Devices.Device.autonomous()`), and the panel shows that card's lines and its
+  chooser (the one Pit's card has) over one button, *Set autonomous and enable*, which sends
+  `{"mode": "AUTONOMOUS", "enabled": true}` and says so before it is pressed. Choosing never
+  enables.
+- **What fails** (`sim-faults.js`): one row draws a fault wherever it is listed. The *Sim* view
+  lists them as a card for each part; the panel as one short list, those on now first and then
+  those used lately (kept in this browser), eight until asked for all; both have a filter.
+- **Faults from a click:** in the World view an `Inspection` may name the simulator's parts the
+  shape is (`Inspection.component(name)`), and the inspect route answers with those the simulator
+  has (`"components"`, always empty on a robot). The details panel then ends in those parts'
+  faults, the same rows. `WorldScene.of(..., SimulatedParts)` is how a robot's simulation says what
+  it called each part: a camera, the gyro, a module (a wheel), and on the bumpers the robot itself
+  with the backup IMU, which has no shape. A fault two of whose numbers are a place on the field
+  (`Fault.Builder.point(x, y)`: setting the robot down) gets *Apply where I click*, which takes
+  the place from the next click on the drawing.
+
+### The page's keys
+
+Esc is the one key several things want, and one of them is safety, so its rule is in one place
+(`page/keys.js`):
+
+| Key | Where | What it does |
+|---|---|---|
+| Esc | any view, any focus, in the simulator with the robot enabled | Disables the robot and stops whatever runs. Nothing else hears it: not a field, not the time strip, not an open dialog |
+| Esc | any view, while a run or an action is running | Stops it |
+| Esc | in a value's field, otherwise | Drops the edit |
+| Esc | otherwise, with a time strip on screen | Returns the cursor to live |
+| P | any view, not in a field | Opens and closes the side dock's panel |
+| W A S D, J L, ← →, R | any view, not in a field, while keyboard driving is on | Drive joystick 0 |
+| ← →, Shift+← →, Space, L | a view with a time strip, not in a field, while keyboard driving is off | A loop, an event, play and pause, back to live |
+| Home, End, PageUp, PageDown | the time strip's track, focused | The oldest loop, live, a second later or earlier |
+| ← → | the side dock's edge, focused | Wider, narrower |
+| / | Tune, not in a field | Focuses the filter |
+| Enter, ? | in a value's field | Applies it, shows its notes |
+
+A safety action wins over a view's action, so on an enabled simulated robot Esc disables from any
+view, and only a disabled robot's Esc means anything else. The driving keys and the strip's arrows
+and L never meet: the strip stands aside for as long as keyboard driving is on. No key enables.
+The page has no JavaScript test harness, so these rules are checked in a browser.
 
 ## The Robot view
 
@@ -204,8 +276,9 @@ the page still follows the robot meanwhile, and the state bar still says how the
   oldest loop held and the strip says so.
 - **Keys**, while the strip is on screen: Left and Right go one loop, with Shift one event; Space
   plays and pauses; Esc or L goes back to live. They stand aside for a field with the focus, for
-  the Sim view's keyboard driving (which drives with the arrows), and for Esc while something runs
-  or the page drives, which stops or disables it. None of them reaches the robot.
+  keyboard driving (which drives with the arrows and L), and for Esc while a simulated robot is
+  enabled or something runs, which disables or stops it ([the page's keys](#the-pages-keys)). None
+  of them reaches the robot.
 - **The list of events** (`page/event-list.js`), beside the strip: the events around the cursor in
   order, with their times, those of the cursor's loop marked; a click moves the cursor there. A
   joint's name on its card shows that joint's events only, and *Problems only* the problems. This is
@@ -214,9 +287,10 @@ the page still follows the robot meanwhile, and the state bar still says how the
 - **What changed in this loop:** while the cursor stands on a loop, the rows that changed in it
   from the loop before are marked on the cards, so going loop by loop shows a cause and then its
   effect. A row is marked when what it says changed, and not when a number only moved.
-- **The simulator's pause and step** are another thing. The Sim view's *Step* runs one new loop of
-  a paused simulator, which adds a moment; the strip's *Loop* buttons go through loops that already
-  ran. While the simulator is paused, live stands still, and the strip says so.
+- **The simulator's pause and step** are another thing. *Step one new loop*, under *Simulator
+  clock* in the Sim view and the Sim panel, runs one new loop of a paused simulator, which adds a
+  moment; the strip's *Loop* buttons go through loops that already ran. While the simulator is
+  paused, live stands still, and the strip says so.
 - **Other views:** a view reads the cursor (`cursor()`), hears when it moves (`onCursor`), and
   draws its own data for that loop. The World view does (below), with the same strip and list of
   events along its bottom and the same keys, so flipping between the two views keeps the moment.
@@ -387,7 +461,15 @@ more. Beside the drawing is the legend, which folds to one button. A click picks
 inspectable line within 12 px, so a thin ray is easy to hit, else the solid under the pointer, and
 asks about the loop shown; the pointer over a shape shows what it reveals (a camera's name and
 view) while it is there. It draws only when a patch arrives or
-something is dragged, never in a loop. A browser without WebGL 2 is told so, and the rest of the
+something is dragged, never in a loop.
+
+Labels are a fixed size on screen, so zoomed out they crowd what they name. Each drawing lays them
+out on the screen (`layoutLabels`): a label in the focus's own frame (the robot's: its cameras'
+names) moves straight out from the robot's middle, just far enough to clear the robot's outline
+and any label placed before it, with a thin leader back to where it was once it has moved more
+than a few pixels; every other label (a tag's number) stays put and fades by how far the robot or
+one of its labels lies over it. Both are worked out from where things are on screen and nothing
+else, so a label moves with the robot and never jumps or blinks. A browser without WebGL 2 is told so, and the rest of the
 page works.
 
 **three.js** comes from its WebJar on Maven Central (`gradle/libs.versions.toml`). The build
