@@ -5,6 +5,9 @@ import com.michaelgrundvig.frc.pitwall.experiment.Run;
 import com.michaelgrundvig.frc.pitwall.push.Broadcaster;
 import com.michaelgrundvig.frc.pitwall.push.Event;
 import com.michaelgrundvig.frc.pitwall.push.Stream;
+import com.michaelgrundvig.frc.pitwall.robot.RobotSession;
+import com.michaelgrundvig.frc.pitwall.robot.RobotView;
+import com.michaelgrundvig.frc.pitwall.robot.RobotWire;
 import com.michaelgrundvig.frc.pitwall.scene.Inspection;
 import com.michaelgrundvig.frc.pitwall.simulator.Components;
 import com.michaelgrundvig.frc.pitwall.simulator.DriverStationState;
@@ -73,6 +76,16 @@ import org.wpilib.hardware.hal.RobotMode;
  *       {"scene", "shape", "title", "details": [{"label", "value"}], "actions"}}, the actions as
  *       {@code /api/actions} gives them; 404 when nothing is known of it now. See {@link
  *       com.michaelgrundvig.frc.pitwall.scene.Scenes}.
+ *   <li>{@code GET /api/robot}: with a robot's session, how much of it is remembered and what that
+ *       costs, {@code {"robot", "oldest", "newest", "oldestNanos", "newestNanos",
+ *       "rememberedLoops", "bytesPerLoop", "bytes", "meanTakeMicros", "slowestTakeMicros", "texts",
+ *       "mostTexts", "gatesNotKept"}}: the loops it holds by index, and when each end of them was;
+ *       404 for a robot program that hands Pitwall none.
+ *   <li>{@code GET /api/robot/view}: the robot's joints as one loop had them, as {@link RobotWire}
+ *       says: the newest loop, or {@code ?index=} a loop by its index, or {@code ?at=} the loop
+ *       nearest a time on the robot's clock, in nanoseconds; 404 when the session holds no such
+ *       loop. Live, the page is sent the same at {@code robotView.live}, named as the view {@code
+ *       robot}.
  *   <li>{@code GET /api/status}: the status items, read by the next loop, {@code [{"name",
  *       "value"}]}; 503 when the loop doesn't get to it within a second.
  *   <li>{@code GET /api/actions}: every action and where it stands, {@code [{"name", "phase",
@@ -486,6 +499,8 @@ public final class PitwallServer implements AutoCloseable {
             Map.entry("/api/heartbeat", List.of("POST")),
             Map.entry("/api/devices", List.of("GET")),
             Map.entry("/api/views", List.of("PUT")),
+            Map.entry("/api/robot", List.of("GET")),
+            Map.entry("/api/robot/view", List.of("GET")),
             Map.entry("/api/simulator", List.of("GET", "PATCH")),
             Map.entry("/api/simulator/step", List.of("POST")),
             Map.entry("/api/simulator/stop", List.of("POST")),
@@ -601,6 +616,8 @@ public final class PitwallServer implements AutoCloseable {
             case "POST /api/heartbeat" -> send(exchange, 204, "text/plain", "");
             case "GET /api/devices" -> sendJson(exchange, 200, state.devices().view());
             case "PUT /api/views" -> putViews(exchange);
+            case "GET /api/robot" -> sendJson(exchange, 200, robotSessionSummary());
+            case "GET /api/robot/view" -> robotView(exchange);
             case "GET /api/simulator" -> sendJson(exchange, 200, simulatorView());
             case "PATCH /api/simulator" -> patchSimulator(exchange);
             case "POST /api/simulator/step" ->
@@ -830,6 +847,79 @@ public final class PitwallServer implements AutoCloseable {
         views.add(name);
       }
       return views;
+    }
+
+    /** The robot's session; 404 for a robot program that handed Pitwall none. */
+    private RobotSession robotSession() {
+      RobotSession session = state.robotSession();
+      if (session == null) {
+        throw new Problem(
+            404,
+            "No robot session",
+            "This robot program hands Pitwall no session of its robot, so there is no Robot view");
+      }
+      return session;
+    }
+
+    /** How much of the session is remembered, and what remembering it costs. */
+    private Map<String, Object> robotSessionSummary() {
+      RobotSession session = robotSession();
+      long taken = session.taken();
+      long oldest = session.oldest();
+      Map<String, Object> shown = new LinkedHashMap<>();
+      shown.put("robot", session.definition().name());
+      shown.put("oldest", oldest);
+      shown.put("newest", taken - 1);
+      session.moment(oldest).ifPresent(first -> shown.put("oldestNanos", first.timestampNanos()));
+      session.newest().ifPresent(last -> shown.put("newestNanos", last.timestampNanos()));
+      shown.put("rememberedLoops", session.capacity());
+      shown.put("bytesPerLoop", session.bytesPerMoment());
+      shown.put("bytes", session.bytes());
+      shown.put("meanTakeMicros", session.meanTakeMicros());
+      shown.put("slowestTakeMicros", session.slowestTakeMicros());
+      shown.put("texts", session.texts());
+      shown.put("mostTexts", session.mostTexts());
+      shown.put("gatesNotKept", session.gatesNotKept());
+      return shown;
+    }
+
+    /**
+     * The robot as one loop of the session had it: the newest, or the loop {@code ?index=} names,
+     * or the loop nearest the time {@code ?at=} names. 404 when the session holds no such loop.
+     */
+    private void robotView(HttpExchange exchange) throws IOException {
+      RobotSession session = robotSession();
+      Map<String, String> asked = query(exchange.getRequestURI().getRawQuery());
+      long index = session.taken() - 1;
+      if (asked.containsKey("index")) {
+        index = wholeNumber("index", asked.get("index"));
+      } else if (asked.containsKey("at")) {
+        index = session.nearest(wholeNumber("at", asked.get("at")));
+      }
+      long loop = index;
+      RobotView view =
+          session
+              .view(loop)
+              .orElseThrow(
+                  () ->
+                      new Problem(
+                          404,
+                          "No such loop",
+                          "The session holds loops "
+                              + session.oldest()
+                              + " to "
+                              + (session.taken() - 1)
+                              + ", not "
+                              + loop));
+      sendJson(exchange, 200, RobotWire.wire(view, loop, session.lastFiring(loop)));
+    }
+
+    private static long wholeNumber(String name, @Nullable String text) {
+      try {
+        return Long.parseLong(String.valueOf(text));
+      } catch (NumberFormatException e) {
+        throw new Problem(400, "Not a number", name + " is a whole number, not " + text);
+      }
     }
 
     /**

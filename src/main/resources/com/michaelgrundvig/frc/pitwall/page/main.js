@@ -11,8 +11,9 @@ import experiment from "./experiment.js";
 import changes from "./changes.js";
 import sim from "./sim.js";
 import world from "./world.js";
+import robotView from "./robot.js";
 
-const views = [pit, tune, experiment, world, changes, sim];
+const views = [pit, tune, experiment, world, robotView, changes, sim];
 mountBar();
 mountApplyBar();
 const sections = new Map(); // view id -> its section

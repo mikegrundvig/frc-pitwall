@@ -6,6 +6,8 @@ import com.michaelgrundvig.frc.pitwall.experiment.Rig;
 import com.michaelgrundvig.frc.pitwall.experiment.Run;
 import com.michaelgrundvig.frc.pitwall.experiment.StepResponse;
 import com.michaelgrundvig.frc.pitwall.experiment.Trace;
+import com.michaelgrundvig.frc.pitwall.robot.RobotFeed;
+import com.michaelgrundvig.frc.pitwall.robot.RobotSession;
 import com.michaelgrundvig.frc.pitwall.scene.Scenes;
 import com.michaelgrundvig.frc.pitwall.simulator.Simulator;
 import java.util.ArrayList;
@@ -39,6 +41,10 @@ public final class Page {
   private final @Nullable Simulator simulator;
   private final Devices devices;
   private final Scenes scenes;
+  private final @Nullable RobotSession robotSession;
+
+  /** What the page is told of the Robot view: built once, as the robot's joints never change. */
+  private final Map<String, Object> robotViewSection;
 
   /** Tells this run of the robot program from the last: the page keeps runs across restarts. */
   private final String program = UUID.randomUUID().toString();
@@ -147,6 +153,32 @@ public final class Page {
       @Nullable Simulator simulator,
       Devices devices,
       Scenes scenes) {
+    this(status, actions, tuning, tunables, experiments, mode, simulator, devices, scenes, null);
+  }
+
+  /**
+   * @param mode the robot's mode as the Driver Station sets it, such as "Utility, enabled": read in
+   *     the robot loop, only while a page is open
+   * @param simulator the simulator's controls, in the simulator; null on a robot, where the page
+   *     has none
+   * @param devices the devices the robot reports on, for the Pit view's cards
+   * @param scenes the scenes the page draws
+   * @param session the robot's session, which the Robot view is drawn from; null for a robot
+   *     program that hands Pitwall none, whose page then has no Robot view
+   */
+  Page(
+      Status status,
+      Actions actions,
+      Tuning tuning,
+      TunableTee tunables,
+      Experiments experiments,
+      Supplier<String> mode,
+      @Nullable Simulator simulator,
+      Devices devices,
+      Scenes scenes,
+      @Nullable RobotSession session) {
+    this.robotSession = session;
+    robotViewSection = session == null ? Map.of() : robotView(session);
     this.status = status;
     this.actions = actions;
     this.tuning = tuning;
@@ -188,6 +220,24 @@ public final class Page {
     return scenes;
   }
 
+  /** The robot's session, which the Robot view is drawn from; null when Pitwall was given none. */
+  public @Nullable RobotSession robotSession() {
+    return robotSession;
+  }
+
+  /**
+   * What the page is told of the Robot view before it shows it: that there is one, the view it
+   * names to be sent the robot's joints, and how much of the session is remembered.
+   */
+  private static Map<String, Object> robotView(RobotSession session) {
+    Map<String, Object> shown = new LinkedHashMap<>();
+    shown.put("robot", session.definition().name());
+    shown.put("view", RobotFeed.VIEW);
+    shown.put("joints", session.definition().joints().size());
+    shown.put("rememberedLoops", session.capacity());
+    return shown;
+  }
+
   /** The simulator's controls; null on a robot. */
   public @Nullable Simulator simulator() {
     return simulator;
@@ -213,6 +263,10 @@ public final class Page {
    *   <li>{@code devices}: each device's card, as of its last read: see {@link Devices#view};
    *   <li>{@code scenes}: each scene's description, by id; what moves in one goes only to the pages
    *       that show it: see {@link Scenes};
+   *   <li>{@code robotView}: with a robot's session, {@code {"robot", "view", "joints",
+   *       "rememberedLoops"}}: that the page has a Robot view, and the view it names to be sent the
+   *       robot's joints, which arrive at {@code robotView.live} ({@link
+   *       com.michaelgrundvig.frc.pitwall.robot.RobotWire}); empty without one;
    *   <li>in the simulator only, {@code simulator} (the Driver Station, the clock, and the
    *       joysticks the page drives), {@code components} (what can fail, and how), and {@code
    *       scenarios}: see {@link Simulator#view}.
@@ -273,6 +327,7 @@ public final class Page {
                 () -> run(run)));
     sections.put("devices", devices.view());
     sections.put("scenes", scenes.descriptions());
+    sections.put("robotView", robotViewSection);
     if (simulator != null) {
       sections.putAll(simulator.view());
     }

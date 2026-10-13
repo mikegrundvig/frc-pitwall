@@ -226,7 +226,9 @@ class PitwallServerTest {
             "sim-outcome.js",
             "world.js",
             "scene-render.js",
-            "scene-shapes.js");
+            "scene-shapes.js",
+            "robot.js",
+            "robot-draw.js");
   }
 
   /**

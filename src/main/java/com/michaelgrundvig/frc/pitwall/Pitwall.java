@@ -2,6 +2,9 @@ package com.michaelgrundvig.frc.pitwall;
 
 import com.michaelgrundvig.frc.pitwall.experiment.Experiments;
 import com.michaelgrundvig.frc.pitwall.push.Broadcaster;
+import com.michaelgrundvig.frc.pitwall.push.Feed;
+import com.michaelgrundvig.frc.pitwall.robot.RobotFeed;
+import com.michaelgrundvig.frc.pitwall.robot.RobotSession;
 import com.michaelgrundvig.frc.pitwall.scene.Scenes;
 import com.michaelgrundvig.frc.pitwall.simulator.Components;
 import com.michaelgrundvig.frc.pitwall.simulator.Simulator;
@@ -34,6 +37,9 @@ import org.wpilib.util.Alert;
  * Add status items, actions, experiments, devices, and scenes through {@link #status()}, {@link
  * #actions()}, {@link #experiments()}, {@link #devices()}, and {@link #scenes()}.
  *
+ * <p>Started with the robot's session ({@link #start(String, RobotSession)}), the page has a Robot
+ * view too: the robot's joints as its model says them, each drawn by its kind, live from the log.
+ *
  * <p>Tuning is WPILib's tunables. Every tunable in the program goes through Pitwall's {@link
  * TunableTee}, around WPILib's own NetworkTables backend: dashboards work as before, while changes
  * apply only while tuning is on, never on the field, and within each tunable's {@link Limits}. A
@@ -62,6 +68,14 @@ public final class Pitwall implements AutoCloseable {
   private final Broadcaster broadcaster;
   private final @Nullable Simulator simulator;
 
+  /** The Robot view's live feed, with a robot's session; null without one. */
+  private final @Nullable RobotFeed robotFeed;
+
+  /** Every feed, the scenes' and the Robot view's: put together again when a scene is added. */
+  private List<Feed> feeds = List.of();
+
+  private int feedsOfScenes = -1;
+
   /** What the simulator's controls said this loop, for the log; the robot loop's alone. */
   private final List<String> said = new ArrayList<>();
 
@@ -76,7 +90,7 @@ public final class Pitwall implements AutoCloseable {
   /** Whether the field system has connected since the robot program started. */
   private boolean fieldSinceStart;
 
-  private Pitwall(String name, int port, boolean advantageKit) {
+  private Pitwall(String name, int port, boolean advantageKit, @Nullable RobotSession session) {
     this.advantageKit = advantageKit;
     // Status items may change at most so often, timed on the robot's clock. Named Robot/... so the
     // page groups them under one heading, with whatever else a robot program adds the same way. The
@@ -139,9 +153,20 @@ public final class Pitwall implements AutoCloseable {
     devices = new Devices(RobotController::getTime);
     // Scenes' patches are timed on the robot's clock too: at most 20 a second, while a page shows.
     scenes = new Scenes(RobotController::getTime, System.out::println);
+    // The Robot view is timed on the robot's clock as the scenes are: at most 20 patches a second.
+    robotFeed = session == null ? null : new RobotFeed(session, RobotController::getTime);
     page =
         new Page(
-            status, actions, tuning, tee, experiments, Pitwall::mode, simulated, devices, scenes);
+            status,
+            actions,
+            tuning,
+            tee,
+            experiments,
+            Pitwall::mode,
+            simulated,
+            devices,
+            scenes,
+            session);
     // A page whose stream closes can't keep an experiment it started going, or drive a joystick.
     // The page's state is compared at most 20 times a second, on the robot's clock.
     broadcaster =
@@ -226,7 +251,31 @@ public final class Pitwall implements AutoCloseable {
    * @param port where to serve the page; 0 picks a free one
    */
   public static Pitwall start(String name, int port) {
-    return new Pitwall(name, port, advantageKitPresent());
+    return new Pitwall(name, port, advantageKitPresent(), null);
+  }
+
+  /**
+   * Starts Pitwall and its page with the robot's session, which the page's Robot view is drawn
+   * from: the robot's joints as its model says them, live from the log. The page is served on
+   * {@link PitwallServer#PORT}, or on the port the {@code pitwall.port} system property names.
+   *
+   * @param name the robot's name, for the page and the logs
+   * @param session the robot's session, made before the log started and handed to AdvantageKit
+   *     ({@code AdvantageKitLog.receiver(session)})
+   */
+  public static Pitwall start(String name, RobotSession session) {
+    return start(name, Integer.getInteger("pitwall.port", PitwallServer.PORT), session);
+  }
+
+  /**
+   * Starts Pitwall and its page with the robot's session.
+   *
+   * @param name the robot's name, for the page and the logs
+   * @param port where to serve the page; 0 picks a free one
+   * @param session the robot's session, which the page's Robot view is drawn from
+   */
+  public static Pitwall start(String name, int port, RobotSession session) {
+    return new Pitwall(name, port, advantageKitPresent(), session);
   }
 
   /** Live tuning's switch, and the live configurations' state. */
@@ -346,7 +395,24 @@ public final class Pitwall implements AutoCloseable {
       broadcaster.compareNow();
     }
     // Last, so an open page hears of everything this loop changed. With none open, nothing.
-    broadcaster.periodic(page::sections, experiments.run(), scenes.feeds());
+    broadcaster.periodic(page::sections, experiments.run(), feeds());
+  }
+
+  /**
+   * Every feed: each scene's, and the Robot view's. The list is put together again only when a
+   * scene has been added, so a loop makes none.
+   */
+  private List<Feed> feeds() {
+    List<? extends Feed> ofScenes = scenes.feeds();
+    if (ofScenes.size() != feedsOfScenes) {
+      List<Feed> all = new ArrayList<>(ofScenes);
+      if (robotFeed != null) {
+        all.add(robotFeed);
+      }
+      feeds = List.copyOf(all);
+      feedsOfScenes = ofScenes.size();
+    }
+    return feeds;
   }
 
   /**
