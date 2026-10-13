@@ -230,6 +230,7 @@ class PitwallServerTest {
             "cursor.js",
             "robot.js",
             "robot-moments.js",
+            "loop-store.js",
             "timeline.js",
             "session-events.js",
             "event-list.js",

@@ -653,9 +653,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .view.world { max-width: none; height: 100%; display: flex; flex-direction: column; gap: var(--s2); }
 .world-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 .world-bar .view-title { margin: 0 var(--s2) 0 0; }
-.world-cameras, .world-layers { display: flex; flex-wrap: wrap; gap: var(--s1); }
-.world-layers { padding-left: var(--s2); border-left: 1px solid var(--line); }
-.world-main { flex: 1; min-height: 0; display: grid; gap: var(--s3);
+.world-cameras { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.world-main { flex: 1 0 320px; min-height: 320px; display: grid; gap: var(--s3);
               grid-template-columns: minmax(0, 1fr) auto; }
 .world-stage { position: relative; min-height: 320px; overflow: hidden; border-radius: 10px;
                border: 1px solid var(--line); background: var(--surface); }
@@ -664,16 +663,38 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .world-message { position: absolute; inset: 0; margin: 0; display: flex; align-items: center;
                  justify-content: center; padding: var(--s5); text-align: center;
                  color: var(--text-2); background: var(--surface); }
-.world-held { position: absolute; top: var(--s2); left: var(--s2); right: var(--s2); margin: 0;
-              width: fit-content; max-width: calc(100% - 16px); padding: 6px 10px; border-radius: 8px;
-              font-size: var(--meta); font-weight: 600; color: var(--lock);
-              background: var(--lock-tint); border: 1px solid var(--lock); }
-.world-earlier { position: absolute; bottom: var(--s2); left: var(--s2); right: var(--s2); margin: 0;
-                 width: fit-content; max-width: calc(100% - 16px); padding: 6px 10px;
-                 display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3);
-                 border-radius: 8px; font-size: var(--meta); font-weight: 600; color: var(--warn);
-                 background: var(--warn-tint); border: 1px solid var(--warn); }
-.world-details { width: 340px; max-height: 100%; overflow: auto; margin: 0; }
+/* Beside the drawing: the legend, which says what each kind of mark means and is where a layer is
+   switched, and under it the details of what was clicked. Folded, the legend is one small button,
+   and with no details shown the column is no wider than that. */
+.world-side { display: flex; flex-direction: column; gap: var(--s2); width: 300px; min-height: 0;
+              max-height: 100%; overflow: auto; }
+.world-side:has(> .world-legend:not([open])):has(> .world-details[hidden]) { width: auto; }
+.world-legend { flex: none; border-radius: 10px; font-size: var(--meta); background: var(--surface);
+                border: 1px solid var(--line); }
+.world-legend > summary { padding: 4px 10px; min-height: 28px; font-weight: 600; cursor: pointer; }
+.world-legend-rows, .world-meanings { list-style: none; margin: 0; padding: 0; }
+.world-legend-rows { padding: 0 6px 6px; }
+.world-layer { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 26px; padding: 2px 4px;
+               border: none; border-radius: 6px; background: none; color: var(--text); text-align: left;
+               font: inherit; font-weight: 600; cursor: pointer; }
+.world-layer:hover:not(:disabled) { background: var(--surface-2); }
+.world-layer[aria-pressed="false"] { color: var(--text-2); font-weight: 400; }
+.world-check { display: inline-flex; align-items: center; justify-content: center; flex: none;
+               width: 14px; height: 14px; border: 1px solid var(--line-strong); border-radius: 3px;
+               font-size: 11px; line-height: 1; }
+.world-layer[aria-pressed="true"] .world-check { background: var(--text); color: var(--surface); border-color: var(--text); }
+.world-meanings { padding: 0 0 4px 24px; }
+.world-meaning { display: flex; align-items: flex-start; gap: 6px; padding: 1px 0; color: var(--text-2); }
+.world-sample { flex: none; width: 30px; height: 14px; margin-top: 2px; }
+@media (pointer: coarse) { .world-layer { min-height: 44px; } .world-legend > summary { min-height: 44px; } }
+.world-live-only { position: absolute; bottom: var(--s2); left: var(--s2); right: var(--s2); margin: 0;
+                   width: fit-content; max-width: calc(100% - 16px); padding: 6px 10px;
+                   border-radius: 8px; font-size: var(--meta); font-weight: 600; color: var(--warn);
+                   background: var(--warn-tint); border: 1px solid var(--warn); }
+/* The strip and the list of events, under the drawing: the same dock as under the Robot view. */
+.view.world .dock { position: static; margin: 0; flex: none; }
+.view.world .dock .el-list { height: 96px; }
+.world-details { margin: 0; }
 .world-details-head { display: flex; align-items: baseline; justify-content: space-between;
                       gap: var(--s2); margin-bottom: var(--s2); }
 .world-details-head h2 { font-size: var(--value); overflow-wrap: anywhere; }
@@ -689,8 +710,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .world-scene { min-height: var(--row); }
 @media (max-width: 719px) {
   .world-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(280px, 1fr) auto; }
-  .world-details { width: auto; max-height: none; }
-  .world-layers { padding-left: 0; border-left: none; }
+  .world-side { width: auto; max-height: none; }
 }
 
 /* ---- Robot: the joints as the model says them, a card each, and beside them the sensors, the

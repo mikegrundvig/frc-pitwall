@@ -17,6 +17,9 @@ const PICK_PIXELS = 12;
 /** A label's height on screen, in CSS pixels, at any zoom. */
 const LABEL_PIXELS = 15;
 
+// What a legend needs of how shapes are drawn, so its samples use the drawing's own styles.
+export { TOKENS, tokenOf, isDashed } from "./scene-shapes.js";
+
 /** Whether this browser can draw 3D at all: three.js needs WebGL 2. */
 export function supported() {
   try {
@@ -53,6 +56,7 @@ export class SceneRenderer {
     this.bounds = new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(10, 10, 1));
     this.selected = null;
     this.revealed = new Set(); // the shape clicked and those it reveals: shown whatever their layer
+    this.hovered = new Set(); // the same, of the shape the pointer is over
     this.followed = null;
     this.followedAt = null;
     this.fitted = new Set();
@@ -221,7 +225,7 @@ export class SceneRenderer {
     // A line between two frames lives in the root, and is kept between them (place).
     const parent = built.between ? this.root : this.frames.get(def.frame) || this.root;
     parent.add(built.object);
-    built.object.visible = this.layerShown(layerId) || this.revealed.has(def.id);
+    built.object.visible = this.layerShown(layerId) || this.isRevealed(def.id);
     if (this.selected === def.id) restyle(built, built.style, this.kit, true);
     return built;
   }
@@ -281,7 +285,7 @@ export class SceneRenderer {
     layer.shown = shown;
     layer.chosen = true;
     for (const built of this.shapes.values()) {
-      if (built.layer === id) built.object.visible = shown || this.revealed.has(built.def.id);
+      if (built.layer === id) built.object.visible = shown || this.isRevealed(built.def.id);
     }
     this.draw();
   }
@@ -624,9 +628,34 @@ export class SceneRenderer {
     if (now) restyle(now, now.style, this.kit, true);
     const was = this.revealed;
     this.revealed = new Set(now ? [id, ...(now.def.reveals || [])] : []);
-    for (const shown of new Set([...was, ...this.revealed])) {
-      const built = this.shapes.get(shown);
-      if (built) built.object.visible = this.revealed.has(shown) || this.layerShown(built.layer);
+    this.showRevealed([...was, ...this.revealed]);
+  }
+
+  /**
+   * Shows what the shape under the pointer reveals (a camera's name and its view) for as long as
+   * the pointer is over it, or nothing more for none.
+   */
+  hover(id) {
+    const now = id ? this.shapes.get(id) : null;
+    const reveals = now ? now.def.reveals || [] : [];
+    if (reveals.length === this.hovered.size && reveals.every((each) => this.hovered.has(each))) {
+      return;
+    }
+    const was = this.hovered;
+    this.hovered = new Set(reveals);
+    this.showRevealed([...was, ...this.hovered]);
+  }
+
+  /** Whether a shape is shown whatever its layer: it, or what reveals it, is clicked or hovered. */
+  isRevealed(id) {
+    return this.revealed.has(id) || this.hovered.has(id);
+  }
+
+  /** Shows or hides some shapes again, as their layers and what reveals them now say. */
+  showRevealed(ids) {
+    for (const id of new Set(ids)) {
+      const built = this.shapes.get(id);
+      if (built) built.object.visible = this.isRevealed(id) || this.layerShown(built.layer);
     }
     this.draw();
   }

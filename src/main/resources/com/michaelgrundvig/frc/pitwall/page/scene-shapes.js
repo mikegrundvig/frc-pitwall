@@ -35,7 +35,6 @@ export class Kit {
     this.lines = new Map(); // "ok" / "ok dashed" -> material
     this.fills = new Map();
     this.solids = new Map(); // opaque, for arrowheads
-    this.faint = new Map(); // barely there, for what spans much of the view: a camera's wedge
     this.selected = new THREE.LineBasicMaterial({ color: 0x2a78d6 });
     this.selectedDashed = new THREE.LineDashedMaterial({ color: 0x2a78d6, dashSize: DASH,
                                                          gapSize: GAP });
@@ -47,8 +46,6 @@ export class Kit {
         transparent: true, opacity: FILL_OPACITY[token], depthWrite: false,
         side: THREE.DoubleSide }));
       this.solids.set(token, new THREE.MeshBasicMaterial());
-      this.faint.set(token, new THREE.MeshBasicMaterial({
-        transparent: true, opacity: 0.035, depthWrite: false, side: THREE.DoubleSide }));
     }
   }
 
@@ -59,7 +56,6 @@ export class Kit {
       this.lines.get(token + " dashed").color.copy(colors[token]);
       this.fills.get(token).color.copy(colors[token]);
       this.solids.get(token).color.copy(colors[token]);
-      this.faint.get(token).color.copy(colors[token]);
     }
     this.selected.color.copy(colors.focus);
     this.selectedDashed.color.copy(colors.focus);
@@ -154,7 +150,7 @@ export function restyle(built, style, kit, selected = false) {
     if (line.material.isLineDashedMaterial) measureDashes(line);
   }
   for (const fill of built.fills) {
-    fill.material = (fill.userData.faint ? kit.faint : kit.fills).get(tokenOf(style));
+    fill.material = kit.fills.get(tokenOf(style));
   }
   for (const head of built.heads) head.material = kit.solid(style);
 }
@@ -311,21 +307,8 @@ const BUILDERS = {
     const lines = lineOf(segments, "pairs");
     built.lines.push(lines);
     built.object.add(lines);
-    // Its sides, faintly: from above, a camera's view is a wedge on the floor.
-    const sides = [];
-    for (let i = 0; i < 4; i++) {
-      const a = nearCorners[i];
-      const b = nearCorners[(i + 1) % 4];
-      const c = farCorners[(i + 1) % 4];
-      const d = farCorners[i];
-      sides.push(...a, ...d, ...c, ...a, ...c, ...b);
-    }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(sides, 3));
-    const fill = new THREE.Mesh(geometry);
-    fill.userData.faint = true; // a wedge may reach across the field: barely tinted
-    built.fills.push(fill);
-    built.object.add(fill);
+    // Its edges only. Its sides, filled however faintly, tinted everything four cameras' views
+    // lay over, the robot first.
   },
 
   label(def, built, kit, label) {
