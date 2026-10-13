@@ -1,8 +1,9 @@
 # Pitwall
 
 Pitwall is the robot program's own web page: status, actions, live tuning, experiments, devices,
-the robot's joints drawn live, and the simulator's controls, served by the program itself on port
-5820 (http://localhost:5820 in the simulator). It's a library of its own
+the robot's joints drawn live with a timeline of the last five minutes, and the simulator's
+controls, served by the program itself on port 5820 (http://localhost:5820 in the simulator). It's
+a library of its own
 (`com.michaelgrundvig.frc.pitwall`), free of any team's robot code. It reads the robot model
 (`com.michaelgrundvig.frc:frc-robot-model`): handed a robot's definition, it draws that robot's
 joints as the model says them. Everything else the robot program contributes to it, as data. The
@@ -71,6 +72,9 @@ The tests read the configuration records' documentation as files in
 The robot's joints as its model says them, live: one card for each joint, drawn by its kind, with
 the same facts under it in words. It is drawn from the robot program's own log, so it shows what
 the program read and decided, loop by loop, and it is the same on a robot and in the simulator.
+Along its bottom is a time strip over the last five minutes: live is too fast to see the order
+things happened in, so the page scrubs back through what was recorded, loop by loop, with what
+happened listed in order beside it ([The session timeline](#the-session-timeline)).
 
 A robot program makes the robot's session before its log starts (`RobotSession.of(definition)`),
 hands AdvantageKit a receiver for it (`AdvantageKitLog.receiver(session)`, beside the log's file and
@@ -96,7 +100,7 @@ profile has it. Under it: where it is and between which places, where it was tol
 it (a command, or idle and what it does idle), how its last move ended, what holds it, and how its
 motor controller, its absolute encoder and its limit switches are. Beside the joints: the robot's
 other sensors, its gates with what each waits for, the gamepads, and the bindings that fired in
-the last second.
+the last second, each with the control that fired it marked on its gamepad.
 
 ### Cause, across cards
 
@@ -136,8 +140,8 @@ lost sensor, reads as unknown, and restricts).
   what it was told, each sensor, each gate with what blocks it, the bindings that fired, and the
   gamepads. Taking one reads about two hundred values and allocates nothing: the robot writes a
   fact only when it changes, and a fact is made out of the log's bytes only then.
-- **The session's memory** is a ring of the last five minutes of moments, in arrays taken once: 810
-  bytes a loop for a robot with eight joints and two sensors, 12 MB in all. A fact's fields are
+- **The session's memory** is a ring of the last five minutes of moments, in arrays taken once: 818
+  bytes a loop for a robot with eight joints and two sensors, 12.3 MB in all. A fact's fields are
   kept each in its place; texts, and the outcomes of moves, are kept once each in tables of their
   own and known by a number. It keeps at most three things holding a joint, 16 gates with two
   blocking terms each, four fired bindings a loop, two gamepads, 4096 different texts and 1024
@@ -148,22 +152,79 @@ lost sensor, reads as unknown, and restricts).
   times a second and only what changed, at `robotView.live` in the page's state (`RobotWire` says
   its shape). With no page showing it, the robot loop does nothing for it.
 - **Any loop:** `GET /api/robot/view` answers with the newest, `?index=` a loop by its index, and
-  `?at=` the loop nearest a time on the robot's clock, in nanoseconds.
+  `?at=` the loop nearest a time on the robot's clock, in nanoseconds. With a loop comes what
+  changed in it from the loop before (`Changed`, a function of the definition and two moments).
+
+### The session timeline
+
+The session records all the time: its memory is the recording. What the page shows of it is one
+piece of page state, the **cursor** (`page/cursor.js`), which is the page's and no view's: either
+live, pinned to the newest loop, or standing on one loop of the session, by its index. Scrubbing
+moves what the page shows through what was recorded. It never rewinds the robot or the simulator,
+the page still follows the robot meanwhile, and the state bar still says how the robot is now.
+
+- **Events** are the loops in which something a person follows changed from the loop before, each
+  with what changed, in words: the robot enabled or disabled, or its mode changed; a binding fired;
+  a command took a joint or left it idle; a joint was asked for another place or output by name; a
+  move ended, with how; something began or stopped holding a joint short of what it was asked; a
+  joint's state changed (homing, faulted, ready); a joint or its absolute encoder stopped
+  answering; a gate began to hold or fell, with why; a switch tripped or cleared, or a sensor was
+  lost. A move that timed out or was refused, a fault, and anything lost are flagged as problems.
+  `EventFinder` finds them as each loop is taken, on the log's thread, by comparing the loop with
+  the one before where the memory keeps them: it allocates nothing, and adds about half a
+  microsecond a loop. An event is kept as two numbers, 12 bytes, in a ring of 4096 (49 KB), and
+  goes when the loop before its own leaves the memory; its sentence is made when it is asked for,
+  from its loop's moment, by the model's functions (`EventSentences`). So the events are a function
+  of the session's moments and nothing else: found again from the loops still remembered, they are
+  the same (`RobotEventsTest`).
+- **Asking for them:** `GET /api/robot/events` answers with those the session holds, `?from=&to=`
+  in a range of loops, `?fromAt=&toAt=` of times, `?newest=` the last so many, `?before=` and
+  `?after=` the one event before or after a loop, each of them `?kind=` of some kinds, `?about=`
+  about one joint, sensor, gate or gamepad port, or `?problems=true`. In Java, `session.events()`.
+- **The time strip** (`page/timeline.js`), along the bottom of the Robot view and made for any view:
+  the memory as a strip of time with the cursor on it and a mark for each event. Marks that would
+  touch are one mark with their count, and a problem among them always shows. Drag to scrub, click
+  a mark to go to it, go to the previous or next event, an earlier or later loop, play at 1×, 0.5×,
+  0.25× or 0.1×, show the last 10 s, 30 s, 2 min or all of it, and go back to live. It says how far
+  behind live the cursor is, and when the cursor's loop leaves the memory the cursor moves to the
+  oldest loop held and the strip says so.
+- **Keys**, while the strip is on screen: Left and Right go one loop, with Shift one event; Space
+  plays and pauses; Esc or L goes back to live. They stand aside for a field with the focus, for
+  the Sim view's keyboard driving (which drives with the arrows), and for Esc while something runs
+  or the page drives, which stops or disables it. None of them reaches the robot.
+- **The list of events** (`page/event-list.js`), beside the strip: the events around the cursor in
+  order, with their times, those of the cursor's loop marked; a click moves the cursor there. A
+  joint's name on its card shows that joint's events only, and *Problems only* the problems. This is
+  where an ordering mistake is read: "feeder told feeding" above "shooter at goal holds" is a shot
+  that fed before its shooter was up.
+- **What changed in this loop:** while the cursor stands on a loop, the rows that changed in it
+  from the loop before are marked on the cards, so going loop by loop shows a cause and then its
+  effect. A row is marked when what it says changed, and not when a number only moved.
+- **The simulator's pause and step** are another thing. The Sim view's *Step* runs one new loop of
+  a paused simulator, which adds a moment; the strip's *Loop* buttons go through loops that already
+  ran. While the simulator is paused, live stands still, and the strip says so.
+- **Other views:** a view reads the cursor (`cursor()`), hears when it moves (`onCursor`), and
+  draws its own data for that loop. The World view does not follow it yet: while the cursor is on
+  an earlier loop it says that it shows the robot live, and offers the way back.
+
+A loop is known by its index; when it was is the robot's to say, since loops are not evenly spaced
+(a slow first loop, an overrun). The page works out a loop's time between the nearest loops whose
+times it was told: the memory's two ends, every event, every loop it has shown.
 
 ### The page
 
 `page/robot.js` is the view and `page/robot-draw.js` draws a joint, in SVG, with no library. The
-drawing module imports nothing and knows nothing of the page, so it draws a saved moment as well as
-the live one. Labels are placed beside what they name and then moved apart until none overlaps: a
-place at a stop ("in 1.5°" at the 0° stop) keeps its spot, and the stop's value moves beside it.
+drawing module imports nothing and knows nothing of the page, so it draws any loop the same way.
+Labels are placed beside what they name and then moved apart until none overlaps: a place at a stop
+("in 1.5°" at the 0° stop) keeps its spot, and the stop's value moves beside it. The view draws the
+loop the cursor is on: the newest as it arrives, or an earlier one asked of the robot and kept
+(`page/robot-moments.js` keeps a few hundred, the latest asked for, and fetches only the loop the
+cursor is on now, so a drag across a thousand loops asks for a handful).
 
-### Planned, and not built
+### Not built
 
-A **session timeline**: a cursor over the remembered five minutes, to scrub and step through, with
-an event strip, and the World view following the same cursor. The session, its indexes and the
-route that answers for any loop are there for it; the page shows only the newest loop today.
-
-Opening a saved log file stays AdvantageScope's job, as charts do.
+The **World view following the cursor**: it shows the present only. **Recording a test's run** to
+look at here. Opening a saved log file stays AdvantageScope's job, as charts do.
 
 ## Scenes: the World view
 
@@ -309,8 +370,9 @@ a canvas. three.js's license is in [`licenses/`](licenses/three.js-License.md).
 ### Not building
 
 The World view draws the code's beliefs, to act on: no log loading, CAD, game pieces, or charts.
-AdvantageScope does those. It shows the present only, for now: the session timeline that is planned
-for the Robot view (above) will move the World view with it.
+AdvantageScope does those. It shows the present only, for now: the Robot view's session timeline
+(above) does not move it yet, and while that view shows an earlier moment this one says that it
+shows the robot live.
 
 ## The template's World
 
