@@ -16,6 +16,8 @@ import java.util.function.Consumer;
  *       scene, and never while none does. Keep it to a handful of numbers.
  *   <li>{@link #inspect} answers a click on one of its shapes, on a web server thread. Most layers
  *       don't need it: a shape made with {@link Shape#inspect} answers for itself.
+ *   <li>{@link #recorded} says the same of an earlier loop, for a layer drawn from the robot's
+ *       record.
  * </ul>
  *
  * <p>A layer that throws costs only itself: its last description, or its last update, stands, and
@@ -50,6 +52,37 @@ public interface Layer {
    */
   default Object configuration() {
     return "";
+  }
+
+  /**
+   * The layer as an earlier loop of the robot's session had it, for a layer drawn from the robot's
+   * record. The page can then show the scene at any loop the record holds. A layer drawn from live
+   * objects has none: it is the present only, and the page says so.
+   */
+  default Optional<Recorded> recorded() {
+    return Optional.empty();
+  }
+
+  /** A layer as the robot's record has it, loop by loop. Asked on a web server thread. */
+  interface Recorded {
+    /** Nothing in the layer moves, so it is the same in every loop: a field's walls. */
+    Recorded STILL = (loop, state) -> true;
+
+    /**
+     * Says what moved as a loop had it: what {@link Layer#update} said in that loop, all of it.
+     *
+     * @param loop the loop's index in the robot's session
+     * @return false when the record does not hold the loop
+     */
+    boolean update(long loop, SceneState state);
+
+    /**
+     * What a click on one of the layer's shapes says of a loop. Empty for a shape that says the
+     * same in every loop, which then answers as it was described.
+     */
+    default Optional<Inspection> inspect(long loop, String shapeId) {
+      return Optional.empty();
+    }
   }
 
   /** A layer that only describes: shapes that never move, such as a field's walls. */

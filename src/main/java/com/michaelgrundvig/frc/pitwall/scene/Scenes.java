@@ -30,6 +30,10 @@ import java.util.function.LongSupplier;
  *   <li><b>A click</b> asks {@code GET /api/scenes/<id>/inspect/<shape>}, answered on the web
  *       server's thread from what the loop published: a shape of the moment can still be inspected
  *       for two seconds after it's gone.
+ *   <li><b>An earlier loop</b> of the robot's record is asked for whole ({@code GET
+ *       /api/scenes/<id>/state?index=}), and a click on it likewise ({@code ...?index=}), for each
+ *       layer that is drawn from the record ({@link Layer#recorded}). Neither costs the robot loop
+ *       anything.
  * </ul>
  *
  * <p>A pose goes as {@code [x, y, yaw]} for one level on the floor, else {@code [x, y, z, roll,
@@ -111,6 +115,36 @@ public final class Scenes {
     for (SceneFeed feed : feeds) {
       if (feed.view().equals(scene)) {
         return feed.inspect(shapeId);
+      }
+    }
+    return Optional.empty();
+  }
+
+  /**
+   * A scene's moving parts as a loop of the robot's record had them, whole, as the page reads a
+   * scene's state, with the layers that are live only named under {@code liveOnly}. Safe from any
+   * thread.
+   *
+   * @return empty when there's no such scene, or its record does not hold the loop
+   */
+  public Optional<Map<String, Object>> stateAt(String scene, long loop) {
+    for (SceneFeed feed : feeds) {
+      if (feed.view().equals(scene)) {
+        return feed.stateAt(loop);
+      }
+    }
+    return Optional.empty();
+  }
+
+  /**
+   * What a click on a shape says of a loop of the robot's record. Safe from any thread.
+   *
+   * @return empty when there's no such scene, or nothing to say about the shape in that loop
+   */
+  public Optional<Inspection> inspectAt(String scene, long loop, String shapeId) {
+    for (SceneFeed feed : feeds) {
+      if (feed.view().equals(scene)) {
+        return feed.inspectAt(loop, shapeId);
       }
     }
     return Optional.empty();

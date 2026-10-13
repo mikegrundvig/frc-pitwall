@@ -76,8 +76,13 @@ import org.wpilib.hardware.hal.RobotMode;
  *       its stream; 204.
  *   <li>{@code GET /api/scenes/<id>/inspect/<shape>}: what a click on a scene's shape says, {@code
  *       {"scene", "shape", "title", "details": [{"label", "value"}], "actions"}}, the actions as
- *       {@code /api/actions} gives them; 404 when nothing is known of it now. See {@link
+ *       {@code /api/actions} gives them; 404 when nothing is known of it now. With {@code ?index=}
+ *       it says what the shape was in that loop of the robot's session. See {@link
  *       com.michaelgrundvig.frc.pitwall.scene.Scenes}.
+ *   <li>{@code GET /api/scenes/<id>/state?index=}: a scene's moving parts as a loop of the robot's
+ *       session had them, whole: {@code {"index", "timestampNanos", "frames", "values", "styles",
+ *       "shapes", "liveOnly"}}, as the scene's state is sent live, with the layers that have no
+ *       earlier loop to show named under {@code liveOnly}; 404 when the session holds no such loop.
  *   <li>{@code GET /api/robot}: with a robot's session, how much of it is remembered and what that
  *       costs, {@code {"robot", "oldest", "newest", "oldestNanos", "newestNanos",
  *       "rememberedLoops", "bytesPerLoop", "bytes", "meanTakeMicros", "slowestTakeMicros", "texts",
@@ -468,6 +473,10 @@ public final class PitwallServer implements AutoCloseable {
   private static final Pattern INSPECT_ROUTE =
       Pattern.compile("/api/scenes/(" + SCENE_NAMES + ")/inspect/(" + SCENE_NAMES + ")");
 
+  /** A scene as a loop of the robot's session had it: the scene's id. */
+  private static final Pattern SCENE_STATE_ROUTE =
+      Pattern.compile("/api/scenes/(" + SCENE_NAMES + ")/state");
+
   /** The most views a page may say it shows at once. */
   private static final int MAX_VIEWS = 8;
 
@@ -595,7 +604,9 @@ public final class PitwallServer implements AutoCloseable {
             allowed = List.of(change ? "POST" : "GET");
           }
           if (allowed == null
-              && (PAGE_FILE.matcher(path).matches() || INSPECT_ROUTE.matcher(path).matches())) {
+              && (PAGE_FILE.matcher(path).matches()
+                  || INSPECT_ROUTE.matcher(path).matches()
+                  || SCENE_STATE_ROUTE.matcher(path).matches())) {
             allowed = List.of("GET");
           }
           if (allowed == null) {
@@ -652,10 +663,13 @@ public final class PitwallServer implements AutoCloseable {
             default -> {
               Matcher device = DEVICE_ROUTE.matcher(path);
               Matcher inspect = INSPECT_ROUTE.matcher(path);
+              Matcher sceneState = SCENE_STATE_ROUTE.matcher(path);
               if (device.matches()) {
                 device(exchange, device);
               } else if (inspect.matches()) {
                 inspect(exchange, inspect.group(1), inspect.group(2));
+              } else if (sceneState.matches()) {
+                sceneState(exchange, sceneState.group(1));
               } else if (PAGE_FILE.matcher(path).matches()) {
                 sendPageFile(exchange, path);
               } else {
@@ -1052,6 +1066,41 @@ public final class PitwallServer implements AutoCloseable {
       shown.put("title", inspection.title());
       shown.put("details", details);
       shown.put("actions", offered);
+      sendJson(exchange, 200, shown);
+    }
+
+    /**
+     * A scene's moving parts as the loop {@code ?index=} names had them, drawn from the robot's
+     * session: all of them, where the live state sends only what changed. 404 for a scene that is
+     * not there, and for a loop the session does not hold.
+     */
+    private void sceneState(HttpExchange exchange, String scene) throws IOException {
+      if (!state.scenes().has(scene)) {
+        throw new Problem(404, "No such scene", "There is no scene " + scene);
+      }
+      Map<String, String> asked = query(exchange.getRequestURI().getRawQuery());
+      if (!asked.containsKey("index")) {
+        throw new Problem(
+            400, "No loop asked for", "Name the loop: /api/scenes/" + scene + "/state?index=");
+      }
+      long loop = wholeNumber("index", asked.get("index"));
+      Map<String, Object> said =
+          state
+              .scenes()
+              .stateAt(scene, loop)
+              .orElseThrow(
+                  () ->
+                      new Problem(
+                          404,
+                          "No such loop",
+                          "The session holds no loop " + loop + " for scene " + scene));
+      Map<String, Object> shown = new LinkedHashMap<>();
+      shown.put("index", loop);
+      RobotSession session = state.robotSession();
+      if (session != null) {
+        session.timeOf(loop).ifPresent(nanos -> shown.put("timestampNanos", nanos));
+      }
+      shown.putAll(said);
       sendJson(exchange, 200, shown);
     }
 

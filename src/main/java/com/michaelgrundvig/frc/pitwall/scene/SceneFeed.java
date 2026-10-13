@@ -126,6 +126,15 @@ final class SceneFeed implements Feed, SceneState {
   private volatile Map<String, Supplier<Inspection>> inspections = Map.of();
 
   /**
+   * What the description says of itself, for a scene drawn from the record on a web server thread:
+   * each value's resolution, and what each described shape says when clicked. Published whole.
+   */
+  private record Described(
+      Map<String, Double> resolutions, Map<String, Supplier<Inspection>> inspections) {}
+
+  private volatile Described described = new Described(Map.of(), Map.of());
+
+  /**
    * Describes every layer of the scene.
    *
    * @param clock the robot's clock, in nanoseconds
@@ -261,6 +270,50 @@ final class SceneFeed implements Feed, SceneState {
       }
     }
     return Optional.empty();
+  }
+
+  /**
+   * The scene's moving parts as a loop of the robot's record had them, whole: {@code {"frames",
+   * "values", "styles", "shapes", "liveOnly"}}, the last naming the layers that are drawn from live
+   * objects and so have no earlier loop to show. From any thread.
+   *
+   * @return empty when a layer's record does not hold the loop
+   */
+  Optional<Map<String, Object>> stateAt(long loop) {
+    StillState still = new StillState(clock.getAsLong());
+    List<String> liveOnly = new ArrayList<>();
+    for (Running running : layers) {
+      Optional<Layer.Recorded> recorded = running.layer.recorded();
+      if (recorded.isEmpty()) {
+        liveOnly.add(running.layer.id());
+        continue;
+      }
+      if (!recorded.get().update(loop, still.layer(running.layer.id()))) {
+        return Optional.empty();
+      }
+    }
+    Map<String, Object> wire = still.wire(described.resolutions());
+    wire.put("liveOnly", liveOnly);
+    return Optional.of(wire);
+  }
+
+  /**
+   * What a click on a shape says of a loop of the robot's record: what its layer says of that loop,
+   * else what the shape was described to say, which is the same in every loop. From any thread.
+   */
+  Optional<Inspection> inspectAt(long loop, String shapeId) {
+    for (Running running : layers) {
+      Optional<Layer.Recorded> recorded = running.layer.recorded();
+      if (recorded.isEmpty()) {
+        continue;
+      }
+      Optional<Inspection> said = recorded.get().inspect(loop, shapeId);
+      if (said.isPresent()) {
+        return said;
+      }
+    }
+    Supplier<Inspection> own = described.inspections().get(shapeId);
+    return own == null ? Optional.empty() : Optional.of(own.get());
   }
 
   // ---- SceneState, for the layer updating ----
@@ -539,6 +592,9 @@ final class SceneFeed implements Feed, SceneState {
             });
     values = held;
     valueList = List.copyOf(held.values());
+    Map<String, Supplier<Inspection>> ofTheDescription = new HashMap<>();
+    checked.inspections().forEach(ofTheDescription::putAll);
+    described = new Described(Map.copyOf(checked.values()), Map.copyOf(ofTheDescription));
     publishInspections();
   }
 
