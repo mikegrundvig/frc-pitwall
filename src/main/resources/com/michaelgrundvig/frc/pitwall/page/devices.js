@@ -98,8 +98,11 @@ function update(parts, device) {
   }
 }
 
-/** A choice on a card: its options, what's chosen now, and a button to choose another. */
-function makeChoice(name, choice) {
+/**
+ * A choice on a card: its options, what's chosen now, and a button to choose another. The Sim
+ * panel shows the auto's with the same one (sim-auto.js).
+ */
+export function makeChoice(name, choice) {
   const select = h("select", { "aria-label": choice.label },
     choice.options.map((option) => h("option", { value: option.value }, option.label)));
   select.value = choice.current;

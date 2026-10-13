@@ -116,16 +116,59 @@ input[readonly] { background: var(--surface-2); }
 
 .shell { display: grid; height: 100%; background: var(--bg);
          grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-         grid-template-areas: "bar" "band" "tabs" "main" "apply"; }
+         grid-template-columns: minmax(0, 1fr) auto;
+         grid-template-areas: "bar bar" "band band" "tabs tabs" "main side" "apply apply"; }
 .bar { grid-area: bar; }
 .band { grid-area: band; }
 .tabs { grid-area: tabs; }
 .views { grid-area: main; overflow: auto; }
+.sidedock { grid-area: side; }
 .applybar { grid-area: apply; }
 @media (max-width: 719px) and (pointer: coarse) {
   .shell { grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-           grid-template-areas: "bar" "band" "main" "apply" "tabs"; }
+           grid-template-areas: "bar bar" "band band" "main side" "apply apply" "tabs tabs"; }
 }
+/* A view lays itself out by the width it has, which is less than the window's while the side dock
+   is open beside it: so its breakpoints ask the views' own width (@container views). Not on a
+   phone, where the dock lies over the page and takes no width, and where a button pinned to the
+   screen must stay pinned to the screen. */
+@media (min-width: 720px) { .views { container: views / inline-size; } }
+
+/* ---- The side dock: a panel beside every view (side-dock.js). A column on a wide screen, with an
+   edge to drag; over the bottom of the page on a narrow one. ---- */
+
+.sidedock { position: relative; display: flex; flex-direction: column; min-height: 0;
+        width: var(--side-width, 380px); background: var(--surface);
+        border-left: 1px solid var(--line-strong); }
+.side-grip { position: absolute; z-index: 2; left: -4px; top: 0; bottom: 0; width: 9px;
+             cursor: col-resize; touch-action: none; }
+.side-grip::after { content: ""; position: absolute; left: 3px; top: 0; bottom: 0; width: 3px;
+                    background: transparent; }
+.side-grip:hover::after, .side-grip:focus-visible::after { background: var(--focus); }
+.side-grip:focus-visible { outline: none; }
+.side-head { flex: none; display: flex; align-items: center; justify-content: space-between;
+             gap: var(--s2); padding: var(--s1) var(--s3) var(--s1) var(--s4);
+             border-bottom: 1px solid var(--line); }
+.side-title { font-size: var(--value); }
+.side-title:focus-visible { outline-offset: 4px; }
+.side-close { font-size: var(--value); min-width: 36px; min-height: 36px; text-align: center; }
+.side-body { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--s3) var(--s4) var(--s4); }
+@media (max-width: 899px) {
+  .sidedock { position: fixed; z-index: 8; left: 0; right: 0; bottom: 0; width: auto;
+          height: min(64vh, 560px); border-left: none; border-top: 1px solid var(--line-strong);
+          border-radius: 12px 12px 0 0; box-shadow: var(--shadow); }
+  .side-grip { display: none; }
+  .side-close { min-width: 44px; min-height: 44px; }
+}
+/* The dock's buttons in the state bar, one a panel: filled in while its panel is open. */
+.bar-panels { display: inline-flex; gap: var(--s1); }
+.bar-panels:empty { display: none; }
+.side-button { min-height: 34px; padding: 2px 12px; border-radius: 999px; font-weight: 600; }
+.side-button[aria-expanded="true"] { background: var(--text); color: var(--surface);
+                                     border-color: var(--text); }
+.side-button[aria-expanded="true"]:hover:not(:disabled) { background: var(--text);
+                                                          filter: brightness(1.15); }
+@media (pointer: coarse) { .side-button { min-height: 44px; } }
 
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: var(--s2) var(--s4);
        background: var(--surface); border-bottom: 1px solid var(--line); }
@@ -168,8 +211,14 @@ input[readonly] { background: var(--surface-2); }
 /* Below a wide laptop, the bar keeps to one line: the code (in Pit's status too) goes, and the
    theme button is its mark alone. */
 @media (max-width: 1099px) {
-  .bar .code { display: none; }
   .theme .word { display: none; }
+}
+/* The simulator's bar holds more (Enable, Disable, the panel's button), so the code goes sooner. */
+@media (max-width: 1499px) {
+  .bar:has(.enabler) .code { display: none; }
+}
+@media (max-width: 1099px) {
+  .bar .code { display: none; }
 }
 @media (max-width: 719px) {
   .bar { padding: var(--s2) var(--s3); gap: 6px 10px; }
@@ -254,12 +303,16 @@ table { border-collapse: collapse; }
 .pit .side { min-width: 0; }
 /* Two columns: the actions down the right, the switches and devices under the status on the left,
    so neither column waits for the other's row to end. */
-@media (max-width: 1179px) {
+@container views (max-width: 1179px) {
   .pit { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto auto 1fr; }
   .pit > .fold { grid-column: 2; grid-row: 2 / span 2; }
   .pit .side { grid-column: 1; grid-row: 3; }
 }
-@media (max-width: 899px) {
+@container views (max-width: 899px) {
+  .pit { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .pit > .fold, .pit .side { grid-column: auto; grid-row: auto; }
+}
+@media (max-width: 719px) {
   .pit { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
   .pit > .fold, .pit .side { grid-column: auto; grid-row: auto; }
 }
@@ -457,7 +510,8 @@ table { border-collapse: collapse; }
 /* ---- Experiment ---- */
 
 .exp { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); gap: var(--s4); align-items: start; }
-@media (max-width: 959px) { .exp { grid-template-columns: minmax(0, 1fr); } }
+@container views (max-width: 959px) { .exp { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 719px) { .exp { grid-template-columns: minmax(0, 1fr); } }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { border-radius: 999px; padding: 3px var(--s3); min-height: 30px; }
 .chip { display: inline-flex; align-items: center; border: 1px solid var(--line-strong); color: var(--text);
@@ -532,7 +586,8 @@ table { border-collapse: collapse; }
 /* ---- Sim ---- */
 
 .sim { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; align-items: start; }
-@media (max-width: 899px) { .sim { grid-template-columns: minmax(0, 1fr); } }
+@container views (max-width: 899px) { .sim { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 719px) { .sim { grid-template-columns: minmax(0, 1fr); } }
 
 /* The Driver Station's state, with Enable and Disable, held at the top of the view as it scrolls:
    Disable is always in reach. Enabled is filled in; disabled is an outline. */
@@ -633,6 +688,39 @@ table { border-collapse: collapse; }
 .param .lim { font-size: 12px; color: var(--muted); }
 .fault .acts .meta { flex: 1 1 200px; }
 .tag.on { color: var(--tuned); background: var(--tuned-tint); }
+/* The simulator's sections where they are compact (the Sim panel): no cards, a rule between them,
+   smaller controls, and what is used less folded under a line that says what it holds. */
+.simsec { padding: var(--s3) 0; border-bottom: 1px solid var(--line); margin: 0; }
+.simsec > h3 { font-size: var(--body); margin-bottom: var(--s1); }
+.side-panel button:not(.link):not(.switch) { min-height: 30px; padding: 2px 10px; font-size: 14px; }
+.side-panel input, .side-panel select { min-height: 30px; font-size: 14px; }
+.side-panel .simrow { margin: 6px 0; gap: var(--s1) var(--s2); }
+.side-panel .simrow .label { flex-basis: 100%; min-width: 0; font-size: var(--meta); }
+.side-panel .state { margin: 2px 0 6px; font-size: var(--meta); }
+.side-panel .state.paused { color: var(--warn); font-weight: 600; }
+.side-panel .keymap { font-size: var(--meta); }
+.side-panel .acts { margin: var(--s1) 0; }
+.side-panel .slist li { font-size: 14px; grid-template-columns: 18px 5.5em minmax(0, 1fr); padding: 3px 0; }
+.side-panel .dchoice select { max-width: 100%; min-width: 0; flex: 1 1 140px; }
+.side-panel .onbar { margin-bottom: var(--s2); font-size: 14px; }
+.side-panel .fault { padding: var(--s2) 0 var(--s2) 12px; }
+.side-panel .fault .does, .world-details .fault .does { font-size: var(--meta); margin: 1px 0 4px; }
+.side-panel .params, .world-details .params { gap: var(--s1) var(--s3); }
+.side-panel .pval, .world-details .pval { width: 4.6em; }
+.side-panel .scens { grid-template-columns: minmax(0, 1fr); }
+.simmore { margin: var(--s1) 0; }
+.simmore > summary { cursor: pointer; min-height: 28px; display: flex; align-items: center;
+                     gap: var(--s2); font-size: var(--meta); font-weight: 600; color: var(--text-2);
+                     list-style: none; }
+.simmore > summary::-webkit-details-marker { display: none; }
+.simmore > summary::before { content: "▸"; color: var(--muted); width: 1em; }
+.simmore[open] > summary::before { content: "▾"; }
+.simmore .fcname { font-size: var(--meta); }
+.simall { margin-top: var(--s3); }
+@media (pointer: coarse) {
+  .side-panel button:not(.link):not(.switch), .side-panel input, .side-panel select,
+  .simmore > summary { min-height: 44px; }
+}
 /* The filter over the faults, with the short list's "Show all" beside it. */
 .ffind { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin: 0 0 var(--s2); }
 .ffilter { flex: 1 1 180px; min-width: 0; max-width: 420px; }
@@ -737,7 +825,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .rv-bar .view-title { margin: 0; }
 .rv-waiting { color: var(--text-2); }
 .rv-main { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 10px; align-items: start; }
-@media (max-width: 899px) { .rv-main { grid-template-columns: minmax(0, 1fr); } }
+@container views (max-width: 899px) { .rv-main { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 719px) { .rv-main { grid-template-columns: minmax(0, 1fr); } }
 .rv-joints { display: grid; grid-template-columns: repeat(auto-fill, minmax(262px, 1fr)); gap: 10px;
              align-items: start; }
 .rv .card { padding: 10px; margin-bottom: 0; }
@@ -813,8 +902,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 @media (max-width: 719px) { .dock { margin-bottom: calc(-1 * var(--s3)); } }
 /* On a laptop the strip and the list sit side by side, the list standing taller, so together they
    cover a corner of the cards and not half of them; a folded list leaves the strip the width. */
-@media (min-width: 1100px) {
-  .dock { display: grid; align-items: end; grid-template-columns: minmax(0, 1fr) minmax(360px, 34%); }
+@container views (min-width: 900px) {
+  .dock { display: grid; align-items: end; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); }
   .dock:has(.el:not([open])) { grid-template-columns: minmax(0, 1fr) auto; }
   .dock .ts { grid-column: 1; grid-row: 1; border-radius: 10px 0 0 0; }
   .dock .el { grid-column: 2; grid-row: 1; border-left: none; border-radius: 10px 10px 0 0; }

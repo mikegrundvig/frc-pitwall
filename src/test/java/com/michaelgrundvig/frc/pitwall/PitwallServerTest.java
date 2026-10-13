@@ -237,6 +237,9 @@ class PitwallServerTest {
             "changes.js",
             "sim.js",
             "keys.js",
+            "side-dock.js",
+            "sim-panel.js",
+            "sim-auto.js",
             "sim-state.js",
             "sim-enable.js",
             "sim-station.js",
@@ -848,8 +851,8 @@ class PitwallServerTest {
   /**
    * On a robot the page can't enable or disable: the request is refused, whatever it asks, and the
    * page is never told there is a simulator, which is the one thing its Enable and Disable are
-   * built on (sim-state.js's {@code isSimulator()}: a simulated robot with a simulator section,
-   * and a robot's page has no such section). The Driver Station enables a robot.
+   * built on (sim-state.js's {@code isSimulator()}: a simulated robot with a simulator section, and
+   * a robot's page has no such section). The Driver Station enables a robot.
    */
   @Test
   void aRobotsPageCanNeitherEnableNorDisableIt() throws Exception {

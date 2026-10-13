@@ -4,6 +4,8 @@
 
 import { robot, connect, onChange, byId, h } from "./core.js";
 import { startKeys } from "./keys.js";
+import { mountDock, offer } from "./side-dock.js";
+import { addSimPanel } from "./sim-panel.js";
 import { mountBar } from "./bar.js";
 import { mountApplyBar, showIn } from "./applybar.js";
 import pit from "./pit.js";
@@ -17,6 +19,8 @@ import robotView from "./robot.js";
 const views = [pit, tune, experiment, world, robotView, changes, sim];
 mountBar();
 mountApplyBar();
+mountDock();
+addSimPanel();
 const sections = new Map(); // view id -> its section
 const tabs = new Map(); // view id -> its tab
 let current = null;
@@ -105,7 +109,10 @@ onChange((patch, snapshot) => {
     count.setAttribute("aria-label", tuned + " to commit");
   }
   // The address may name a view offered only now, such as #sim, or one no longer offered.
-  if (snapshot || "robot" in patch) reoffer();
+  if (snapshot || "robot" in patch) {
+    reoffer();
+    offer(); // the dock's panels too: the Sim panel is offered only in the simulator
+  }
 });
 document.addEventListener("pitwall-offered", reoffer);
 

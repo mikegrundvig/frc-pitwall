@@ -53,7 +53,10 @@ export function mountBar() {
     h("span", { class: "brand" }, "Pitwall", name, badge),
     code,
     h("span", { class: "spacer" }),
-    connection, mode, driving, tuningPill, uncommitted, themeButton);
+    connection, mode, driving,
+    // The side dock's buttons, one for each panel it has (side-dock.js fills it).
+    h("span", { class: "bar-panels", id: "bar-panels" }),
+    tuningPill, uncommitted, themeButton);
   bandSince = h("span");
   band = byId("band");
   onChange(render);

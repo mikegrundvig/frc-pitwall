@@ -151,6 +151,16 @@ export async function enable(message = null) {
   await patch({ enabled: true }, message);
 }
 
+/**
+ * Sets the Driver Station to autonomous and enables the robot, in one loop, so the auto the robot
+ * has chosen runs. Only ever called by a press of the button that says exactly that.
+ */
+export async function enableInAutonomous(message = null) {
+  const now = sim();
+  if (!isSimulator() || !now || now.enabled) return;
+  await patch({ mode: "AUTONOMOUS", enabled: true }, message);
+}
+
 /** Disables the simulated robot. Failing to is said loudly, wherever it was asked from. */
 export async function disable(message = null) {
   if (!isSimulator()) return;

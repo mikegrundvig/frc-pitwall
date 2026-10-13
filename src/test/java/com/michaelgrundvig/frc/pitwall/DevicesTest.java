@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 
 /** The devices' cards as the robot loop reads them, and what a device may be. */
@@ -76,6 +77,26 @@ class DevicesTest {
         .isEqualTo(List.of(Map.of("id", "settings", "label", "Download settings backup")));
     assertThat(shown.get("uploads"))
         .isEqualTo(List.of(Map.of("id", "survey", "label", "Upload venue")));
+    assertThat(shown).doesNotContainKey("autonomous");
+  }
+
+  /**
+   * The device whose card is what autonomous runs says so, and no other does: the page's Sim
+   * controls show that card over the press that sets autonomous and enables.
+   */
+  @Test
+  void theCardOfWhatAutonomousRunsSaysSo() {
+    devices.add(Device.named("auto", "Autonomous", this::card).autonomous());
+    devices.add(Device.named("vision-front", "Coprocessor", this::card));
+
+    devices.periodic(true);
+
+    assertThat(devices.view().get("auto"))
+        .asInstanceOf(InstanceOfAssertFactories.MAP)
+        .containsEntry("autonomous", true);
+    assertThat(devices.view().get("vision-front"))
+        .asInstanceOf(InstanceOfAssertFactories.MAP)
+        .doesNotContainKey("autonomous");
   }
 
   @Test

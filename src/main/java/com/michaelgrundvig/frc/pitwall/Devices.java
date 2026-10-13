@@ -249,6 +249,7 @@ public final class Devices {
     private final List<Download> downloads = new ArrayList<>();
     private final List<Upload> uploads = new ArrayList<>();
     private final Map<String, Choose> choosers = new LinkedHashMap<>();
+    private boolean autonomous;
     private boolean added;
 
     private Device(String name, String kind, Supplier<Card> card) {
@@ -307,6 +308,17 @@ public final class Devices {
       if (choosers.putIfAbsent(id, choose) != null) {
         throw new IllegalArgumentException(name + " has two choosers named " + id);
       }
+      return this;
+    }
+
+    /**
+     * Says this device's card is what the robot runs in autonomous, and its choice the auto to run.
+     * In the simulator the page then shows the card among its controls of the Driver Station too,
+     * over the one press that sets autonomous and enables. Choosing never enables.
+     */
+    public Device autonomous() {
+      unchanged();
+      autonomous = true;
       return this;
     }
 
@@ -415,7 +427,7 @@ public final class Devices {
    * The devices as of the last read, for the event stream: {@code {name: {"kind", "state", "level",
    * "lines": [{"label", "value", "level"}], "downloads": [{"id", "label"}], "uploads": [{"id",
    * "label"}], "choices": [{"id", "label", "options": [{"value", "label"}], "current"}]}}}, levels
-   * in lowercase.
+   * in lowercase; and {@code "autonomous": true} for the device that says what autonomous runs.
    */
   Map<String, Object> view() {
     return section;
@@ -437,6 +449,9 @@ public final class Devices {
   private static Map<String, Object> shown(Device device, Card card) {
     Map<String, Object> shown = new LinkedHashMap<>();
     shown.put("kind", device.kind());
+    if (device.autonomous) {
+      shown.put("autonomous", true);
+    }
     shown.put("state", card.state());
     shown.put("level", level(card.level()));
     List<Object> lines = new ArrayList<>();
