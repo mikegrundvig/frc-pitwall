@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -49,6 +50,16 @@ public final class Fault {
   private final Consumer<Values> apply;
   private final Runnable undoAction;
   private final BooleanSupplier on;
+  private final @Nullable Point point;
+
+  /**
+   * Two of a fault's numbers that are a place on the field, in meters: where the robot is set down,
+   * say. The page can take them from a click on its drawing of the field.
+   *
+   * @param x the parameter that is the place's x
+   * @param y the parameter that is its y
+   */
+  public record Point(String x, String y) {}
 
   private Fault(Builder builder) {
     if (builder.name.isBlank()) {
@@ -71,6 +82,15 @@ public final class Fault {
       undoAction = () -> {};
     }
     parameters = List.copyOf(builder.parameters);
+    point = builder.point;
+    if (point != null) {
+      for (String named : List.of(point.x(), point.y())) {
+        if (parameters.stream().noneMatch(parameter -> parameter.name().equals(named))) {
+          throw new IllegalArgumentException(
+              name + "'s place on the field names " + named + ", which isn't one of its numbers");
+        }
+      }
+    }
   }
 
   /** A fault that lasts until it's undone, such as a gyro unplugged. */
@@ -108,6 +128,11 @@ public final class Fault {
    */
   public String undo() {
     return undo;
+  }
+
+  /** The two of its numbers that are a place on the field, if it has such a place. */
+  public Optional<Point> point() {
+    return Optional.ofNullable(point);
   }
 
   /** Whether it's on now: a lasting fault asks the simulated world; an event never is. */
@@ -193,6 +218,7 @@ public final class Fault {
     private @Nullable Consumer<Values> apply;
     private @Nullable Runnable undoAction;
     private @Nullable BooleanSupplier on;
+    private @Nullable Point point;
 
     private Builder(String name, Kind kind) {
       this.name = name;
@@ -218,6 +244,18 @@ public final class Fault {
         throw new IllegalArgumentException(this.name + " has two parameters named " + name);
       }
       parameters.add(new Parameter(name, unit, limits, initial));
+      return this;
+    }
+
+    /**
+     * Says two of its numbers are a place on the field, in meters from the field's origin: the page
+     * offers to take them from a click on its drawing of the field.
+     *
+     * @param x the name of the parameter that is the place's x
+     * @param y the name of the parameter that is its y
+     */
+    public Builder point(String x, String y) {
+      this.point = new Point(x, y);
       return this;
     }
 

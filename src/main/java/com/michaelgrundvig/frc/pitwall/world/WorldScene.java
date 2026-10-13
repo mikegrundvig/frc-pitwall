@@ -35,7 +35,9 @@ import java.util.function.Supplier;
  * ({@link #draw}), so the view is the same thing at any loop: the newest, live, or the one the
  * page's cursor is on. A click on a sight line says why its measurement was accepted or refused in
  * that loop, a click on a camera says how it's mounted, and a click on the ellipse how sure the
- * estimate was. Each layer says what its marks mean, for the page's legend.
+ * estimate was. In the simulator a click on a camera, the gyro, a wheel or the bumpers also ends in
+ * what can be made to fail there ({@link SimulatedParts}). Each layer says what its marks mean, for
+ * the page's legend.
  *
  * <p>The view draws the code's own beliefs. A camera's wedge pointing the wrong way is a typo in
  * {@code Robots.java}, found at a glance.
@@ -64,10 +66,11 @@ public final class WorldScene {
       Supplier<FieldModel> onField,
       Truth truth,
       SightingWords words,
-      Function<String, Optional<String>> cameraAction) {
+      Function<String, Optional<String>> cameraAction,
+      SimulatedParts simulated) {
     field = new FieldLayer(onField);
-    robot = new RobotLayer(definition, cameraAction);
-    views = new CameraViews(definition.cameras(), cameraAction);
+    robot = new RobotLayer(definition, cameraAction, simulated);
+    views = new CameraViews(definition.cameras(), cameraAction, simulated);
     moving.add(robot);
     moving.add(new Uncertainty());
     moving.add(new SightLines(onField, definition.cameras(), words, cameraAction));
@@ -93,7 +96,24 @@ public final class WorldScene {
       Truth truth,
       SightingWords words,
       Function<String, Optional<String>> cameraAction) {
-    return new WorldScene(robot, field, truth, words, cameraAction);
+    return new WorldScene(robot, field, truth, words, cameraAction, SimulatedParts.NONE);
+  }
+
+  /**
+   * The world of one simulated robot on one field: as {@link #of(RobotDefinition, Supplier, Truth,
+   * SightingWords, Function)}, and a click on a camera, the gyro, a wheel or the bumpers also ends
+   * in the faults of the simulator's part it is.
+   *
+   * @param simulated which of the simulator's parts each part of the robot is
+   */
+  public static WorldScene of(
+      RobotDefinition robot,
+      Supplier<FieldModel> field,
+      Truth truth,
+      SightingWords words,
+      Function<String, Optional<String>> cameraAction,
+      SimulatedParts simulated) {
+    return new WorldScene(robot, field, truth, words, cameraAction, simulated);
   }
 
   /**

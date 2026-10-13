@@ -11,6 +11,7 @@ import com.michaelgrundvig.frc.pitwall.robot.RobotSession;
 import com.michaelgrundvig.frc.pitwall.robot.RobotView;
 import com.michaelgrundvig.frc.pitwall.robot.RobotWire;
 import com.michaelgrundvig.frc.pitwall.scene.Inspection;
+import com.michaelgrundvig.frc.pitwall.simulator.Component;
 import com.michaelgrundvig.frc.pitwall.simulator.Components;
 import com.michaelgrundvig.frc.pitwall.simulator.DriverStationState;
 import com.michaelgrundvig.frc.pitwall.simulator.JoystickInput;
@@ -31,6 +32,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -75,9 +77,10 @@ import org.wpilib.hardware.hal.RobotMode;
  *   <li>{@code PUT /api/views}: {@code {"views": ["world"]}}, the views the page shows now, naming
  *       its stream; 204.
  *   <li>{@code GET /api/scenes/<id>/inspect/<shape>}: what a click on a scene's shape says, {@code
- *       {"scene", "shape", "title", "details": [{"label", "value"}], "actions"}}, the actions as
- *       {@code /api/actions} gives them; 404 when nothing is known of it now. With {@code ?index=}
- *       it says what the shape was in that loop of the robot's session. See {@link
+ *       {"scene", "shape", "title", "details": [{"label", "value"}], "actions", "components"}}, the
+ *       actions as {@code /api/actions} gives them, and the components the simulator's parts the
+ *       shape is (none on a robot); 404 when nothing is known of it now. With {@code ?index=} it
+ *       says what the shape was in that loop of the robot's session. See {@link
  *       com.michaelgrundvig.frc.pitwall.scene.Scenes}.
  *   <li>{@code GET /api/scenes/<id>/state?index=}: a scene's moving parts as a loop of the robot's
  *       session had them, whole: {@code {"index", "timestampNanos", "frames", "values", "styles",
@@ -1023,9 +1026,11 @@ public final class PitwallServer implements AutoCloseable {
 
     /**
      * What a click on a scene's shape says, from what the robot loop last published: {@code
-     * {"scene", "shape", "title", "details": [{"label", "value"}], "actions": [action]}}, each
-     * action as {@code /api/actions} gives it (one that isn't an action is left out). 404 when
-     * there's nothing to say: no such scene, or a shape gone for more than two seconds.
+     * {"scene", "shape", "title", "details": [{"label", "value"}], "actions": [action],
+     * "components": [name]}}, each action as {@code /api/actions} gives it (one that isn't an
+     * action is left out), and each component one of the simulator's parts the shape is, whose
+     * faults are in the page's state already (always none on a robot). 404 when there's nothing to
+     * say: no such scene, or a shape gone for more than two seconds.
      *
      * <p>With {@code ?index=} it says what the shape was in that loop of the robot's session, from
      * the session's memory: 404 when the scene has nothing to say of the shape in that loop.
@@ -1080,7 +1085,31 @@ public final class PitwallServer implements AutoCloseable {
       shown.put("title", inspection.title());
       shown.put("details", details);
       shown.put("actions", offered);
+      shown.put("components", partsThatCanFail(inspection));
       sendJson(exchange, 200, shown);
+    }
+
+    /**
+     * The simulator's parts a clicked shape is, of those it names: none on a robot, which has no
+     * simulator, so its page is never offered a fault.
+     */
+    private List<String> partsThatCanFail(Inspection inspection) {
+      Simulator simulator = state.simulator();
+      if (simulator == null) {
+        return List.of();
+      }
+      Set<String> known = new HashSet<>();
+      for (Component component : simulator.components().components()) {
+        known.add(component.name());
+      }
+      // In the order the shape names them: the part itself first.
+      List<String> parts = new ArrayList<>();
+      for (String name : inspection.components()) {
+        if (known.contains(name) && !parts.contains(name)) {
+          parts.add(name);
+        }
+      }
+      return parts;
     }
 
     /**

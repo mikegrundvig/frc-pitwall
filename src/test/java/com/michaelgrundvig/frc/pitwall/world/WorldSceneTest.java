@@ -25,6 +25,7 @@ import com.michaelgrundvig.frc.world.robot.RobotDefinition;
 import io.avaje.jsonb.JsonType;
 import io.avaje.jsonb.Jsonb;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -150,6 +151,95 @@ class WorldSceneTest {
                 + "\"style\":\"bad dashed\"")
         .contains("\"mark\":\"outline\",\"style\":\"truth dashed\"");
     assertThat(said).isEmpty();
+  }
+
+  /** The simulator's parts, as a robot's simulation would name them. */
+  private static final SimulatedParts SIMULATED =
+      new SimulatedParts() {
+        @Override
+        public Optional<String> camera(String name) {
+          return Optional.of("Camera " + name);
+        }
+
+        @Override
+        public Optional<String> gyro() {
+          return Optional.of("Gyro");
+        }
+
+        @Override
+        public Optional<String> backupImu() {
+          return Optional.of("Backup IMU");
+        }
+
+        @Override
+        public Optional<String> module(int index) {
+          return Optional.of("Module " + index);
+        }
+
+        @Override
+        public Optional<String> robot() {
+          return Optional.of("Robot");
+        }
+      };
+
+  /**
+   * In the simulator a click on a part that can fail there names the simulator's part it is, whose
+   * faults the page then offers: a camera (on its arrow or its view), the gyro, each wheel's
+   * module, and on the bumpers the robot itself with the backup IMU, which has no shape. A sensor
+   * and a tag are no such part.
+   */
+  @Test
+  void inTheSimulatorAClickOnAPartNamesTheSimulatorsPartItIs() {
+    WorldScene simulated =
+        WorldScene.of(
+            ROBOT,
+            () -> FIELD,
+            WorldScene.Truth.IN_THE_RECORD,
+            WORDS,
+            camera -> Optional.empty(),
+            SIMULATED);
+    scenes.add(simulated.scene(session));
+
+    Map<String, List<String>> partsOf = new LinkedHashMap<>();
+    for (String shape :
+        List.of(
+            "camera.front.axis",
+            "camera.front.view",
+            "imu.gyro.block",
+            "imu.gyro.x",
+            "wheel.front-left",
+            "wheel.back-right",
+            "robot.bumpers",
+            "sensor.0.block",
+            "tag.7.square")) {
+      partsOf.put(shape, scenes.inspect(WorldScene.ID, shape).orElseThrow().components());
+    }
+
+    assertThat(partsOf)
+        .containsEntry("camera.front.axis", List.of("Camera front"))
+        .containsEntry("camera.front.view", List.of("Camera front"))
+        .containsEntry("imu.gyro.block", List.of("Gyro"))
+        .containsEntry("imu.gyro.x", List.of("Gyro"))
+        .containsEntry("wheel.front-left", List.of("Module 0"))
+        .containsEntry("wheel.back-right", List.of("Module 3"))
+        .containsEntry("robot.bumpers", List.of("Robot", "Backup IMU"))
+        .containsEntry("sensor.0.block", List.of())
+        .containsEntry("tag.7.square", List.of());
+    assertThat(scenes.inspect(WorldScene.ID, "wheel.front-left").orElseThrow().title())
+        .isEqualTo("Module front-left");
+  }
+
+  /** A robot that isn't simulated names no such part: its page is never offered a fault. */
+  @Test
+  void onARobotAClickNamesNoPartThatCanFail() {
+    onAPage();
+
+    for (String shape :
+        List.of("camera.front.axis", "imu.gyro.block", "wheel.front-left", "robot.bumpers")) {
+      assertThat(scenes.inspect(WorldScene.ID, shape).orElseThrow().components())
+          .as(shape)
+          .isEmpty();
+    }
   }
 
   /** A real robot's record has no true pose, and its view no layer for one. */

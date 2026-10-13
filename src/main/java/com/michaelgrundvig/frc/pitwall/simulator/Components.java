@@ -314,9 +314,11 @@ public final class Components {
   /**
    * Every component as the page shows it, by name: {@code {"kind", "faults": {name: {"does",
    * "lasting", "undo", "parameters": [{"name", "unit", "min", "max", "initial"}], "on",
-   * "values"}}}}. A lasting fault that's on gives the values it was applied with. Call it from the
-   * robot loop; a component's map is rebuilt only when one of its faults turns on or off, and the
-   * same map is returned until one does, so the page's comparison stops at it.
+   * "values"}}}}. A lasting fault that's on gives the values it was applied with, and a fault that
+   * happens at a place on the field gives {@code "point": [x, y]}, the names of its two numbers
+   * that are the place ({@link Fault.Builder#point}). Call it from the robot loop; a component's
+   * map is rebuilt only when one of its faults turns on or off, and the same map is returned until
+   * one does, so the page's comparison stops at it.
    */
   public Map<String, Object> view() {
     boolean changed = shownView.size() != components.size();
@@ -386,6 +388,7 @@ public final class Components {
         parameters.add(shown);
       }
       described.put("parameters", parameters);
+      fault.point().ifPresent(point -> described.put("point", List.of(point.x(), point.y())));
       if (fault.kind() == Fault.Kind.LASTING) {
         boolean on = fault.isOn();
         described.put("on", on);

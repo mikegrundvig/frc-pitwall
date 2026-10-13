@@ -45,7 +45,12 @@ import org.wpilib.math.geometry.Translation3d;
  *
  * <p>A click on a camera says how it's mounted, offers its calibration, and shows its name and its
  * view until the details close. A click on the IMU says how it's mounted and whether its
- * accelerometer has been checked. A click on a sensor says what it is and where.
+ * accelerometer has been checked. A click on a sensor says what it is and where. A click on a wheel
+ * says which module it is, and one on the bumpers says how big the robot is.
+ *
+ * <p>In the simulator each of those that can fail there says which of the simulator's parts it is
+ * ({@link SimulatedParts}), and the details end in that part's faults: a camera's, the gyro's, a
+ * module's, and on the bumpers what can happen to the robot as a whole.
  */
 final class RobotLayer extends WorldLayer {
   /** The robot's frame on the page: the frame the page's Follow follows. */
@@ -172,6 +177,7 @@ final class RobotLayer extends WorldLayer {
 
   private final ImuMount gyro;
   private final Function<String, Optional<String>> cameraAction;
+  private final SimulatedParts simulated;
   private final Translation2d[] modules;
 
   /** Each module's frame and speed on the page. They are named once, since every loop uses them. */
@@ -179,7 +185,11 @@ final class RobotLayer extends WorldLayer {
 
   private final String[] moduleSpeeds;
 
-  RobotLayer(RobotDefinition robot, Function<String, Optional<String>> cameraAction) {
+  RobotLayer(
+      RobotDefinition robot,
+      Function<String, Optional<String>> cameraAction,
+      SimulatedParts simulated) {
+    this.simulated = simulated;
     body = robot.body();
     for (Joint joint : robot.joints()) {
       joints.put(joint.label(), joint);
@@ -259,7 +269,8 @@ final class RobotLayer extends WorldLayer {
         .box("robot.bumpers", FRAME)
         .size(bumperLength, body.bumperWidth().in(Meters), BUMPER_HEIGHT)
         .at(0, 0, BUMPER_CLEARANCE + BUMPER_HEIGHT / 2)
-        .style(Style.ACCENT);
+        .style(Style.ACCENT)
+        .inspect(() -> WorldWords.robot(body, simulated));
     scene
         .arrow("robot.front", FRAME)
         .from(0, 0, height + FRONT_ARROW_RISE)
@@ -274,6 +285,7 @@ final class RobotLayer extends WorldLayer {
    */
   private void describeWheels(SceneBuilder scene) {
     for (int i = 0; i < moduleFrames.length; i++) {
+      int index = i;
       String module = MODULES.get(i);
       String frame = moduleFrames[i];
       double radius = radii[i];
@@ -287,7 +299,8 @@ final class RobotLayer extends WorldLayer {
           .radius(radius)
           .length(WHEEL_WIDTH)
           .at(0, 0, radius, Math.PI / 2, 0, 0)
-          .style(Style.ACCENT);
+          .style(Style.ACCENT)
+          .inspect(() -> WorldWords.module(module, index, modules[index], radius, simulated));
     }
   }
 
@@ -305,7 +318,7 @@ final class RobotLayer extends WorldLayer {
           .arrow(frame + ".axis", frame)
           .to(CAMERA_ARROW, 0, 0)
           .style(Style.ACCENT)
-          .inspect(() -> WorldWords.camera(camera, cameraAction))
+          .inspect(() -> WorldWords.camera(camera, cameraAction, simulated))
           .reveal(CameraViews.view(camera), name(camera));
     }
   }
@@ -402,12 +415,12 @@ final class RobotLayer extends WorldLayer {
         .box(IMU + ".block", IMU)
         .size(IMU_SIZE, IMU_SIZE, IMU_THICKNESS)
         .style(Style.ACCENT)
-        .inspect(() -> WorldWords.imu("Gyro IMU", gyro));
+        .inspect(() -> WorldWords.imu("Gyro IMU", gyro, simulated.gyro()));
     scene
         .arrow(IMU + ".x", IMU)
         .to(IMU_ARROW, 0, 0)
         .style(Style.ACCENT)
-        .inspect(() -> WorldWords.imu("Gyro IMU", gyro));
+        .inspect(() -> WorldWords.imu("Gyro IMU", gyro, simulated.gyro()));
   }
 
   /**

@@ -40,8 +40,8 @@ function used(key) {
 /** What says when a list of faults must be built again: the parts and what each fault takes. */
 function catalogKey(components) {
   return JSON.stringify(Object.entries(components).map(([name, part]) => [name,
-    part.kind, Object.entries(part.faults).map(([fault, { does, lasting, undo, parameters }]) =>
-      [fault, does, lasting, undo, parameters])]));
+    part.kind, Object.entries(part.faults).map(([fault, { does, lasting, undo, parameters,
+      point }]) => [fault, does, lasting, undo, parameters, point])]));
 }
 
 // ---- One fault's row ----
@@ -53,9 +53,14 @@ function catalogKey(components) {
  * @param named how the row is titled: the fault's name alone under its part's heading, or with
  *     its part's name where faults of many parts are listed together
  * @param compact without the line saying what undoing does, which the Undo button's tip has
+ * @param pick for a fault two of whose numbers are a place on the field ({@code fault.point}):
+ *     called with the row when its "where I click" button is pressed, by a view that can take
+ *     the place from a click on its drawing of the field
  */
-function makeFault(component, kind, name, fault, { named = name, compact = false } = {}) {
+function makeFault(component, kind, name, fault,
+  { named = name, compact = false, pick = null } = {}) {
   const parts = { component, name, lasting: fault.lasting, params: [], busy: false, on: false,
+                  point: Array.isArray(fault.point) ? fault.point : null,
                   key: component + "\n" + name,
                   words: (component + " " + kind + " " + name + " " + fault.does).toLowerCase() };
   const label = component + ", " + name;
@@ -81,6 +86,9 @@ function makeFault(component, kind, name, fault, { named = name, compact = false
                              title: "Undo: " + fault.undo,
                              onclick: () => undoFault(parts) }, "Undo");
   parts.message = h("p", { class: "message", hidden: true });
+  parts.pick = pick && parts.point ? h("button", { type: "button", "aria-pressed": "false",
+    "aria-label": "Apply " + label + " where I click on the field",
+    onclick: () => pick(parts) }, "Apply where I click") : null;
   parts.el = h("div", { class: "fault", role: "group", "aria-label": label },
     h("div", { class: "fhead" }, h("b", null, named), parts.tag,
       !fault.lasting && h("span", { class: "tag plain" }, "↯ happens once")),
@@ -90,7 +98,7 @@ function makeFault(component, kind, name, fault, { named = name, compact = false
       h("label", { class: "param" }, h("span", null, parameter.name), parameter.input,
         parameter.unit && h("span", { class: "unit" }, parameter.unit),
         h("span", { class: "lim" }, parameter.range)))),
-    h("div", { class: "acts" }, parts.apply, parts.undo,
+    h("div", { class: "acts" }, parts.apply, parts.pick, parts.undo,
       !compact && h("span", { class: "meta" },
         (fault.lasting ? "Undo: " : "Afterwards: ") + fault.undo)),
     parts.message);
@@ -115,6 +123,22 @@ function updateButtons(parts) {
   // On, a fault with nothing to change has nothing more to apply.
   parts.apply.hidden = parts.on && parts.params.length === 0;
   parts.apply.disabled = parts.undo.disabled = Boolean(parts.locked) || parts.busy;
+  if (parts.pick) parts.pick.disabled = parts.apply.disabled;
+}
+
+/**
+ * Applies a fault at a place on the field: its two numbers that are the place are set to it, and
+ * the fault is applied with those and the rest as typed.
+ *
+ * @param at {x, y} in meters, as the fault's numbers are
+ */
+export function applyAt(parts, at) {
+  if (!parts.point) return Promise.resolve(false);
+  for (const [name, value] of [[parts.point[0], at.x], [parts.point[1], at.y]]) {
+    const parameter = parts.params.find((each) => each.name === name);
+    if (parameter) parameter.input.value = String(Math.round(value * 100) / 100);
+  }
+  return applyFault(parts);
 }
 
 /** Applies a fault with the values typed, each checked against its limits here first. */
@@ -438,9 +462,10 @@ export function makeFaults({ compact = false } = {}) {
  * The faults of the parts named, applied and undone where they are shown.
  *
  * @param names the simulator's parts, by name; those it doesn't have are left out
+ * @param pick what a fault's "Apply where I click" button calls, with its row: see makeFault
  * @return {element, render(), any()}: {@code any()} says whether any of them has a fault to show
  */
-export function makeFaultsOf(names) {
+export function makeFaultsOf(names, pick = null) {
   const rows = new Map();
   let built = "";
   const element = h("div", { class: "faultsof" });
@@ -466,7 +491,7 @@ export function makeFaultsOf(names) {
         element.replaceChildren(...Object.entries(parts).flatMap(([name, part]) => [
           several && h("h4", { class: "fpart" }, name),
           ...Object.entries(part.faults).map(([fault, described]) => {
-            const row = makeFault(name, part.kind, fault, described, { compact: true });
+            const row = makeFault(name, part.kind, fault, described, { compact: true, pick });
             rows.set(row.key, row);
             return row.el;
           })]).filter(Boolean));
@@ -478,9 +503,6 @@ export function makeFaultsOf(names) {
         }
       }
     },
-    /** One of its rows, by part and fault: where a fault's numbers can be set from outside. */
-    row: (component, fault) => rows.get(component + "\n" + fault) || null,
-    apply: (row) => applyFault(row),
   };
 }
 

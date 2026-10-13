@@ -17,6 +17,12 @@
 // /api/scenes/<id>/inspect/<shape>, with ?index= when the cursor is not live), and shows the answer
 // beside the drawing, ending in what can be done about it: the page's actions, run as from Pit.
 //
+// In the simulator the answer may name the simulator's parts the shape is (a camera, the gyro, a
+// wheel's module, the robot itself), and the panel then ends in their faults, applied and undone
+// right there: the same rows as the Sim view's (sim-faults.js). A fault that happens at a place on
+// the field (setting the robot down) can take the place from the next click on the drawing. On a
+// robot the answer names no parts, and there is no simulator to have any.
+//
 // The legend says what each kind of mark means, layer by layer, with a sample drawn from the very
 // style the layer draws in, and it is where a layer is switched on and off. What is switched, and
 // whether the legend is open, is kept in this browser.
@@ -26,6 +32,8 @@ import { cursor, onCursor, span, noteTime } from "./cursor.js";
 import { makeLoopStore } from "./loop-store.js";
 import { makeTimeline } from "./timeline.js";
 import { makeEventList } from "./event-list.js";
+import { isSimulator, onSim } from "./sim-state.js";
+import { makeFaultsOf, applyAt } from "./sim-faults.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -53,6 +61,9 @@ let loopsOf = ""; // the scene and the session those loops are of
 let drawnAt = null; // the loop the drawing is of while the cursor is not live
 let liveOnly = []; // the layers that have no earlier loop to show, as the robot last said
 let hovering = null; // a frame in which the shape under the pointer is looked for
+let fails = null; // the faults of the simulator's parts the shape inspected is: sim-faults.js's
+let failsOf = ""; // the parts those are of
+let placing = null; // the fault's row whose place the next click on the drawing gives
 const chosen = readKept(LAYERS_KEY, {}); // "scene/layer" -> shown, as chosen in this browser
 const ui = {};
 
@@ -93,7 +104,11 @@ function mount(view) {
     // Folded, the legend gives its width back to the drawing, which is fitted to what it has.
     if (renderer && visible) renderer.resize();
   });
-  ui.details = h("aside", { class: "world-details card", hidden: true, "aria-live": "polite" });
+  // What the robot said of the shape, drawn again as it changes; and under it, in the simulator,
+  // the faults of the part it is, built once for a part so a number being typed is kept.
+  ui.said = h("div", { "aria-live": "polite" });
+  ui.fails = h("section", { class: "world-fails", hidden: true, "aria-label": "What fails" });
+  ui.details = h("aside", { class: "world-details card", hidden: true }, ui.said, ui.fails);
   ui.stage = h("div", { class: "world-stage" }, ui.canvas, ui.message, ui.liveOnly);
   view.classList.add("world");
   view.append(
@@ -112,7 +127,8 @@ function mount(view) {
   ui.canvas.addEventListener("pointerup", (event) => {
     // A click, not a drag: the controls turn and pan on drags.
     if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) < 6) {
-      clicked(event.clientX, event.clientY);
+      if (placing) placeAt(event.clientX, event.clientY);
+      else clicked(event.clientX, event.clientY);
     }
     down = null;
   });
@@ -136,6 +152,10 @@ function mount(view) {
   });
   // Run needs the robot there, as on Pit: the details' button follows the link.
   onConnection(() => inspection && showDetails());
+  // A fault put on or undone from anywhere shows on the part's rows here.
+  onSim((what) => {
+    if (what.faults && visible && fails) fails.render();
+  });
 }
 
 /** What this browser keeps under a key, or what to take when it keeps nothing readable. */
@@ -507,8 +527,9 @@ function showDetails(waiting = "") {
   const close = h("button", { type: "button", class: "link world-close", "aria-label": "Close",
                               onclick: closeDetails }, "✕");
   if (!inspection) {
-    replace(ui.details, h("div", { class: "world-details-head" },
+    replace(ui.said, h("div", { class: "world-details-head" },
       h("h2", null, inspected.id), close), h("p", { class: "muted" }, waiting));
+    showFails([]);
     return;
   }
   const details = h("dl", { class: "world-facts" },
@@ -526,10 +547,63 @@ function showDetails(waiting = "") {
       h("span", null, asked.name),
       locked ? h("span", { class: "gate locked" }, "🔒 " + locked) : null);
   });
-  replace(ui.details,
+  replace(ui.said,
     h("div", { class: "world-details-head" }, h("h2", null, inspection.title), close),
     details,
     actions.length ? h("div", { class: "world-actions" }, actions) : null);
+  showFails(inspection.components || []);
+}
+
+/**
+ * Under the details, the faults of the simulator's parts the shape is: none on a robot, and none
+ * for a shape that is no such part. They act on the robot as it is now, whatever moment is shown.
+ */
+function showFails(parts) {
+  const names = isSimulator() ? parts : [];
+  const key = names.join("\n");
+  if (key !== failsOf) {
+    failsOf = key;
+    stopPlacing();
+    fails = names.length ? makeFaultsOf(names, togglePlacing) : null;
+    ui.placing = h("p", { class: "world-placing", role: "status", hidden: true });
+    ui.fails.replaceChildren(...(fails ? [
+      h("h3", null, "What fails"),
+      h("p", { class: "meta" }, "In the simulator, to the robot as it is now. Its code isn't told."),
+      ui.placing, fails.element] : []));
+  }
+  if (fails) fails.render();
+  ui.fails.hidden = !fails || !fails.any();
+}
+
+/** Arms a fault to be applied where the drawing is next clicked, or lets it go again. */
+function togglePlacing(row) {
+  const same = placing === row;
+  stopPlacing();
+  if (same || !renderer) return;
+  placing = row;
+  row.pick.setAttribute("aria-pressed", "true");
+  row.pick.textContent = "Cancel";
+  ui.canvas.classList.add("placing");
+  ui.placing.hidden = false;
+  ui.placing.textContent = "Click the field: " + row.component + ", " + row.name
+      + " is applied there.";
+}
+
+function stopPlacing() {
+  if (!placing) return;
+  placing.pick.setAttribute("aria-pressed", "false");
+  placing.pick.textContent = "Apply where I click";
+  placing = null;
+  ui.canvas.classList.remove("placing");
+  if (ui.placing) ui.placing.hidden = true;
+}
+
+/** Applies the armed fault at the place on the field under a click. */
+function placeAt(x, y) {
+  const row = placing;
+  const at = renderer.floorPoint(x, y);
+  stopPlacing();
+  if (at) applyAt(row, at);
 }
 
 /**
@@ -548,6 +622,7 @@ async function runAction(event) {
 function closeDetails() {
   inspected = null;
   inspection = null;
+  showFails([]);
   detailsShown(false);
   if (renderer) renderer.select(null);
 }

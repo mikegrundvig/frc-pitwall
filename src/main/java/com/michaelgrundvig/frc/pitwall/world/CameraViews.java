@@ -27,8 +27,13 @@ final class CameraViews implements Layer {
 
   private final List<CameraConfig> cameras;
   private final Function<String, Optional<String>> cameraAction;
+  private final SimulatedParts simulated;
 
-  CameraViews(List<CameraConfig> cameras, Function<String, Optional<String>> cameraAction) {
+  CameraViews(
+      List<CameraConfig> cameras,
+      Function<String, Optional<String>> cameraAction,
+      SimulatedParts simulated) {
+    this.simulated = simulated;
     this.cameras = List.copyOf(cameras);
     this.cameraAction = cameraAction;
   }
@@ -69,7 +74,7 @@ final class CameraViews implements Layer {
           .frustum(view(camera), WorldWords.cameraFrame(camera.id()))
           .fov(sees.acrossRadians(), sees.upAndDownRadians())
           .range(0, Math.min(VIEW_METERS, camera.sensor().sightRange().in(Meters)))
-          .inspect(() -> WorldWords.camera(camera, cameraAction));
+          .inspect(() -> WorldWords.camera(camera, cameraAction, simulated));
     }
   }
 }

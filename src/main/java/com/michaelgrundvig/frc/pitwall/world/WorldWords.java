@@ -5,6 +5,7 @@ import static org.wpilib.units.Units.Meters;
 
 import com.michaelgrundvig.frc.pitwall.robot.SightingSentences;
 import com.michaelgrundvig.frc.pitwall.scene.Inspection;
+import com.michaelgrundvig.frc.world.robot.Body;
 import com.michaelgrundvig.frc.world.robot.CameraConfig;
 import com.michaelgrundvig.frc.world.robot.ImuMount;
 import com.michaelgrundvig.frc.world.robot.Sensor;
@@ -12,6 +13,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Function;
 import org.wpilib.math.geometry.Pose3d;
+import org.wpilib.math.geometry.Translation2d;
 import org.wpilib.units.measure.Distance;
 
 /**
@@ -35,7 +37,10 @@ final class WorldWords {
    * What a click on a camera, or on its view, says: where it's mounted, how it's turned, what it
    * sees, and the action that calibrates its mount, if the page has one.
    */
-  static Inspection camera(CameraConfig camera, Function<String, Optional<String>> cameraAction) {
+  static Inspection camera(
+      CameraConfig camera,
+      Function<String, Optional<String>> cameraAction,
+      SimulatedParts simulated) {
     CameraConfig.Sensor sensor = camera.sensor();
     Inspection said =
         Inspection.of("Camera " + camera.name())
@@ -57,7 +62,8 @@ final class WorldWords {
                     sensor.widthPixels(),
                     sensor.heightPixels(),
                     sensor.sightRange().in(Meters)))
-            .detail("From", "the robot's configuration, in Robots.java");
+            .detail("From", "the robot's configuration, in Robots.java")
+            .component(simulated.camera(camera.name()));
     Optional<String> calibrate = cameraAction.apply(camera.name());
     if (calibrate.isEmpty()) {
       return said;
@@ -69,7 +75,7 @@ final class WorldWords {
    * What a click on an IMU says: where it's mounted, how it's turned, and whether its accelerometer
    * has been checked against the robot's axes.
    */
-  static Inspection imu(String title, ImuMount imu) {
+  static Inspection imu(String title, ImuMount imu, Optional<String> simulated) {
     String accelerometer = "not yet checked (docs/calibration.md)";
     if (imu.accelerometerChecked()) {
       accelerometer = "checked: reads along the robot's axes";
@@ -85,7 +91,53 @@ final class WorldWords {
                 Math.toDegrees(imu.orientation().getY()),
                 Math.toDegrees(imu.orientation().getZ())))
         .detail("Accelerometer", accelerometer)
-        .detail("From", "the robot's configuration, in Robots.java");
+        .detail("From", "the robot's configuration, in Robots.java")
+        .component(simulated);
+  }
+
+  /**
+   * What a click on the robot's bumpers says: how big it is. In the simulator the panel ends in
+   * what can happen to the robot as a whole, and in the faults of the backup IMU, which has no
+   * shape of its own to click.
+   */
+  static Inspection robot(Body body, SimulatedParts simulated) {
+    return Inspection.of("Robot")
+        .detail(
+            "Frame",
+            String.format(
+                Locale.ROOT,
+                "%.3f m long, %.3f m wide, %.3f m tall",
+                body.frameLength().in(Meters),
+                body.frameWidth().in(Meters),
+                body.height().in(Meters)))
+        .detail(
+            "With bumpers",
+            String.format(
+                Locale.ROOT,
+                "%.3f m long, %.3f m wide",
+                body.bumperLength().in(Meters),
+                body.bumperWidth().in(Meters)))
+        .detail("From", "the robot's configuration, in Robots.java")
+        .component(simulated.robot())
+        .component(simulated.backupImu());
+  }
+
+  /**
+   * What a click on a wheel says: which module it is and where it stands on the robot.
+   *
+   * @param name the module's name on the page, such as {@code front-left}
+   * @param index its place in the drivetrain's order
+   */
+  static Inspection module(
+      String name, int index, Translation2d at, double wheelRadius, SimulatedParts simulated) {
+    return Inspection.of("Module " + name)
+        .detail(
+            "At",
+            String.format(
+                Locale.ROOT, "%.3f m forward, %.3f m left of the center", at.getX(), at.getY()))
+        .detail("Wheel", String.format(Locale.ROOT, "%.1f mm radius", wheelRadius * 1000))
+        .detail("From", "the robot's configuration, in Robots.java")
+        .component(simulated.module(index));
   }
 
   /** Where something is mounted on the robot, from the robot's center on the floor. */

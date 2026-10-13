@@ -199,7 +199,11 @@ class SceneStreamTest {
             .frustum(camera + ".view", camera)
             .fov(1.2, 0.8)
             .range(0, 7)
-            .inspect(() -> Inspection.of(camera).action("Calibrate the front camera"));
+            .inspect(
+                () ->
+                    Inspection.of(camera)
+                        .action("Calibrate the front camera")
+                        .component("Camera front"));
         scene.label(camera + ".name", camera).text(corner).at(0, 0, 0.08);
       }
       scene.value("ellipse.major", 0.005).value("ellipse.minor", 0.005);
@@ -393,9 +397,11 @@ class SceneStreamTest {
         .isEqualTo(
             "{\"scene\":\"world\",\"shape\":\"ray.fl.7.bad\",\"title\":\"fl → tag 7\","
                 + "\"details\":[{\"label\":\"Verdict\",\"value\":\"rejected: gate 45.2 > 13.8\"}],"
-                + "\"actions\":[]}");
+                + "\"actions\":[],\"components\":[]}");
     assertThat(get("/api/scenes/world/inspect/camera.fl.view").body())
-        .contains("\"actions\":[{\"name\":\"Calibrate the front camera\"");
+        .contains("\"actions\":[{\"name\":\"Calibrate the front camera\"")
+        .as("a program without a simulator, as on a robot, offers no part's faults")
+        .endsWith("\"components\":[]}");
     assertThat(get("/api/scenes/world/inspect/walls").statusCode()).isEqualTo(404);
     assertThat(get("/api/scenes/elsewhere/inspect/walls").statusCode()).isEqualTo(404);
     assertThat(get("/api/scenes/world/inspect/..%2Findex.html").statusCode()).isEqualTo(404);

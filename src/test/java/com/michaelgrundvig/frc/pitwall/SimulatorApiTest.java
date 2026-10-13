@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.michaelgrundvig.frc.pitwall.experiment.ByHand;
 import com.michaelgrundvig.frc.pitwall.push.Broadcaster;
+import com.michaelgrundvig.frc.pitwall.scene.Inspection;
+import com.michaelgrundvig.frc.pitwall.scene.Layer;
+import com.michaelgrundvig.frc.pitwall.scene.Scene;
+import com.michaelgrundvig.frc.pitwall.scene.SceneBuilder;
 import com.michaelgrundvig.frc.pitwall.scene.Scenes;
 import com.michaelgrundvig.frc.pitwall.simulator.Component;
 import com.michaelgrundvig.frc.pitwall.simulator.Components;
@@ -73,6 +77,37 @@ class SimulatorApiTest {
       new TunableTee(new MockTunableBackend(), () -> null, inputs -> {}, false);
   private final Tuning tuning =
       new Tuning("sim", tunables::configs, tunables::pathOf, true, inputs -> {}, view -> {});
+
+  /** A scene with one shape, the lamp: a click on it names the simulator's part it is. */
+  private final Scenes scenes =
+      new Scenes(System::nanoTime, System.out::println)
+          .add(
+              Scene.named("room", "Room")
+                  .layer(
+                      new Layer() {
+                        @Override
+                        public String id() {
+                          return "lamp";
+                        }
+
+                        @Override
+                        public String title() {
+                          return "Lamp";
+                        }
+
+                        @Override
+                        public void describe(SceneBuilder scene) {
+                          scene
+                              .box("lamp.shade", SceneBuilder.ROOT)
+                              .size(1, 1, 1)
+                              .inspect(
+                                  () ->
+                                      Inspection.of("The lamp")
+                                          .component("Lamp")
+                                          .component("A part the simulator doesn't have"));
+                        }
+                      }));
+
   private final Page page =
       new Page(
           new Status(),
@@ -83,7 +118,7 @@ class SimulatorApiTest {
           () -> "",
           simulator,
           new Devices(System::nanoTime),
-          new Scenes(System::nanoTime, System.out::println));
+          scenes);
   private final Broadcaster broadcaster =
       new Broadcaster(Broadcaster.MAX_STREAMS, Broadcaster.MAILBOX, simulator::lost);
   private final PitwallServer server = new PitwallServer(page, broadcaster, 0);
@@ -174,6 +209,34 @@ class SimulatorApiTest {
     assertThat(disabled.body()).contains("\"enabled\":false", "\"mode\":\"TELEOPERATED\"");
     assertThat(hal.driverStation().enabled()).isFalse();
     assertThat(hal.driverStation().mode()).isEqualTo(RobotMode.TELEOPERATED);
+  }
+
+  /**
+   * A click on a shape that is one of the simulator's parts is answered with that part's name, and
+   * its faults are the page's to apply and undo from there: the names it gives are the names the
+   * faults' route takes. A part the simulator doesn't have is left out.
+   */
+  @Test
+  void aClickOnAPartIsAnsweredWithThePartWhoseFaultsThePageCanApply() throws Exception {
+    var clicked = send("GET", "/api/scenes/room/inspect/lamp.shade", null, null);
+
+    assertThat(clicked.statusCode()).isEqualTo(200);
+    assertThat(clicked.body()).contains("\"title\":\"The lamp\"", "\"components\":[\"Lamp\"]}");
+
+    var applied =
+        send(
+            "POST", "/api/simulator/faults", JSON, "{\"component\": \"Lamp\", \"fault\": \"Out\"}");
+    assertThat(applied.statusCode()).isEqualTo(200);
+    assertThat(lampOut).isTrue();
+
+    var undone =
+        send(
+            "POST",
+            "/api/simulator/faults",
+            JSON,
+            "{\"component\": \"Lamp\", \"fault\": \"Out\", \"undo\": true}");
+    assertThat(undone.statusCode()).isEqualTo(200);
+    assertThat(lampOut).isFalse();
   }
 
   /**

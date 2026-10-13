@@ -64,6 +64,36 @@ class ComponentsTest {
                     .build()));
   }
 
+  /**
+   * A fault that happens at a place on the field says which two of its numbers are the place, so
+   * the page can take them from a click on its drawing; one that names a number it doesn't have is
+   * refused as it's built.
+   */
+  @Test
+  void aFaultAtAPlaceOnTheFieldSaysWhichOfItsNumbersAreThePlace() {
+    Fault.Builder setDown =
+        Fault.event("Set down")
+            .does("Carried here.")
+            .parameter("X", "m", Limits.between(0, 16), 8)
+            .parameter("Y", "m", Limits.between(0, 8), 4)
+            .parameter("Heading", "°", Limits.between(-180, 180), 0)
+            .apply(values -> {})
+            .undoneBy("Set it down again.");
+    Components withAPlace =
+        new Components(said::add)
+            .add(Component.of("Robot", "robot", setDown.point("X", "Y").build()));
+
+    assertThat(withAPlace.view().get("Robot"))
+        .asInstanceOf(InstanceOfAssertFactories.MAP)
+        .extractingByKey("faults", InstanceOfAssertFactories.MAP)
+        .extractingByKey("Set down", InstanceOfAssertFactories.MAP)
+        .containsEntry("point", List.of("X", "Y"));
+    assertThat(components.view().toString()).as("no other fault has one").doesNotContain("point");
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> setDown.point("X", "Z").build())
+        .withMessageContaining("names Z, which isn't one of its numbers");
+  }
+
   @Test
   void aLastingFaultIsOnUntilUndoneAndTheWorldSaysSo() {
     assertThat(components.apply(Setting.of("Lamp", "Unplugged"))).isNull();

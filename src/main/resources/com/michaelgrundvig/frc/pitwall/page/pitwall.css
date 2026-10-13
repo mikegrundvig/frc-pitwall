@@ -809,6 +809,17 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .world-action { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
 .world-action .gate { flex-basis: 100%; font-size: var(--meta); }
 .world-scene { min-height: var(--row); }
+/* In the simulator, the faults of the part clicked, under what the robot said of it. */
+.world-fails { margin-top: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line); }
+.world-fails h3 { font-size: var(--body); }
+.world-fails button { min-height: 30px; padding: 2px 10px; font-size: 14px; }
+.world-fails .fpart { font-size: var(--meta); color: var(--text-2); margin: var(--s2) 0 0; }
+.world-fails button[aria-pressed="true"] { background: var(--text); color: var(--surface); }
+.world-placing { margin: var(--s1) 0; padding: var(--s1) var(--s2); border-radius: 6px;
+                 font-size: var(--meta); font-weight: 600; background: var(--edit-tint);
+                 border: 1px solid var(--edit); }
+.world-gl.placing { cursor: cell; }
+@media (pointer: coarse) { .world-fails button { min-height: 44px; } }
 @media (max-width: 719px) {
   .world-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(280px, 1fr) auto; }
   .world-side { width: auto; max-height: none; }

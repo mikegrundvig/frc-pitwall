@@ -549,6 +549,21 @@ export class SceneRenderer {
   // ---- Clicking ----
 
   /**
+   * The place on the floor under a point of the canvas, in the scene's own frame (the field's):
+   * {x, y} in meters, or null where the view doesn't look at the floor there.
+   */
+  floorPoint(clientX, clientY) {
+    const rect = this.canvas.getBoundingClientRect();
+    const pointer = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1);
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(pointer, this.camera);
+    const floor = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    const hit = ray.ray.intersectPlane(floor, new THREE.Vector3());
+    return hit ? { x: hit.x, y: hit.y } : null;
+  }
+
+  /**
    * What a click at a point picks: the nearest inspectable line within a few pixels (a thin ray's
    * hit area is wide), else the nearest inspectable solid under the pointer. Null for nothing.
    */
