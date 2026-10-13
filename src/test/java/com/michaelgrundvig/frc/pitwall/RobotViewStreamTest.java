@@ -124,6 +124,80 @@ class RobotViewStreamTest {
   }
 
   /**
+   * The session's events are asked for by loops, by times, the newest, from a number on, and one at
+   * a time, of some kinds, about one thing, or the problems only.
+   */
+  @Test
+  void theSessionsEventsAreAskedForInRangesAndOneAtATime() throws Exception {
+    long started = clock.get() + LOOP_NANOS;
+    loop(0);
+    record.sensor("claw beam", true, true, Double.NaN);
+    loop(0);
+    loop(0);
+    record.sensor("hopper", false, false, Double.NaN);
+    loop(0);
+    record.sensor("claw beam", true, false, Double.NaN);
+    loop(0);
+
+    Map<String, Object> all = asMap(JSON.fromJson(get("/api/robot/events").body()));
+    assertThat(all)
+        .containsEntry("found", 3L)
+        .containsEntry("oldest", 0L)
+        .containsEntry("newest", 4L);
+    assertThat(sentences("/api/robot/events"))
+        .containsExactly("claw beam tripped", "hopper lost", "claw beam clear");
+    Map<String, Object> lost = asMap(asList(all.get("events")).get(1));
+    assertThat(lost)
+        .containsEntry("number", 1L)
+        .containsEntry("loop", 3L)
+        .containsEntry("timestampNanos", started + 3 * LOOP_NANOS)
+        .containsEntry("kind", "SENSOR_LOST")
+        .containsEntry("subject", "SENSOR")
+        .containsEntry("about", List.of("hopper"))
+        .containsEntry("severity", "PROBLEM");
+
+    assertThat(sentences("/api/robot/events?from=2&to=3")).containsExactly("hopper lost");
+    assertThat(sentences("/api/robot/events?toAt=" + (started + LOOP_NANOS)))
+        .containsExactly("claw beam tripped");
+    assertThat(sentences("/api/robot/events?fromAt=" + (started + 4 * LOOP_NANOS)))
+        .containsExactly("claw beam clear");
+    assertThat(sentences("/api/robot/events?newest=2"))
+        .containsExactly("hopper lost", "claw beam clear");
+    assertThat(sentences("/api/robot/events?since=2")).containsExactly("claw beam clear");
+    assertThat(sentences("/api/robot/events?after=1")).containsExactly("hopper lost");
+    assertThat(sentences("/api/robot/events?before=4&about=claw%20beam"))
+        .containsExactly("claw beam tripped");
+    assertThat(sentences("/api/robot/events?after=0&kind=SENSOR_CLEARED,SENSOR_LOST"))
+        .containsExactly("hopper lost");
+    assertThat(sentences("/api/robot/events?problems=true")).containsExactly("hopper lost");
+    assertThat(sentences("/api/robot/events?after=4")).isEmpty();
+
+    assertThat(get("/api/robot/events?kind=SURPRISE").statusCode()).isEqualTo(400);
+    assertThat(get("/api/robot/events?from=soon").statusCode()).isEqualTo(400);
+    assertThat(asMap(JSON.fromJson(get("/api/robot").body())))
+        .containsEntry("events", 3L)
+        .containsEntry("rememberedEvents", 4096L)
+        .containsEntry("eventBytes", 49_152L)
+        .containsEntry("startedNanos", started);
+  }
+
+  /** The sentences of the events an address answers with, in order. */
+  private List<String> sentences(String path) throws Exception {
+    HttpResponse<String> answer = get(path);
+    assertThat(answer.statusCode()).as(path).isEqualTo(200);
+    List<String> sentences = new ArrayList<>();
+    for (Object event : asList(asMap(JSON.fromJson(answer.body())).get("events"))) {
+      sentences.add(String.valueOf(asMap(event).get("sentence")));
+    }
+    return sentences;
+  }
+
+  @SuppressWarnings("unchecked") // a JSON list
+  private static List<Object> asList(@Nullable Object json) {
+    return (List<Object>) Objects.requireNonNull(json);
+  }
+
+  /**
    * A page that shows the view is sent all of it as it starts, and then only what changes: with the
    * pivot moving, its needle and where it says it is. A page that does not show it is sent none.
    */

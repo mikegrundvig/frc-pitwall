@@ -526,7 +526,7 @@ final class JointCards {
   }
 
   /** Where a joint was told to go, or what it was told to run at. */
-  private static String told(RobotPlan.OfJoint planned, Drawn drawn, Moment.OfJoint now) {
+  static String told(RobotPlan.OfJoint planned, Drawn drawn, Moment.OfJoint now) {
     Joint joint = planned.joint();
     boolean asked = now.owner() != JointOwner.IDLE;
     if (drawn == Drawn.DIAL) {
@@ -554,7 +554,7 @@ final class JointCards {
    * idle. A joint that holds positions holds one; any other is at neutral, where its motors brake
    * or coast as its control says.
    */
-  private static String ownedBy(Joint joint, Moment moment, Moment.OfJoint now) {
+  static String ownedBy(Joint joint, Moment moment, Moment.OfJoint now) {
     String owner = JointSentences.owner(now.owner(), now.command());
     if (now.owner() != JointOwner.IDLE) {
       return owner;

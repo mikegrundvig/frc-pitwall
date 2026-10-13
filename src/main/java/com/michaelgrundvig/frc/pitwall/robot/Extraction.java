@@ -121,6 +121,7 @@ final class Extraction {
   private static final BindingFired[] NONE_FIRED = new BindingFired[0];
 
   private final SessionMemory memory;
+  private final RobotEvents events;
   private final List<JointKeys> joints = new ArrayList<>();
   private final List<SensorKeys> sensors = new ArrayList<>();
   private final List<GamepadKeys> gamepads = new ArrayList<>();
@@ -140,11 +141,17 @@ final class Extraction {
   private volatile int gatesNotKept;
 
   /**
+   * @param events the session's events, which are found in each loop as it is taken
    * @param jointLabels the robot's joints, in the order the memory keeps them
    * @param sensorLabels the robot's switches and rangefinders, in the order the memory keeps them
    */
-  Extraction(SessionMemory memory, List<String> jointLabels, List<String> sensorLabels) {
+  Extraction(
+      SessionMemory memory,
+      RobotEvents events,
+      List<String> jointLabels,
+      List<String> sensorLabels) {
     this.memory = memory;
+    this.events = events;
     jointLabels.forEach(label -> joints.add(JointKeys.of(label)));
     jointLabels.forEach(label -> moves.add(new MoveTaken()));
     sensorLabels.forEach(label -> sensors.add(SensorKeys.of(label)));
@@ -153,7 +160,7 @@ final class Extraction {
     }
   }
 
-  /** Takes one loop. */
+  /** Takes one loop, and finds its events. */
   void take(LoopRecord record) {
     findNewGates(record);
     synchronized (memory) {
@@ -185,6 +192,7 @@ final class Extraction {
             gamepad, record.whole(keys.buttons(), 0), record.floats(keys.axes()), pov);
       }
       memory.close();
+      events.findIn(memory.taken() - 1);
     }
   }
 

@@ -170,9 +170,10 @@ class AdvantageKitReceiverTest {
   }
 
   /**
-   * Taking a loop makes nothing new on the receiver's thread once the robot runs, so the session
-   * costs the robot's garbage collector nothing however long it runs. The robot writes a fact only
-   * when it changes, and a fact is made out of the log's bytes only then.
+   * Taking a loop, and finding its events, makes nothing new on the receiver's thread once the
+   * robot runs, so the session costs the robot's garbage collector nothing however long it runs.
+   * The robot writes a fact only when it changes, and a fact is made out of the log's bytes only
+   * then.
    */
   @Test
   void takingALoopAllocatesNothingOnceTheRobotRuns() throws InterruptedException {
@@ -196,13 +197,18 @@ class AdvantageKitReceiverTest {
     long bytes = THREADS.getThreadAllocatedBytes(thread) - before;
 
     System.out.printf(
-        "Taking a loop of a six-joint robot: %.2f µs and %.1f bytes a loop; %d bytes kept a"
-            + " loop, %.1f MB for %d loops%n",
+        "Taking a loop of a six-joint robot, and finding its events: %.2f µs and %.1f bytes a"
+            + " loop; %d bytes kept a loop, %.1f MB for %d loops; %.1f KB more for %d events%n",
         nanos / 1e3 / measured,
         (double) bytes / measured,
         session.bytesPerMoment(),
         session.bytes() / 1e6,
-        session.capacity());
+        session.capacity(),
+        session.events().bytes() / 1e3,
+        session.events().capacity());
     assertThat(bytes / measured).isLessThanOrEqualTo(MOST_BYTES_A_LOOP);
+    assertThat(session.events().found())
+        .as("a binding fired in every loop, and each firing was found as an event")
+        .isEqualTo(2L * measured - 1);
   }
 }

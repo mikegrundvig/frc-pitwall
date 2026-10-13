@@ -43,6 +43,8 @@ final class Moments {
     private double velocity;
     private double goal;
     private JointState state = JointState.READY;
+    private String fault = "";
+    private Moment.Encoder encoder = Moment.Encoder.HEALTHY;
     private JointOwner owner = JointOwner.IDLE;
     private String command = "";
     private String goalName = "";
@@ -51,6 +53,7 @@ final class Moments {
   }
 
   private Moment.Enabled enabled = Moment.Enabled.ENABLED;
+  private Moment.Mode mode = Moment.Mode.TELEOPERATED;
   private final Map<String, OfJoint> joints = new LinkedHashMap<>();
   private final Map<String, Moment.OfSensor> sensors = new LinkedHashMap<>();
   private final List<Moment.OfGate> gates = new ArrayList<>();
@@ -76,6 +79,16 @@ final class Moments {
 
   Moments disabled() {
     enabled = Moment.Enabled.DISABLED;
+    return this;
+  }
+
+  Moments enabled() {
+    enabled = Moment.Enabled.ENABLED;
+    return this;
+  }
+
+  Moments mode(Moment.Mode chosen) {
+    mode = chosen;
     return this;
   }
 
@@ -115,6 +128,15 @@ final class Moments {
     return this;
   }
 
+  /** Nothing asks anything of a joint any more: it is idle, where it is. */
+  Moments idle(String label) {
+    OfJoint joint = joint(label);
+    joint.owner = JointOwner.IDLE;
+    joint.command = "";
+    joint.goalName = "";
+    return this;
+  }
+
   /** What the robot logged as holding a joint. */
   Moments heldBy(String label, Holder... holders) {
     joint(label).heldBy = List.of(holders);
@@ -128,33 +150,75 @@ final class Moments {
     return this;
   }
 
+  /** A joint is faulted for a reason, with the text of its fault as the robot logged it. */
+  Moments faulted(String label, JointState.Fault reason, String fault) {
+    joint(label).state = JointState.faulted(reason);
+    joint(label).fault = fault;
+    return this;
+  }
+
+  /** How a joint's absolute encoder is doing. */
+  Moments encoder(String label, Moment.Encoder encoder) {
+    joint(label).encoder = encoder;
+    return this;
+  }
+
   /** The last move on a joint arrived at one of its places, in so many seconds. */
   Moments arrivedAt(String label, String place, double seconds) {
+    return ended(label, place, MoveResult.ARRIVED, seconds);
+  }
+
+  /**
+   * The last move on a joint, to one of its places, ended as given after so many seconds, with the
+   * joint where the moment has it.
+   */
+  Moments ended(String label, String place, MoveResult result, double seconds) {
+    joint(label).lastMove =
+        new Moment.LastMove(
+            label + " → " + place, List.of(part(label, place, result, seconds)), "", List.of());
+    return this;
+  }
+
+  /** The last move on two joints, each to one of its places, arrived in so many seconds. */
+  Moments arrivedTogether(
+      String name, String one, String onesPlace, String other, String othersPlace, double seconds) {
+    Moment.LastMove move =
+        new Moment.LastMove(
+            name,
+            List.of(
+                part(one, onesPlace, MoveResult.ARRIVED, seconds),
+                part(other, othersPlace, MoveResult.ARRIVED, seconds)),
+            "",
+            List.of());
+    joint(one).lastMove = move;
+    joint(other).lastMove = move;
+    return this;
+  }
+
+  /** One joint's part of a move to one of its places. */
+  private MoveOutcome part(String label, String place, MoveResult result, double seconds) {
     Joint joint = jointNamed(label);
     int index = 0;
     while (!joint.positions().get(index).name().equals(place)) {
       index++;
     }
     double target = joint.positions().get(index).value();
-    MoveOutcome part =
-        new MoveOutcome(
-            MoveResult.ARRIVED,
-            MoveTask.GO_TO,
-            MoveProgress.BEGUN,
-            seconds,
-            ROBOT.joints().indexOf(joint),
-            Identity.NONE,
-            MoveTarget.PLACE,
-            index,
-            target,
-            target,
-            0,
-            seconds,
-            MoveReason.NONE,
-            Identity.NONE);
-    joint(label).lastMove =
-        new Moment.LastMove(label + " → " + place, List.of(part), "", List.of());
-    return this;
+    boolean arrived = result == MoveResult.ARRIVED;
+    return new MoveOutcome(
+        result,
+        MoveTask.GO_TO,
+        MoveProgress.BEGUN,
+        seconds,
+        ROBOT.joints().indexOf(joint),
+        Identity.NONE,
+        MoveTarget.PLACE,
+        index,
+        target,
+        arrived ? target : joint(label).position,
+        0,
+        arrived ? seconds : Double.NaN,
+        MoveReason.NONE,
+        Identity.NONE);
   }
 
   /** The record has nothing of a joint: the robot program does not drive it. */
@@ -174,12 +238,19 @@ final class Moments {
     for (int each = 0; each < blocking.length; each++) {
       terms.add(GateTerm.text(each));
     }
+    gates.removeIf(gate -> gate.name().equals(name));
     gates.add(new Moment.OfGate(name, held, terms, List.of(blocking)));
     return this;
   }
 
   Moments fired(String binding) {
     fired.add(binding);
+    return this;
+  }
+
+  /** No binding fires: a firing lasts one loop. */
+  Moments firedNothing() {
+    fired.clear();
     return this;
   }
 
@@ -233,9 +304,9 @@ final class Moments {
               now.position,
               0,
               Double.NaN,
-              Moment.Encoder.HEALTHY,
+              now.encoder,
               now.state,
-              "",
+              now.fault,
               now.owner,
               now.command,
               now.goalName,
@@ -246,7 +317,7 @@ final class Moments {
     return new Moment(
         1_000_000_000L,
         enabled,
-        Moment.Mode.TELEOPERATED,
+        mode,
         built,
         List.copyOf(sensors.values()),
         gates,

@@ -99,6 +99,25 @@ public final class RobotWire {
     return wire;
   }
 
+  /**
+   * One event of the session, as the page is sent it: {@code {"number", "loop", "timestampNanos",
+   * "kind", "subject", "about": [name], "severity", "sentence", "result"}}, the last for a move
+   * that ended only.
+   */
+  public static Map<String, Object> wire(RobotEvent event) {
+    Map<String, Object> wire = new LinkedHashMap<>();
+    wire.put("number", event.number());
+    wire.put("loop", event.loop());
+    wire.put("timestampNanos", event.timestampNanos());
+    wire.put("kind", event.kind().name());
+    wire.put("subject", event.subject().name());
+    wire.put("about", event.about());
+    wire.put("severity", event.severity().name());
+    wire.put("sentence", event.sentence());
+    event.moveResult().ifPresent(result -> wire.put("result", result.name()));
+    return wire;
+  }
+
   private static Map<String, Object> wire(RobotView.JointCard joint) {
     double step = stepOf(joint.scale().unit());
     Map<String, Object> wire = new LinkedHashMap<>();

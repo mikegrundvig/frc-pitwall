@@ -86,6 +86,11 @@ final class SessionMemory {
   private static final int ENABLED = 1;
   private static final int MODE_SHIFT = 1;
 
+  // Each enum's values, taken once: asking an enum for them makes a new array every time.
+  private static final Moment.Mode[] MODES = Moment.Mode.values();
+  private static final JointOwner[] OWNERS = JointOwner.values();
+  private static final JointState.Standing[] STANDINGS = JointState.Standing.values();
+
   private final List<String> jointLabels;
   private final List<String> sensorLabels;
   private final int capacity;
@@ -399,6 +404,152 @@ final class SessionMemory {
   /** When a loop it holds was, in nanoseconds. */
   synchronized long timeOf(long index) {
     return longs[(int) (index % capacity) * longsEach];
+  }
+
+  // ---- One fact of one loop it holds, read where it is kept and making nothing: what the
+  // session's events are found from, every loop. Call these under this object's lock. ----
+
+  private int shortOf(long index, int place) {
+    return shorts[(int) (index % capacity) * shortsEach + place];
+  }
+
+  private int jointShort(long index, int joint, int place) {
+    return shortOf(index, joint * JOINT_SHORTS + place);
+  }
+
+  /** How many joints it keeps a place for. */
+  int joints() {
+    return jointLabels.size();
+  }
+
+  /** How many sensors it keeps a place for. */
+  int sensors() {
+    return sensorLabels.size();
+  }
+
+  /** How many gates it has found so far. */
+  int gates() {
+    return gateNames.size();
+  }
+
+  Moment.Enabled enabledIn(long index) {
+    boolean enabled = (shortOf(index, loopShort) & ENABLED) != 0;
+    return enabled ? Moment.Enabled.ENABLED : Moment.Enabled.DISABLED;
+  }
+
+  Moment.Mode modeIn(long index) {
+    return MODES[shortOf(index, loopShort) >> MODE_SHIFT];
+  }
+
+  /** Whether a loop's record had a joint. */
+  boolean hasJoint(long index, int joint) {
+    return (jointShort(index, joint, 0) & PRESENT) != 0;
+  }
+
+  /** Whether a joint's motor controller answered, fresh or not. */
+  boolean jointAnswers(long index, int joint) {
+    return (jointShort(index, joint, 0) & CONNECTED) != 0;
+  }
+
+  /** How a joint's absolute encoder was doing, as two bits that are equal while it is the same. */
+  int encoderBits(long index, int joint) {
+    return jointShort(index, joint, 0) & (MAGNET_BAD | ENCODER_LOST);
+  }
+
+  JointOwner ownerIn(long index, int joint) {
+    return OWNERS[jointShort(index, joint, 0) >> OWNER_SHIFT & 3];
+  }
+
+  /**
+   * Where a joint stood, with what its homing pushed toward and why it was faulted, as a number.
+   */
+  int stateBits(long index, int joint) {
+    return jointShort(index, joint, STATE);
+  }
+
+  JointState.Standing standingIn(long index, int joint) {
+    return STANDINGS[stateBits(index, joint) & 3];
+  }
+
+  /** The number the name of the command that asked a joint is known by. */
+  int commandNumber(long index, int joint) {
+    return jointShort(index, joint, COMMAND);
+  }
+
+  /** The number the name of what a joint was asked for is known by; zero for no name. */
+  int goalNameNumber(long index, int joint) {
+    return jointShort(index, joint, GOAL_NAME);
+  }
+
+  /** Whether anything held a joint. */
+  boolean isHeld(long index, int joint) {
+    return jointShort(index, joint, HELD_BY) != 0;
+  }
+
+  /** Whether the same things held a joint in two loops, in the same order. */
+  boolean sameHolders(long one, long other, int joint) {
+    for (int each = 0; each < HOLDERS; each++) {
+      if (jointShort(one, joint, HELD_BY + each) != jointShort(other, joint, HELD_BY + each)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** The number the outcome of the last move on a joint is known by; zero before any ended. */
+  short lastMoveNumber(long index, int joint) {
+    return (short) jointShort(index, joint, LAST_MOVE);
+  }
+
+  /** The outcome of a move a number stands for. */
+  Moment.LastMove moveOf(short number) {
+    return moves.moveOf(number);
+  }
+
+  /** Whether a loop's record had a sensor. */
+  boolean hasSensor(long index, int sensor) {
+    return (shortOf(index, sensorShorts + sensor) & PRESENT) != 0;
+  }
+
+  boolean sensorAnswers(long index, int sensor) {
+    return (shortOf(index, sensorShorts + sensor) & CONNECTED) != 0;
+  }
+
+  boolean sensorTripped(long index, int sensor) {
+    return (shortOf(index, sensorShorts + sensor) & TRIPPED) != 0;
+  }
+
+  /** Whether a loop's record had a gate, by the place it is kept in. */
+  boolean hasGate(long index, int gate) {
+    return (shortOf(index, gateShorts + gate * GATE_SHORTS) & PRESENT) != 0;
+  }
+
+  boolean gateHolds(long index, int gate) {
+    return (shortOf(index, gateShorts + gate * GATE_SHORTS) & HOLDS) != 0;
+  }
+
+  /** How many bindings fired in a loop, of the {@link #FIRED} it keeps. */
+  int firedIn(long index) {
+    int fired = 0;
+    while (fired < FIRED && shortOf(index, firedShorts + fired) != 0) {
+      fired++;
+    }
+    return fired;
+  }
+
+  /** A joint's label, by its place. */
+  String jointLabel(int joint) {
+    return jointLabels.get(joint);
+  }
+
+  /** A sensor's label, by its place. */
+  String sensorLabel(int sensor) {
+    return sensorLabels.get(sensor);
+  }
+
+  /** A gate's name, by its place. */
+  String gateName(int gate) {
+    return gateNames.get(gate);
   }
 
   private Moment read(int from) {

@@ -5,6 +5,8 @@ import com.michaelgrundvig.frc.pitwall.experiment.Run;
 import com.michaelgrundvig.frc.pitwall.push.Broadcaster;
 import com.michaelgrundvig.frc.pitwall.push.Event;
 import com.michaelgrundvig.frc.pitwall.push.Stream;
+import com.michaelgrundvig.frc.pitwall.robot.RobotEvent;
+import com.michaelgrundvig.frc.pitwall.robot.RobotEvents;
 import com.michaelgrundvig.frc.pitwall.robot.RobotSession;
 import com.michaelgrundvig.frc.pitwall.robot.RobotView;
 import com.michaelgrundvig.frc.pitwall.robot.RobotWire;
@@ -79,13 +81,24 @@ import org.wpilib.hardware.hal.RobotMode;
  *   <li>{@code GET /api/robot}: with a robot's session, how much of it is remembered and what that
  *       costs, {@code {"robot", "oldest", "newest", "oldestNanos", "newestNanos",
  *       "rememberedLoops", "bytesPerLoop", "bytes", "meanTakeMicros", "slowestTakeMicros", "texts",
- *       "mostTexts", "gatesNotKept"}}: the loops it holds by index, and when each end of them was;
- *       404 for a robot program that hands Pitwall none.
+ *       "mostTexts", "gatesNotKept", "events", "rememberedEvents", "eventBytes", "startedNanos"}}:
+ *       the loops it holds by index, when each end of them was and when the session began; 404 for
+ *       a robot program that hands Pitwall none.
  *   <li>{@code GET /api/robot/view}: the robot's joints as one loop had them, as {@link RobotWire}
  *       says: the newest loop, or {@code ?index=} a loop by its index, or {@code ?at=} the loop
  *       nearest a time on the robot's clock, in nanoseconds; 404 when the session holds no such
  *       loop. Live, the page is sent the same at {@code robotView.live}, named as the view {@code
  *       robot}.
+ *   <li>{@code GET /api/robot/events}: the session's events, the loops in which something changed,
+ *       each as {@link RobotWire#wire(RobotEvent)} says, in order: {@code {"found", "oldest",
+ *       "newest", "events": [event]}}, with how many events the session has found and the loops it
+ *       holds. Every event it holds (500 at most, as every answer), or {@code ?from=&to=} those in
+ *       a range of loops, {@code ?fromAt=&toAt=} in a range of times on the robot's clock in
+ *       nanoseconds, {@code ?newest=} the last so many, {@code ?since=} those numbered from one on,
+ *       {@code ?before=} the one event before a loop and {@code ?after=} the one after it. Any of
+ *       them but {@code since} only {@code ?kind=} of some kinds (their names, with commas
+ *       between), {@code ?about=} about one joint, sensor, gate or gamepad port by its name, and
+ *       {@code ?problems=true} the problems.
  *   <li>{@code GET /api/status}: the status items, read by the next loop, {@code [{"name",
  *       "value"}]}; 503 when the loop doesn't get to it within a second.
  *   <li>{@code GET /api/actions}: every action and where it stands, {@code [{"name", "phase",
@@ -501,6 +514,7 @@ public final class PitwallServer implements AutoCloseable {
             Map.entry("/api/views", List.of("PUT")),
             Map.entry("/api/robot", List.of("GET")),
             Map.entry("/api/robot/view", List.of("GET")),
+            Map.entry("/api/robot/events", List.of("GET")),
             Map.entry("/api/simulator", List.of("GET", "PATCH")),
             Map.entry("/api/simulator/step", List.of("POST")),
             Map.entry("/api/simulator/stop", List.of("POST")),
@@ -618,6 +632,7 @@ public final class PitwallServer implements AutoCloseable {
             case "PUT /api/views" -> putViews(exchange);
             case "GET /api/robot" -> sendJson(exchange, 200, robotSessionSummary());
             case "GET /api/robot/view" -> robotView(exchange);
+            case "GET /api/robot/events" -> robotEvents(exchange);
             case "GET /api/simulator" -> sendJson(exchange, 200, simulatorView());
             case "PATCH /api/simulator" -> patchSimulator(exchange);
             case "POST /api/simulator/step" ->
@@ -880,6 +895,10 @@ public final class PitwallServer implements AutoCloseable {
       shown.put("texts", session.texts());
       shown.put("mostTexts", session.mostTexts());
       shown.put("gatesNotKept", session.gatesNotKept());
+      shown.put("events", session.events().found());
+      shown.put("rememberedEvents", session.events().capacity());
+      shown.put("eventBytes", session.events().bytes());
+      session.startedNanos().ifPresent(started -> shown.put("startedNanos", started));
       return shown;
     }
 
@@ -912,6 +931,70 @@ public final class PitwallServer implements AutoCloseable {
                               + ", not "
                               + loop));
       sendJson(exchange, 200, RobotWire.wire(view, loop, session.lastFiring(loop)));
+    }
+
+    /** The most events one answer holds. */
+    private static final int MOST_EVENTS = 500;
+
+    /**
+     * The session's events: those a range, a count or a loop in the address asks for, of the kinds
+     * and about the thing it names, in order.
+     */
+    private void robotEvents(HttpExchange exchange) throws IOException {
+      RobotSession session = robotSession();
+      RobotEvents events = session.events();
+      Map<String, String> asked = query(exchange.getRequestURI().getRawQuery());
+      RobotEvents.Filter filter = eventFilter(asked);
+      List<RobotEvent> answer;
+      if (asked.containsKey("since")) {
+        answer = events.since(wholeNumber("since", asked.get("since")), MOST_EVENTS);
+      } else if (asked.containsKey("before")) {
+        answer =
+            events.before(wholeNumber("before", asked.get("before")), filter).stream().toList();
+      } else if (asked.containsKey("after")) {
+        answer = events.after(wholeNumber("after", asked.get("after")), filter).stream().toList();
+      } else if (asked.containsKey("newest")) {
+        long most = Math.clamp(wholeNumber("newest", asked.get("newest")), 0, MOST_EVENTS);
+        answer = events.newest(filter, (int) most);
+      } else if (asked.containsKey("fromAt") || asked.containsKey("toAt")) {
+        long from = asked.containsKey("fromAt") ? wholeNumber("fromAt", asked.get("fromAt")) : 0;
+        long to =
+            asked.containsKey("toAt") ? wholeNumber("toAt", asked.get("toAt")) : Long.MAX_VALUE - 1;
+        answer = events.betweenTimes(from, to, filter, MOST_EVENTS);
+      } else {
+        long from = asked.containsKey("from") ? wholeNumber("from", asked.get("from")) : 0;
+        long to = asked.containsKey("to") ? wholeNumber("to", asked.get("to")) : Long.MAX_VALUE;
+        answer = events.between(from, to, filter, MOST_EVENTS);
+      }
+      Map<String, Object> shown = new LinkedHashMap<>();
+      shown.put("found", events.found());
+      shown.put("oldest", session.oldest());
+      shown.put("newest", session.taken() - 1);
+      shown.put("events", answer.stream().map(RobotWire::wire).toList());
+      sendJson(exchange, 200, shown);
+    }
+
+    /** Which events an address asks for: of some kinds, about one thing, the problems only. */
+    private static RobotEvents.Filter eventFilter(Map<String, String> asked) {
+      Set<RobotEvent.Kind> kinds = new LinkedHashSet<>();
+      for (String name : asked.getOrDefault("kind", "").split(",")) {
+        if (name.isEmpty()) {
+          continue;
+        }
+        try {
+          kinds.add(RobotEvent.Kind.valueOf(name));
+        } catch (IllegalArgumentException e) {
+          throw new Problem(
+              400,
+              "Not a kind of event",
+              name + " is not one of " + List.of(RobotEvent.Kind.values()));
+        }
+      }
+      boolean problems = Boolean.parseBoolean(asked.getOrDefault("problems", "false"));
+      return new RobotEvents.Filter(
+          kinds,
+          asked.getOrDefault("about", ""),
+          problems ? RobotEvents.Shown.PROBLEMS_ONLY : RobotEvents.Shown.EVERY_EVENT);
     }
 
     private static long wholeNumber(String name, @Nullable String text) {

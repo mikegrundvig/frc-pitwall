@@ -3,6 +3,7 @@ package com.michaelgrundvig.frc.pitwall.robot;
 import com.michaelgrundvig.frc.world.robot.RobotDefinition;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -44,6 +45,11 @@ public final class RobotSession {
   /** What the view needs of the definition, worked out once. */
   private final RobotPlan plan;
 
+  private final RobotEvents events;
+
+  /** When the first loop taken was, on the robot's clock; read from other threads. */
+  private volatile long startedNanos = Long.MIN_VALUE;
+
   private RobotSession(RobotDefinition definition, double loopSeconds, double rememberedSeconds) {
     this.definition = definition;
     plan = RobotPlan.of(definition);
@@ -51,7 +57,8 @@ public final class RobotSession {
     List<String> joints = Parts.jointLabels(definition);
     List<String> sensors = Parts.sensorLabels(definition);
     memory = new SessionMemory(joints, sensors, capacity);
-    extraction = new Extraction(memory, joints, sensors);
+    events = new RobotEvents(plan, memory, RobotEvents.KEPT);
+    extraction = new Extraction(memory, events, joints, sensors);
   }
 
   /** A session of a robot whose loop runs 50 times a second, remembering five minutes. */
@@ -79,6 +86,9 @@ public final class RobotSession {
    */
   public void take(LoopRecord record) {
     long started = System.nanoTime();
+    if (startedNanos == Long.MIN_VALUE) {
+      startedNanos = record.timestampNanos();
+    }
     extraction.take(record);
     long took = System.nanoTime() - started;
     takingNanos.addAndGet(took);
@@ -126,6 +136,22 @@ public final class RobotSession {
   public Optional<Moment> lastFiring(long index) {
     long fired = memory.lastFiring(index, FIRED_SHOWN_LOOPS);
     return fired < 0 ? Optional.empty() : moment(fired);
+  }
+
+  /**
+   * The session's events: the loops in which something changed, each with what changed in words.
+   */
+  public RobotEvents events() {
+    return events;
+  }
+
+  /**
+   * When the session began: the time of the first loop it took, on the robot's clock, in
+   * nanoseconds. Empty before the first.
+   */
+  public OptionalLong startedNanos() {
+    long started = startedNanos;
+    return started == Long.MIN_VALUE ? OptionalLong.empty() : OptionalLong.of(started);
   }
 
   // ---- What it costs ----
