@@ -481,6 +481,10 @@ final class SceneFeed implements Feed, SceneState {
       wire.put("shown", entry.visibility() == Scene.Visibility.ON);
       wire.put("frames", Collections.unmodifiableMap(framesWire));
       wire.put("shapes", List.copyOf(shapes));
+      List<Legend> legend = entry.layer().legend();
+      if (!legend.isEmpty()) {
+        wire.put("legend", legend.stream().map(Legend::wire).toList());
+      }
       wires.add(Collections.unmodifiableMap(wire));
       inspections.add(Map.copyOf(inspected));
     }

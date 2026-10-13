@@ -2,9 +2,11 @@ package com.michaelgrundvig.frc.pitwall.world;
 
 import com.michaelgrundvig.frc.pitwall.robot.Moment;
 import com.michaelgrundvig.frc.pitwall.scene.Inspection;
+import com.michaelgrundvig.frc.pitwall.scene.Legend;
 import com.michaelgrundvig.frc.pitwall.scene.SceneBuilder;
 import com.michaelgrundvig.frc.pitwall.scene.SceneState;
 import com.michaelgrundvig.frc.pitwall.scene.Style;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -41,6 +43,15 @@ final class Uncertainty extends WorldLayer {
   @Override
   public String title() {
     return "Uncertainty (2σ)";
+  }
+
+  @Override
+  public List<Legend> legend() {
+    return List.of(
+        Legend.outline(
+            Style.ACCENT.dashed(),
+            "Where the robot could be: two standard deviations of the estimate's position"),
+        Legend.outline(Style.BAD.dashed(), "The same, while the estimate is lost or the gyro is"));
   }
 
   @Override

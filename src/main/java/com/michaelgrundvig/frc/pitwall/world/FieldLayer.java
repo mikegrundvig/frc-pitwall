@@ -2,8 +2,10 @@ package com.michaelgrundvig.frc.pitwall.world;
 
 import com.michaelgrundvig.frc.pitwall.scene.Inspection;
 import com.michaelgrundvig.frc.pitwall.scene.Layer;
+import com.michaelgrundvig.frc.pitwall.scene.Legend;
 import com.michaelgrundvig.frc.pitwall.scene.SceneBuilder;
 import com.michaelgrundvig.frc.pitwall.scene.Shape;
+import com.michaelgrundvig.frc.pitwall.scene.Style;
 import com.michaelgrundvig.frc.world.field.Crossing;
 import com.michaelgrundvig.frc.world.field.FieldModel;
 import com.michaelgrundvig.frc.world.field.Surface;
@@ -18,8 +20,8 @@ import org.wpilib.math.geometry.Pose3d;
 
 /**
  * The field as the field model has it: its carpet and walls, its raised ground (bumps, ramps,
- * platforms), and its AprilTags where the layout puts them, each with its number. Nothing here
- * moves.
+ * platforms), and its AprilTags where the layout puts them. Their numbers are a layer of their own
+ * ({@link #tagNumbers}). Nothing here moves.
  */
 final class FieldLayer implements Layer {
   /** The side of an AprilTag's printed square, in meters. FRC's 36h11 tags are 6.5 in. */
@@ -96,7 +98,7 @@ final class FieldLayer implements Layer {
         .closed();
   }
 
-  /** A tag in a frame of its own at its pose: its square, and its number in front of it. */
+  /** A tag in a frame of its own at its pose: its square. */
   private static void describeTag(SceneBuilder scene, int id, Pose3d pose) {
     String frame = WorldWords.tagFrame(id);
     scene.frame(frame, SceneBuilder.ROOT, pose);
@@ -105,9 +107,38 @@ final class FieldLayer implements Layer {
         .box(frame + ".square", frame)
         .size(TAG_THICKNESS, TAG_SIZE, TAG_SIZE)
         .inspect(() -> tag(id, pose));
-    // The number is drawn in front of the face, so that the numbers of tags back to back, or side
-    // by side on one panel, keep apart.
-    scene.label(frame + ".id", frame).text(Integer.toString(id)).at(TAG_NUMBER_OUT, 0, TAG_SIZE);
+  }
+
+  /**
+   * The tags' numbers, a layer of their own so the page can hide them: each in its tag's frame, in
+   * front of the tag's face, so that the numbers of tags back to back, or side by side on one
+   * panel, keep apart.
+   */
+  StillLayer tagNumbers() {
+    return new StillLayer(
+        "tag-numbers",
+        "Tag numbers",
+        scene -> {
+          for (Tag tag : active.get().tags().values()) {
+            String frame = WorldWords.tagFrame(tag.id());
+            scene
+                .label(frame + ".id", frame)
+                .text(Integer.toString(tag.id()))
+                .at(TAG_NUMBER_OUT, 0, TAG_SIZE);
+          }
+        },
+        List.of(Legend.text(Style.MUTED, "An AprilTag's number")),
+        active::get);
+  }
+
+  @Override
+  public List<Legend> legend() {
+    return List.of(
+        Legend.outline(Style.MUTED, "The field's walls, around its carpet"),
+        Legend.fill(
+            Style.MUTED,
+            "An AprilTag where the layout has it, and raised ground: a bump,"
+                + " a ramp or a platform. Click one for its numbers"));
   }
 
   /** Raised ground as its triangles: a bump's ridge, a ramp, or a platform and its ramps. */

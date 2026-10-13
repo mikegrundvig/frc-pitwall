@@ -20,10 +20,11 @@ import java.util.function.Supplier;
  * the simulator where the robot really was. It has a layer for each of:
  *
  * <ul>
- *   <li>the field the robot plays on;
- *   <li>the robot where the estimate has it, with its wheels, cameras, sensors and gyro as its
- *       definition has them, and what rides on a joint where the joint was;
- *   <li>each camera's full view, which is off until switched on;
+ *   <li>the field the robot plays on, and its tags' numbers;
+ *   <li>the robot where the estimate has it, with its wheels, cameras and gyro as its definition
+ *       has them, and what rides on a joint where the joint was;
+ *   <li>the wheels' drive arrows, and the switches and rangefinders;
+ *   <li>each camera's name and its view, which are off until switched on or the camera is clicked;
  *   <li>how sure the estimate was, as an ellipse;
  *   <li>each camera's sight lines to the tags it measured, solid where the estimator accepted the
  *       measurement and dashed where it refused it;
@@ -34,7 +35,7 @@ import java.util.function.Supplier;
  * ({@link #draw}), so the view is the same thing at any loop: the newest, live, or the one the
  * page's cursor is on. A click on a sight line says why its measurement was accepted or refused in
  * that loop, a click on a camera says how it's mounted, and a click on the ellipse how sure the
- * estimate was.
+ * estimate was. Each layer says what its marks mean, for the page's legend.
  *
  * <p>The view draws the code's own beliefs. A camera's wedge pointing the wrong way is a typo in
  * {@code Robots.java}, found at a glance.
@@ -129,13 +130,18 @@ public final class WorldScene {
    */
   public Scene scene(RobotSession session) {
     Newest newest = new Newest(session);
-    Scene scene = Scene.named(ID, "World").layer(field);
+    Scene scene = Scene.named(ID, "World").layer(field).layer(field.tagNumbers());
     for (WorldLayer layer : moving) {
       layer.follow(newest);
       scene.layer(layer);
       if (layer == robot) {
-        // The cameras' full views are drawn in the cameras' frames, which the robot's layer adds.
-        scene.layer(views, Scene.Visibility.OFF);
+        // What is drawn in the frames the robot's layer adds, each a layer the page can switch.
+        // A camera's name and view are off until asked for: four of each crowd the robot.
+        scene
+            .layer(robot.wheelArrows())
+            .layer(robot.sensors())
+            .layer(robot.cameraNames(), Scene.Visibility.OFF)
+            .layer(views, Scene.Visibility.OFF);
       }
     }
     return scene.focus(RobotLayer.FRAME);

@@ -4,6 +4,7 @@ import static org.wpilib.units.Units.Meters;
 import static org.wpilib.units.Units.Radians;
 
 import com.michaelgrundvig.frc.pitwall.robot.Moment;
+import com.michaelgrundvig.frc.pitwall.scene.Legend;
 import com.michaelgrundvig.frc.pitwall.scene.SceneBuilder;
 import com.michaelgrundvig.frc.pitwall.scene.SceneState;
 import com.michaelgrundvig.frc.pitwall.scene.Style;
@@ -31,19 +32,20 @@ import org.wpilib.math.geometry.Translation3d;
  *
  * <ul>
  *   <li>the frame and the bumpers, with an arrow out the front;
- *   <li>each wheel at its module, turned to its measured angle, with an arrow where it's driving;
- *   <li>each camera at its exact mount, with an arrow along its optical axis, the first meter of
- *       its view, and its name off the robot;
- *   <li>each switch and rangefinder where it's mounted, as a small block, and a rangefinder's cone
- *       out to its range. A camera or a sensor that rides on a joint is where the joint was in that
- *       loop;
+ *   <li>each wheel at its module, turned to its measured angle;
+ *   <li>each camera at its exact mount, as a short arrow along its optical axis;
  *   <li>the gyro's IMU, as a small block where its mount puts it, turned as it's mounted, with an
  *       arrow along its own x axis.
  * </ul>
  *
- * <p>A click on a camera says how it's mounted, offers its calibration, and shows its full view
- * ({@link CameraViews}) until the details close. A click on the IMU says how it's mounted and
- * whether its accelerometer has been checked. A click on a sensor says what it is and where.
+ * <p>It also places the frames that other layers draw in, each of which the page can switch on and
+ * off by itself: the wheels' drive arrows ({@link #wheelArrows}), the cameras' names ({@link
+ * #cameraNames}) and views ({@link CameraViews}), and the switches and rangefinders ({@link
+ * #sensors}). A camera or a sensor that rides on a joint is where the joint was in that loop.
+ *
+ * <p>A click on a camera says how it's mounted, offers its calibration, and shows its name and its
+ * view until the details close. A click on the IMU says how it's mounted and whether its
+ * accelerometer has been checked. A click on a sensor says what it is and where.
  */
 final class RobotLayer extends WorldLayer {
   /** The robot's frame on the page: the frame the page's Follow follows. */
@@ -88,9 +90,8 @@ final class RobotLayer extends WorldLayer {
   private static final double CAMERA_ARROW = 0.3;
 
   /**
-   * How far a camera's view is always drawn. It reaches past the bumpers, to show where the camera
-   * points and how wide it sees, and stops far short of the 7 m that covered the field four times
-   * over.
+   * How far from its camera a camera's name starts, along the way the camera faces: past the
+   * bumpers, and near enough to be the camera's.
    */
   static final double VIEW_STUB_METERS = 1.0;
 
@@ -238,7 +239,9 @@ final class RobotLayer extends WorldLayer {
     describeBody(scene);
     describeWheels(scene);
     describeCameras(scene);
-    describeSensors(scene);
+    for (int i = 0; i < sensors.size(); i++) {
+      scene.frame("sensor." + i, FRAME, sensorMounts[i]);
+    }
     describeImu(scene);
   }
 
@@ -266,15 +269,14 @@ final class RobotLayer extends WorldLayer {
 
   /**
    * Each wheel in a frame of its own at its module, which {@link #update} turns to the wheel's
-   * measured angle. The wheel is a cylinder lying on its side, and its drive arrow points along the
-   * frame's x, as long as the module's speed value says.
+   * measured angle. The wheel is a cylinder lying on its side. Its drive arrow is in a layer of its
+   * own ({@link #wheelArrows}).
    */
   private void describeWheels(SceneBuilder scene) {
     for (int i = 0; i < moduleFrames.length; i++) {
       String module = MODULES.get(i);
       String frame = moduleFrames[i];
       double radius = radii[i];
-      double aboveTheWheel = 2 * radius + DRIVE_ARROW_RISE;
       scene
           .frame(frame, FRAME, modules[i].getX(), modules[i].getY(), 0, 0, 0, 0)
           .deadband(frame, WHEEL_DEADBAND_METERS, STEER_DEADBAND_RADIANS)
@@ -286,68 +288,111 @@ final class RobotLayer extends WorldLayer {
           .length(WHEEL_WIDTH)
           .at(0, 0, radius, Math.PI / 2, 0, 0)
           .style(Style.ACCENT);
-      scene
-          .arrow("drive." + module, frame)
-          .from(0, 0, aboveTheWheel)
-          .to(1, 0, aboveTheWheel)
-          .length(moduleSpeeds[i])
-          .style(Style.ACCENT);
     }
   }
 
   /**
-   * Each camera in a frame of its own at its mount: an arrow along its optical axis, the first
-   * meter of its view, and its name. A click on the arrow or the view says how the camera is
-   * mounted, and shows its full view.
+   * Each camera in a frame of its own at its mount, marked by a short arrow along its optical axis.
+   * A click on the arrow says how the camera is mounted, and shows its name and its view until the
+   * details close; the names and the views are layers of their own, off until switched on.
    */
   private void describeCameras(SceneBuilder scene) {
-    List<Translation3d> labels = labelPlaces(cameras, body);
     for (int i = 0; i < cameras.size(); i++) {
       CameraConfig camera = cameras.get(i);
       String frame = WorldWords.cameraFrame(camera.id());
-      String fullView = CameraViews.view(camera);
       scene.frame(frame, FRAME, mounts[i]);
       scene
           .arrow(frame + ".axis", frame)
           .to(CAMERA_ARROW, 0, 0)
           .style(Style.ACCENT)
           .inspect(() -> WorldWords.camera(camera, cameraAction))
-          .reveal(fullView);
-      FieldOfView sees = fieldOfView(camera.sensor());
-      scene
-          .frustum(frame + ".stub", frame)
-          .fov(sees.acrossRadians(), sees.upAndDownRadians())
-          .range(0, VIEW_STUB_METERS)
-          .inspect(() -> WorldWords.camera(camera, cameraAction))
-          .reveal(fullView);
-      Translation3d label = labels.get(i);
-      scene
-          .label(frame + ".name", FRAME)
-          .text(camera.name())
-          .at(label.getX(), label.getY(), label.getZ());
+          .reveal(CameraViews.view(camera), name(camera));
     }
   }
 
+  /** The id of the shape that is a camera's name. */
+  private static String name(CameraConfig camera) {
+    return WorldWords.cameraFrame(camera.id()) + ".name";
+  }
+
+  /** Each wheel's drive arrow, along its frame's x and as long as the module's speed value says. */
+  StillLayer wheelArrows() {
+    return new StillLayer(
+        "wheel-arrows",
+        "Wheel arrows",
+        scene -> {
+          for (int i = 0; i < moduleFrames.length; i++) {
+            double aboveTheWheel = 2 * radii[i] + DRIVE_ARROW_RISE;
+            scene
+                .arrow("drive." + MODULES.get(i), moduleFrames[i])
+                .from(0, 0, aboveTheWheel)
+                .to(1, 0, aboveTheWheel)
+                .length(moduleSpeeds[i])
+                .style(Style.ACCENT);
+          }
+        },
+        List.of(
+            Legend.arrow(
+                Style.ACCENT,
+                "Where a wheel is driving, as it was measured: as long as it travels in 0.2 s")));
+  }
+
+  /** Each camera's name, off the robot and off the other names. */
+  StillLayer cameraNames() {
+    return new StillLayer(
+        "camera-names",
+        "Camera names",
+        scene -> {
+          List<Translation3d> labels = labelPlaces(cameras, body);
+          for (int i = 0; i < cameras.size(); i++) {
+            Translation3d label = labels.get(i);
+            scene
+                .label(name(cameras.get(i)), FRAME)
+                .text(cameras.get(i).name())
+                .at(label.getX(), label.getY(), label.getZ());
+          }
+        },
+        List.of(Legend.text(Style.MUTED, "A camera's name, as the robot's definition has it")));
+  }
+
   /** Each switch and rangefinder as a small block at its mount, and a rangefinder's cone. */
-  private void describeSensors(SceneBuilder scene) {
-    for (int i = 0; i < sensors.size(); i++) {
-      Sensor.Placed sensor = sensors.get(i);
-      String frame = "sensor." + i;
-      scene.frame(frame, FRAME, sensorMounts[i]);
-      scene
-          .box(frame + ".block", frame)
-          .size(SENSOR_SIZE, SENSOR_SIZE, SENSOR_SIZE)
-          .style(Style.ACCENT)
-          .inspect(() -> WorldWords.sensor(sensor));
-      if (sensor instanceof Sensor.Rangefinder rangefinder) {
-        double cone = rangefinder.fieldOfView().in(Radians);
-        scene
-            .frustum(frame + ".cone", frame)
-            .fov(cone, cone)
-            .range(0, rangefinder.range().in(Meters))
-            .inspect(() -> WorldWords.sensor(sensor));
-      }
-    }
+  StillLayer sensors() {
+    return new StillLayer(
+        "sensors",
+        "Sensors",
+        scene -> {
+          for (int i = 0; i < sensors.size(); i++) {
+            Sensor.Placed sensor = sensors.get(i);
+            String frame = "sensor." + i;
+            scene
+                .box(frame + ".block", frame)
+                .size(SENSOR_SIZE, SENSOR_SIZE, SENSOR_SIZE)
+                .style(Style.ACCENT)
+                .inspect(() -> WorldWords.sensor(sensor));
+            if (sensor instanceof Sensor.Rangefinder rangefinder) {
+              double cone = rangefinder.fieldOfView().in(Radians);
+              scene
+                  .frustum(frame + ".cone", frame)
+                  .fov(cone, cone)
+                  .range(0, rangefinder.range().in(Meters))
+                  .inspect(() -> WorldWords.sensor(sensor));
+            }
+          }
+        },
+        List.of(
+            Legend.fill(Style.ACCENT, "A switch or a rangefinder, where it is mounted"),
+            Legend.outline(Style.MUTED, "A rangefinder's cone, out to its range")));
+  }
+
+  @Override
+  public List<Legend> legend() {
+    return List.of(
+        Legend.fill(
+            Style.ACCENT,
+            "The robot where localization believed it was: its frame, bumpers and wheels"),
+        Legend.arrow(
+            Style.ACCENT,
+            "Out the front of the robot; along each camera's optical axis; along the gyro's x"));
   }
 
   /** The gyro's IMU as a block in a frame turned as it's mounted, with an arrow along its x. */

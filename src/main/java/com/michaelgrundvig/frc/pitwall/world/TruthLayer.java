@@ -3,10 +3,12 @@ package com.michaelgrundvig.frc.pitwall.world;
 import static org.wpilib.units.Units.Meters;
 
 import com.michaelgrundvig.frc.pitwall.robot.Moment;
+import com.michaelgrundvig.frc.pitwall.scene.Legend;
 import com.michaelgrundvig.frc.pitwall.scene.SceneBuilder;
 import com.michaelgrundvig.frc.pitwall.scene.SceneState;
 import com.michaelgrundvig.frc.pitwall.scene.Style;
 import com.michaelgrundvig.frc.world.robot.Body;
+import java.util.List;
 import java.util.Optional;
 import org.wpilib.math.geometry.Pose3d;
 
@@ -36,7 +38,15 @@ final class TruthLayer extends WorldLayer {
 
   @Override
   public String title() {
-    return "Truth (dashed)";
+    return "True pose";
+  }
+
+  @Override
+  public List<Legend> legend() {
+    return List.of(
+        Legend.outline(
+            Style.TRUTH.dashed(),
+            "Where the robot really is, with an arrow out its front: only the simulator knows"));
   }
 
   @Override

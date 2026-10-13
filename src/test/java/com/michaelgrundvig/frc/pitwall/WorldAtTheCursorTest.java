@@ -177,7 +177,7 @@ class WorldAtTheCursorTest {
     assertThat(get("/api/scenes/world/inspect/uncertainty.ellipse").body())
         .as("with no loop named, the newest")
         .contains("\"value\":\"dead reckoning\"");
-    assertThat(get("/api/scenes/world/inspect/camera.front.stub?index=1").body())
+    assertThat(get("/api/scenes/world/inspect/camera.front.axis?index=1").body())
         .as("a camera's mount is the same in every loop")
         .contains("\"title\":\"Camera front\"");
     assertThat(get("/api/scenes/world/inspect/tag.7.square?index=99").statusCode())

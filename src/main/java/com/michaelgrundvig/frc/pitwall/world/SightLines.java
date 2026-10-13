@@ -5,6 +5,7 @@ import com.michaelgrundvig.frc.pitwall.robot.Sighting;
 import com.michaelgrundvig.frc.pitwall.robot.SightingSentences;
 import com.michaelgrundvig.frc.pitwall.robot.SightingWords;
 import com.michaelgrundvig.frc.pitwall.scene.Inspection;
+import com.michaelgrundvig.frc.pitwall.scene.Legend;
 import com.michaelgrundvig.frc.pitwall.scene.SceneBuilder;
 import com.michaelgrundvig.frc.pitwall.scene.SceneState;
 import com.michaelgrundvig.frc.pitwall.scene.Shapes;
@@ -75,7 +76,15 @@ final class SightLines extends WorldLayer {
 
   @Override
   public String title() {
-    return "Sight lines (dashed: rejected)";
+    return "Sight lines";
+  }
+
+  @Override
+  public List<Legend> legend() {
+    return List.of(
+        Legend.line(Style.OK, "A camera's measurement of a tag that the estimator accepted"),
+        Legend.line(Style.BAD.dashed(), "One it refused: click the line for why"),
+        Legend.line(Style.MUTED, "One given to a localizer that does not say what became of it"));
   }
 
   /** Its lines run between the robot's cameras and the field's tags, so it adds no frames. */

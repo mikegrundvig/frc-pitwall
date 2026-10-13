@@ -3,19 +3,28 @@ package com.michaelgrundvig.frc.pitwall.world;
 import static org.wpilib.units.Units.Meters;
 
 import com.michaelgrundvig.frc.pitwall.scene.Layer;
+import com.michaelgrundvig.frc.pitwall.scene.Legend;
 import com.michaelgrundvig.frc.pitwall.scene.SceneBuilder;
+import com.michaelgrundvig.frc.pitwall.scene.Style;
 import com.michaelgrundvig.frc.world.robot.CameraConfig;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
 /**
- * Each camera's full view, out as far as it reads tags (its sensor's sight range). The layer is off
- * until switched on, since four views reach across the field. One camera's view is also shown while
- * that camera is clicked, because {@link RobotLayer}'s camera reveals its own. The views are drawn
- * in the cameras' frames, which the robot's layer adds.
+ * Each camera's view, as far as {@link #VIEW_METERS}. The layer is off until switched on, since
+ * four views crowd the robot they belong to. One camera's view is also shown while that camera is
+ * clicked, because {@link RobotLayer}'s camera reveals its own. The views are drawn in the cameras'
+ * frames, which the robot's layer adds.
  */
 final class CameraViews implements Layer {
+  /**
+   * How far a camera's view is drawn, at most. A camera reads tags out to several meters, and four
+   * views drawn that far cover the field and the robot with it. Drawn this far, a view still shows
+   * which way its camera points and how wide it sees.
+   */
+  static final double VIEW_METERS = 3;
+
   private final List<CameraConfig> cameras;
   private final Function<String, Optional<String>> cameraAction;
 
@@ -46,13 +55,20 @@ final class CameraViews implements Layer {
   }
 
   @Override
+  public List<Legend> legend() {
+    return List.of(
+        Legend.outline(
+            Style.MUTED, "What a camera sees, drawn out to 3 m: it reads tags farther than that"));
+  }
+
+  @Override
   public void describe(SceneBuilder scene) {
     for (CameraConfig camera : cameras) {
       RobotLayer.FieldOfView sees = RobotLayer.fieldOfView(camera.sensor());
       scene
           .frustum(view(camera), WorldWords.cameraFrame(camera.id()))
           .fov(sees.acrossRadians(), sees.upAndDownRadians())
-          .range(0, camera.sensor().sightRange().in(Meters))
+          .range(0, Math.min(VIEW_METERS, camera.sensor().sightRange().in(Meters)))
           .inspect(() -> WorldWords.camera(camera, cameraAction));
     }
   }

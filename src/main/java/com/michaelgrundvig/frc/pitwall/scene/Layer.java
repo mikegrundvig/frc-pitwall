@@ -1,5 +1,6 @@
 package com.michaelgrundvig.frc.pitwall.scene;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -83,6 +84,14 @@ public interface Layer {
     default Optional<Inspection> inspect(long loop, String shapeId) {
       return Optional.empty();
     }
+  }
+
+  /**
+   * What the layer's marks mean, for the page's legend: a line for each kind of mark a person could
+   * wonder about, with the style it is drawn in. None, unless the layer says.
+   */
+  default List<Legend> legend() {
+    return List.of();
   }
 
   /** A layer that only describes: shapes that never move, such as a field's walls. */

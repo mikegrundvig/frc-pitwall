@@ -20,7 +20,8 @@ import java.util.function.LongSupplier;
  *       and goes to each page once, in its snapshot; again only when a layer's configuration
  *       changes. It's the {@code scenes} section of the page's state: {@code {id: {"title",
  *       "focus", "layers": {id: {"title", "shown", "frames", "shapes"}}}}}, the focus being the
- *       frame the page may follow, if the scene names one.
+ *       frame the page may follow, if the scene names one. A layer that says what its marks mean
+ *       has a {@code "legend"} too: {@code [{"mark", "style", "text"}]}.
  *   <li><b>What moves</b> goes only to the pages that show the scene, as JSON merge patches at
  *       {@code scenes.<id>.state}: {@code {"frames": {name: pose}, "values": {name: number},
  *       "styles": {shape: style}, "shapes": {layer: [shape, ...]}}}. Each layer updates every loop

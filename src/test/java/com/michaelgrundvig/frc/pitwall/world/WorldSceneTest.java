@@ -130,15 +130,25 @@ class WorldSceneTest {
         .contains("\"id\":\"tag.7.id\"", "\"text\":\"7\"", "\"tag.8.square\"")
         .contains("\"camera.front\":{\"parent\":\"robot\",\"pose\":")
         .contains(
-            "\"id\":\"camera.front.stub\",\"kind\":\"frustum\",\"frame\":\"camera.front\","
-                + "\"style\":\"muted\",\"inspect\":true,\"reveals\":[\"camera.front.view\"]")
+            "\"id\":\"camera.front.axis\",\"kind\":\"arrow\",\"frame\":\"camera.front\","
+                + "\"style\":\"accent\",\"inspect\":true,"
+                + "\"reveals\":[\"camera.front.view\",\"camera.front.name\"]")
         .contains("\"camera-views\":{\"title\":\"Camera views\",\"shown\":false")
-        .contains("\"camera.front.view\"", "\"range\":[0,7]")
+        .contains("\"camera-names\":{\"title\":\"Camera names\",\"shown\":false")
+        .contains("\"camera.front.view\"", "\"range\":[0,3]")
+        .contains("\"tag-numbers\":{\"title\":\"Tag numbers\",\"shown\":true")
+        .contains("\"wheel-arrows\":{\"title\":\"Wheel arrows\",\"shown\":true")
+        .contains("\"sensors\":{\"title\":\"Sensors\",\"shown\":true", "\"sensor.0.block\"")
         .contains("\"wheel.back-right\"", "\"length\":\"speed.back-right\"")
         .contains("\"imu.gyro\":{\"parent\":\"robot\"", "\"imu.gyro.block\"")
         .contains("\"radii\":[\"uncertainty.major\",\"uncertainty.minor\"]")
         .contains("\"truth.robot\"", "\"style\":\"truth dashed\"")
-        .contains("\"sight-lines\":{\"title\":\"Sight lines (dashed: rejected)\"");
+        .contains("\"sight-lines\":{\"title\":\"Sight lines\"")
+        .contains(
+            "\"legend\":[{\"mark\":\"line\",\"style\":\"ok\",\"text\":\"A camera's"
+                + " measurement of a tag that the estimator accepted\"},{\"mark\":\"line\","
+                + "\"style\":\"bad dashed\"")
+        .contains("\"mark\":\"outline\",\"style\":\"truth dashed\"");
     assertThat(said).isEmpty();
   }
 
@@ -448,7 +458,7 @@ class WorldSceneTest {
             scenes.inspectAt(WorldScene.ID, later, "uncertainty.ellipse").orElseThrow().details())
         .extracting(Inspection.Detail::value)
         .contains("dead reckoning");
-    assertThat(scenes.inspectAt(WorldScene.ID, refused, "camera.front.view").orElseThrow().title())
+    assertThat(scenes.inspectAt(WorldScene.ID, refused, "camera.front.axis").orElseThrow().title())
         .as("a camera's mount is the same in every loop")
         .isEqualTo("Camera front");
     assertThat(scenes.inspectAt(WorldScene.ID, refused, "tag.7.square")).isPresent();
