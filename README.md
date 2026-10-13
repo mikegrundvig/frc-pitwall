@@ -6,9 +6,9 @@ controls, served by the program itself on port 5820 (http://localhost:5820 in th
 a library of its own
 (`com.michaelgrundvig.frc.pitwall`), free of any team's robot code. It reads the robot model
 (`com.michaelgrundvig.frc:frc-robot-model`): handed a robot's definition, it draws that robot's
-joints as the model says them. Everything else the robot program contributes to it, as data. The
-robot template's README describes each part; this file is for contributors, and covers its Robot
-view and its scenes: the World view.
+joints as the model says them, and its world on the field. Everything else the robot program
+contributes to it, as data. The robot template's README describes each part; this file is for
+contributors, and covers its Robot view and its scenes: the World view.
 
 **Another port:** `Pitwall.start(name)` serves on 5820 unless the `pitwall.port` system property
 names another (`-Dpitwall.port=5920`; 0 picks a free one, and Pitwall prints the one it took). In
@@ -140,8 +140,18 @@ lost sensor, reads as unknown, and restricts).
   what it was told, each sensor, each gate with what blocks it, the bindings that fired, and the
   gamepads. Taking one reads about two hundred values and allocates nothing: the robot writes a
   fact only when it changes, and a fact is made out of the log's bytes only then.
-- **The session's memory** is a ring of the last five minutes of moments, in arrays taken once: 818
-  bytes a loop for a robot with eight joints and two sensors, 12.3 MB in all. A fact's fields are
+- **Where the robot was** is in the moment too, for the World view (below): the estimated pose
+  with how sure it was and what it rested on, the true pose in the simulator, the wheels, and each
+  camera's tags of the loop with what became of each. A pose, a covariance and the wheels'
+  velocities are structs in the log, made of numbers alone, and are read as those numbers where
+  they lie (`LoopRecord.numbers`), since they change every loop. A camera's tags are facts
+  (`robot/Sighting`), written when they change, with their measurements beside them as a list of
+  numbers. A verdict and a solver are numbers in the log; their words are the robot program's
+  own, handed to the session as it is made (`SightingWords`), so nothing here words one again.
+- **The session's memory** is a ring of the last five minutes of moments, in arrays taken once:
+  1500 bytes a loop for a robot with eight joints, two sensors and four cameras, 22.5 MB in all.
+  Of that, where the robot was is 130 bytes a loop and 138 more for each camera, which keeps four
+  of a camera's tags a loop and counts the rest. A fact's fields are
   kept each in its place; texts, and the outcomes of moves, are kept once each in tables of their
   own and known by a number. It keeps at most three things holding a joint, 16 gates with two
   blocking terms each, four fired bindings a loop, two gamepads, 4096 different texts and 1024
@@ -169,7 +179,11 @@ the page still follows the robot meanwhile, and the state bar still says how the
   move ended, with how; something began or stopped holding a joint short of what it was asked; a
   joint's state changed (homing, faulted, ready); a joint or its absolute encoder stopped
   answering; a gate began to hold or fell, with why; a switch tripped or cleared, or a sensor was
-  lost. A move that timed out or was refused, a fault, and anything lost are flagged as problems.
+  lost. And where the robot is: it was placed; a camera's measurement was refused, with its
+  verdict (one event for a run of them: the next comes after a second without one); what the
+  estimate rests on changed (tracking, dead reckoning, lost); the estimate recovered, jumping to
+  agree with its cameras, with how far. A move that timed out or was refused, a fault, anything
+  lost, an estimate that is lost and a recovery are flagged as problems.
   `EventFinder` finds them as each loop is taken, on the log's thread, by comparing the loop with
   the one before where the memory keeps them: it allocates nothing, and adds about half a
   microsecond a loop. An event is kept as two numbers, 12 bytes, in a ring of 4096 (49 KB), and
@@ -204,8 +218,8 @@ the page still follows the robot meanwhile, and the state bar still says how the
   a paused simulator, which adds a moment; the strip's *Loop* buttons go through loops that already
   ran. While the simulator is paused, live stands still, and the strip says so.
 - **Other views:** a view reads the cursor (`cursor()`), hears when it moves (`onCursor`), and
-  draws its own data for that loop. The World view does not follow it yet: while the cursor is on
-  an earlier loop it says that it shows the robot live, and offers the way back.
+  draws its own data for that loop. The World view does (below), with the same strip and list of
+  events along its bottom and the same keys, so flipping between the two views keeps the moment.
 
 A loop is known by its index; when it was is the robot's to say, since loops are not evenly spaced
 (a slow first loop, an overrun). The page works out a loop's time between the nearest loops whose
@@ -219,12 +233,13 @@ Labels are placed beside what they name and then moved apart until none overlaps
 ("in 1.5°" at the 0° stop) keeps its spot, and the stop's value moves beside it. The view draws the
 loop the cursor is on: the newest as it arrives, or an earlier one asked of the robot and kept
 (`page/robot-moments.js` keeps a few hundred, the latest asked for, and fetches only the loop the
-cursor is on now, so a drag across a thousand loops asks for a handful).
+cursor is on now, so a drag across a thousand loops asks for a handful; `page/loop-store.js` is
+that keeping, which the World view uses for its own loops).
 
 ### Not built
 
-The **World view following the cursor**: it shows the present only. **Recording a test's run** to
-look at here. Opening a saved log file stays AdvantageScope's job, as charts do.
+**Recording a test's run** to look at here. A **trail** of the estimated and the true pose over the
+strip's window, in the World view. Opening a saved log file stays AdvantageScope's job, as charts do.
 
 ## Scenes: the World view
 
@@ -252,6 +267,8 @@ interface Layer {
   default void update(SceneState state) {}    // what moves: in the robot loop, while a page shows it
   default Optional<Inspection> inspect(String shapeId) { ... }  // a click, on a server thread
   default Object configuration() { ... }      // describe again when this changes (by equals)
+  default Optional<Recorded> recorded() { ... } // the same of an earlier loop, from a record
+  default List<Legend> legend() { ... }       // what its marks mean, for the page's legend
 }
 ```
 
@@ -266,6 +283,16 @@ interface Layer {
   A layer that throws costs only itself, and what it threw is printed once.
 - **`inspect`** is for a layer that answers clicks itself. Most don't need it: a shape made with
   `.inspect(() -> Inspection.of(...))` answers for itself.
+- **`recorded`** is for a layer drawn from the robot's record: it says what `update` said in any
+  loop the record holds, whole, and what a click on one of its shapes says of that loop. The page
+  then draws the scene at its cursor (`GET /api/scenes/<id>/state?index=`, and
+  `.../inspect/<shape>?index=`), from the web server's thread and at no cost to the robot loop. A
+  layer without it is drawn live only: at an earlier loop the page hides it and says so.
+  `Layer.Recorded.STILL` is for a layer in which nothing moves.
+- **`legend`** says what each kind of the layer's marks means, each with the `Style` it is drawn
+  in. The page's legend lists the layers, is where each is switched on and off, and under a shown
+  layer draws a sample of each mark from that same style, so a sample cannot differ from the
+  drawing. What is switched is kept in the browser.
 
 ### Frames, values, and shapes
 
@@ -345,15 +372,21 @@ it reveals must be in the scene's description, or of the same moment.
   scene.
 
 Measured by `SceneStreamTest` (a robot driving on a field with 32 tags) and, for the template's
-own robot, its `WorldViewStreamSimTest`; the design's limit is 250 kbps.
+own robot, the runtime's `WorldViewFromTheRecordEndToEndTest` (a 20 kB description, and 11 kbps
+while driving); the design's limit is 250 kbps.
 
 ### The page
 
 `page/world.js` is the view; `page/scene-render.js` and `page/scene-shapes.js` draw with three.js,
 which loads the first time the view is shown. One renderer, two cameras: *Top*, orthographic (the
 2D map), and *3D*, orbiting. *Fit* frames what stays put, *Follow* keeps the scene's focus frame
-in view, *Hold* freezes the drawing. A click picks the nearest inspectable line within 12 px, so a
-thin ray is easy to hit, else the solid under the pointer. It draws only when a patch arrives or
+in view. The view draws the moment the page's cursor is on: live, the robot's patches; at an
+earlier loop, that loop's state asked of the robot and kept. To hold the drawing still, stand the
+cursor on a loop, with the strip under the drawing or the Left key; there is no *Hold* button any
+more. Beside the drawing is the legend, which folds to one button. A click picks the nearest
+inspectable line within 12 px, so a thin ray is easy to hit, else the solid under the pointer, and
+asks about the loop shown; the pointer over a shape shows what it reveals (a camera's name and
+view) while it is there. It draws only when a patch arrives or
 something is dragged, never in a loop. A browser without WebGL 2 is told so, and the rest of the
 page works.
 
@@ -370,33 +403,47 @@ a canvas. three.js's license is in [`licenses/`](licenses/three.js-License.md).
 ### Not building
 
 The World view draws the code's beliefs, to act on: no log loading, CAD, game pieces, or charts.
-AdvantageScope does those. It shows the present only, for now: the Robot view's session timeline
-(above) does not move it yet, and while that view shows an earlier moment this one says that it
-shows the robot live.
+AdvantageScope does those. It reaches back as far as the session's memory does, five minutes, and
+no further.
 
-## The template's World
+## The World: `world/WorldScene`
 
-The template contributes its world from `frc.robot.views.world` (`WorldView.scene`, added in
-`RobotContainer.addTo`), and `./gradlew run` shows it at http://localhost:5820/#world:
+The robot's world is Pitwall's own scene, drawn from the robot's record: `WorldScene.of(definition,
+field, truth, words, cameraAction).scene(session)`, which the runtime adds in
+`RobotContainer.addTo`, and `./gradlew run` shows at http://localhost:5820/#world. What moves is a
+function of the robot's definition, the field and one loop's moment (`WorldScene.draw(moment)`), as
+the Robot view is of the definition and a moment. So it is one implementation at any loop: live, a
+layer draws the session's newest moment in the robot loop, and at the cursor the same function
+draws the loop asked for.
+
+Each of these is a layer the legend switches:
 
 - **Field:** the field model's walls and carpet, its raised ground (bumps, ramps, platforms), and
-  its AprilTags where the layout puts them, each with its number.
-- **Robot:** at the localization estimate, on the ground under it and tilted as its IMU says, as
-  its `RobotDefinition` describes it: its frame and bumpers from `Body` with an arrow out the
-  front; each wheel at its module, turned to its measured angle, with an arrow as far as it will go
-  in 0.2 s; each camera at its configured mount, an arrow along its optical axis and the first
-  meter of its view, its name beside it, off the robot; and the gyro's IMU, a small block where its
-  `ImuMount` puts it, turned as it's mounted, with an arrow along its own x axis. A click on a
-  camera says how it's mounted, offers its calibration, and shows its full view until the details
-  close; a click on the IMU says how it's mounted and whether its accelerometer has been checked. A
-  wedge pointing the wrong way is a mistake in `Robots.java`, found at a glance.
-- **Camera views,** off at first: every camera's full view, out as far as it reads tags (its
-  sensor's `sightRange`, 7 m on the template's robot).
-- **Uncertainty (2σ):** the estimate's position uncertainty as a dashed ellipse, two standard
-  deviations across; in the color of trouble while the estimate is lost or the gyro is.
-- **Sight lines:** from each camera to the tags its measurements used, solid where the estimator
-  accepted the measurement and dashed where it refused it. A click says why: the verdict, the
-  innovation, χ², the distance, the measured pose, and the solve, and offers the camera's
-  calibration.
-- **Truth:** in the simulator only, where the robot really is, as a dashed ghost beside the
-  estimate.
+  its AprilTags where the layout puts them. **Tag numbers** are a layer of their own.
+- **Robot:** at the estimate (`Localization/Pose3d`), on the ground under it and tilted as its IMU
+  said, as its `RobotDefinition` describes it: its frame and bumpers from `Body` with an arrow out
+  the front; each wheel at its module, turned to its measured angle; each camera as a short arrow
+  along its optical axis at its mount; and the gyro's IMU, a small block where its `ImuMount` puts
+  it, with an arrow along its own x axis. A camera or a sensor that rides on a joint is drawn where
+  the joint was in that loop. A click on a camera says how it's mounted, offers its calibration,
+  and shows its name and its view until the details close; the pointer over it does the same while
+  it is there.
+- **Wheel arrows:** where each wheel is driving, as far as it will go in 0.2 s.
+- **Sensors:** each switch and rangefinder as a small block, and a rangefinder's cone.
+- **Camera names** and **Camera views,** both off at first: four of each crowd the robot. A view
+  is its edges only, out to 3 m, though a camera reads tags farther than that.
+- **Uncertainty (2σ):** the estimate's covariance (`Localization/Covariance`) as a dashed ellipse,
+  two standard deviations across; in the color of trouble while the estimate is lost or the gyro
+  is. A click says how sure, what it rests on, and how the cameras have fared.
+- **Sight lines:** from each camera to the tags it measured (`Vision/<camera>/Sightings`), solid
+  where the estimator accepted the measurement and dashed where it refused it, kept for 300 ms
+  after the measurement so a line does not flicker between images. A click says why: the verdict
+  in localization's own words, the innovation, χ², the distance, the measured pose, and the solve,
+  and offers the camera's calibration.
+- **True pose:** in the simulator only (`Sim/TruePose3d`), where the robot really is, as a dashed
+  ghost beside the estimate.
+
+`WorldSceneTest` holds the function to moments taken from records made by hand. The runtime's
+`WorldViewFromTheRecordEndToEndTest` holds it to a real session: for every loop, what is drawn from
+the log is what the robot's own objects said in that loop.
+
