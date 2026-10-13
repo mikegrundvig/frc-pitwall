@@ -15,10 +15,13 @@ import com.michaelgrundvig.frc.pitwall.robot.TestRobot;
 import com.michaelgrundvig.frc.pitwall.scene.Inspection;
 import com.michaelgrundvig.frc.pitwall.scene.Scenes;
 import com.michaelgrundvig.frc.pitwall.scene.StillState;
+import com.michaelgrundvig.frc.world.field.Element;
 import com.michaelgrundvig.frc.world.field.FieldModel;
 import com.michaelgrundvig.frc.world.field.Symmetry;
 import com.michaelgrundvig.frc.world.field.Tag;
 import com.michaelgrundvig.frc.world.field.TagLayout;
+import com.michaelgrundvig.frc.world.physical.Material;
+import com.michaelgrundvig.frc.world.physical.Polygon2d;
 import com.michaelgrundvig.frc.world.robot.CameraConfig;
 import com.michaelgrundvig.frc.world.robot.Joint;
 import com.michaelgrundvig.frc.world.robot.RobotDefinition;
@@ -34,6 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.wpilib.math.geometry.Pose3d;
 import org.wpilib.math.geometry.Rotation3d;
+import org.wpilib.math.geometry.Translation2d;
 
 /**
  * The World view as a function of the robot, the field and one loop's moment: the same drawing
@@ -47,7 +51,15 @@ class WorldSceneTest {
   private static final long LOOP_NANOS = 20_000_000L;
   private static final double[] NO_NUMBERS = new double[0];
 
-  /** A field with two tags on its far wall, facing back down the field. */
+  /** A post 0.5 m square and 1.2 m tall, standing on blue's half: the field adds red's. */
+  private static final Element POST =
+      Element.standing(
+          "Post",
+          Polygon2d.rectangle(new Translation2d(4, 3), new Translation2d(4.5, 3.5)),
+          1.2,
+          Material.ALUMINUM);
+
+  /** A field with two tags on its far wall, facing back down the field, and a post on each half. */
   private static final FieldModel FIELD =
       FieldModel.builder(
               new TagLayout(
@@ -58,6 +70,7 @@ class WorldSceneTest {
                       Tag.nominal(7, new Pose3d(16.5, 3, 1.4, new Rotation3d(0, 0, Math.PI))),
                       Tag.nominal(8, new Pose3d(16.5, 5, 1.4, new Rotation3d(0, 0, Math.PI))))),
               Symmetry.ROTATED)
+          .elements(List.of(POST))
           .build();
 
   /** The robot program's words: verdict 0 is accepted and 1 the gate, solver 1 a single tag. */
@@ -151,6 +164,48 @@ class WorldSceneTest {
                 + "\"style\":\"bad dashed\"")
         .contains("\"mark\":\"outline\",\"style\":\"truth dashed\"");
     assertThat(said).isEmpty();
+  }
+
+  /**
+   * What stands on the field is a layer of its own, shown unless switched off: each block a solid
+   * in the structure style, and a click on it says the element's name and size. A tag is drawn so
+   * the side it is read from shows: a lit face on the side its pose looks out of, a tick standing
+   * out of that face, and a faint back behind it.
+   */
+  @Test
+  void theSceneCarriesWhatStandsOnTheFieldAndWhichWayEachTagFaces() {
+    onAPage();
+    String described = JSON.toJson(scenes.descriptions());
+
+    assertThat(described)
+        .contains("\"elements\":{\"title\":\"Field elements\",\"shown\":true")
+        .contains(
+            "\"id\":\"element.0.0\",\"kind\":\"mesh\",\"frame\":\"field\","
+                + "\"style\":\"structure\",\"inspect\":true")
+        .contains("\"id\":\"element.1.0\"")
+        .contains("\"mark\":\"fill\",\"style\":\"structure\"")
+        // The face is the slab in front of the tag's plane, the back the one behind it, and the
+        // tick runs on out of the face along the tag's own x.
+        .contains(
+            "\"id\":\"tag.7.square\",\"kind\":\"box\",\"frame\":\"tag.7\","
+                + "\"style\":\"face\",\"inspect\":true,\"at\":[0.015,0,0]")
+        .contains(
+            "\"id\":\"tag.7.back\",\"kind\":\"box\",\"frame\":\"tag.7\","
+                + "\"style\":\"muted\",\"at\":[-0.015,0,0]")
+        .contains(
+            "\"id\":\"tag.7.facing\",\"kind\":\"line\",\"frame\":\"tag.7\"," + "\"style\":\"face\"")
+        .contains("\"from\":[0.03,0,0],\"to\":[0.14,0,0]")
+        .contains("\"mark\":\"fill\",\"style\":\"face\"");
+    assertThat(scenes.inspect(WorldScene.ID, "element.1.0").orElseThrow())
+        .satisfies(
+            post -> {
+              assertThat(post.title()).isEqualTo("Post (red)");
+              assertThat(post.details())
+                  .extracting(Inspection.Detail::label, Inspection.Detail::value)
+                  .contains(
+                      tuple("Covers", "0.50 m along the field by 0.50 m across"),
+                      tuple("Height", "1.20 m"));
+            });
   }
 
   /** The simulator's parts, as a robot's simulation would name them. */

@@ -36,7 +36,7 @@ const FADED = 0.12;
 const LEADER_FROM = 6;
 
 // What a legend needs of how shapes are drawn, so its samples use the drawing's own styles.
-export { TOKENS, tokenOf, isDashed } from "./scene-shapes.js";
+export { TOKENS, FILL_OPACITY, tokenOf, isDashed } from "./scene-shapes.js";
 
 /** Whether this browser can draw 3D at all: three.js needs WebGL 2. */
 export function supported() {

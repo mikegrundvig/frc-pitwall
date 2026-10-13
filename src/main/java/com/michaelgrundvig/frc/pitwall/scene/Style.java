@@ -24,7 +24,11 @@ public record Style(Token token, Stroke stroke) {
     /** The subject: the robot as the code believes it to be. */
     ACCENT,
     /** The simulator's truth, where the robot really is. */
-    TRUTH
+    TRUTH,
+    /** Something solid standing on the field, which a robot runs into: filled, not faint. */
+    STRUCTURE,
+    /** A printed face that can be read from one side only, lit: an AprilTag's. */
+    FACE
   }
 
   /** How its lines are drawn. */
@@ -38,6 +42,8 @@ public record Style(Token token, Stroke stroke) {
   public static final Style MUTED = new Style(Token.MUTED, Stroke.SOLID);
   public static final Style ACCENT = new Style(Token.ACCENT, Stroke.SOLID);
   public static final Style TRUTH = new Style(Token.TRUTH, Stroke.SOLID);
+  public static final Style STRUCTURE = new Style(Token.STRUCTURE, Stroke.SOLID);
+  public static final Style FACE = new Style(Token.FACE, Stroke.SOLID);
 
   /** The same color, dashed. */
   public Style dashed() {

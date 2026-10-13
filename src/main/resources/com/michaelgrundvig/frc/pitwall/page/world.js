@@ -421,8 +421,10 @@ function sample(entry) {
       add("rect", { x: 3, y: 2, width: 24, height: 10, rx: 2, ...stroke });
       break;
     case "fill":
+      // Filled as strongly as the drawing fills it, but never so faintly the sample is lost.
       add("rect", { x: 3, y: 2, width: 24, height: 10, rx: 2, ...stroke, fill: color,
-                    "fill-opacity": 0.25 });
+                    "fill-opacity": Math.max(0.25,
+                      styles.FILL_OPACITY[styles.tokenOf(entry.style)] || 0) });
       break;
     case "arrow":
       add("line", { x1: 2, y1: 7, x2: 22, y2: 7, ...stroke });

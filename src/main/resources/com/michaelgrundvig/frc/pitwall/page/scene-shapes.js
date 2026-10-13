@@ -8,12 +8,17 @@
 
 import * as THREE from "/three/three.module.min.js";
 
-/** How strongly a shape is filled: faint, so lines and what's behind stay readable. */
-const FILL_OPACITY = { muted: 0.1, accent: 0.28, ok: 0.2, bad: 0.2, truth: 0.12 };
+/**
+ * How strongly a shape is filled. Most are faint, so lines and what's behind stay readable. What
+ * stands on the field is filled solidly, because it is in the way, and a tag's readable face is
+ * lit, so that it differs from its faint back.
+ */
+export const FILL_OPACITY = { muted: 0.1, accent: 0.28, ok: 0.2, bad: 0.2, truth: 0.12,
+                              structure: 0.6, face: 0.95 };
 
 /** The tokens a style can name, and the page's color token each is drawn in. */
 export const TOKENS = { ok: "--ok", bad: "--bad", muted: "--muted", accent: "--accent",
-                        truth: "--truth" };
+                        truth: "--truth", structure: "--structure", face: "--tag-face" };
 
 /** A dash and its gap, in meters: visible across a field and on a robot alike. */
 const DASH = 0.12;

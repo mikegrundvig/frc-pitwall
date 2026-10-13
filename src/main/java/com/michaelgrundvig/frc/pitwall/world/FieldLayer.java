@@ -20,15 +20,22 @@ import org.wpilib.math.geometry.Pose3d;
 
 /**
  * The field as the field model has it: its carpet and walls, its raised ground (bumps, ramps,
- * platforms), and its AprilTags where the layout puts them. Their numbers are a layer of their own
- * ({@link #tagNumbers}). Nothing here moves.
+ * platforms), and its AprilTags where the layout puts them, each drawn so the side it is read from
+ * shows. Their numbers are a layer of their own ({@link #tagNumbers}), and so is what stands on the
+ * field ({@link #elements}). Nothing here moves.
  */
 final class FieldLayer implements Layer {
   /** The side of an AprilTag's printed square, in meters. FRC's 36h11 tags are 6.5 in. */
   private static final double TAG_SIZE = 0.1651;
 
-  /** How thick a tag's square is drawn. */
-  private static final double TAG_THICKNESS = 0.01;
+  /**
+   * How thick each side of a tag is drawn, its face and its back: thick enough that a tag seen from
+   * above, across the whole field, is still a short line and not a hair.
+   */
+  private static final double TAG_SIDE_THICKNESS = 0.03;
+
+  /** How far the tick stands out of a tag's face, from the face's middle. */
+  private static final double TAG_TICK_OUT = 0.14;
 
   /** How far in front of its face a tag's number is drawn. */
   private static final double TAG_NUMBER_OUT = 0.25;
@@ -98,15 +105,49 @@ final class FieldLayer implements Layer {
         .closed();
   }
 
-  /** A tag in a frame of its own at its pose: its square. */
+  /**
+   * A tag in a frame of its own at its pose, drawn so the side it is read from shows. Its face is a
+   * lit slab on the side its pose looks out of, with a tick standing out of its middle, and its
+   * back is a faint slab behind. From above that is a short thick line with a tick on its readable
+   * side; from around, a bright front and a dim back.
+   */
   private static void describeTag(SceneBuilder scene, int id, Pose3d pose) {
     String frame = WorldWords.tagFrame(id);
     scene.frame(frame, SceneBuilder.ROOT, pose);
-    // The tag's x points out of its face, so its square stands in the y-z plane.
+    // The tag's x points out of its face, so its square stands in the y-z plane: the face's slab is
+    // just in front of that plane and the back's just behind it.
     scene
         .box(frame + ".square", frame)
-        .size(TAG_THICKNESS, TAG_SIZE, TAG_SIZE)
+        .size(TAG_SIDE_THICKNESS, TAG_SIZE, TAG_SIZE)
+        .at(TAG_SIDE_THICKNESS / 2, 0, 0)
+        .style(Style.FACE)
         .inspect(() -> tag(id, pose));
+    scene
+        .box(frame + ".back", frame)
+        .size(TAG_SIDE_THICKNESS, TAG_SIZE, TAG_SIZE)
+        .at(-TAG_SIDE_THICKNESS / 2, 0, 0);
+    scene
+        .line(frame + ".facing", frame)
+        .from(TAG_SIDE_THICKNESS, 0, 0)
+        .to(TAG_TICK_OUT, 0, 0)
+        .style(Style.FACE);
+  }
+
+  /**
+   * What stands on the field, a layer of its own so the page can hide it: each element's blocks as
+   * solids ({@link ElementShapes}).
+   */
+  StillLayer elements() {
+    return new StillLayer(
+        "elements",
+        "Field elements",
+        scene -> ElementShapes.describe(scene, active.get().elements()),
+        List.of(
+            Legend.fill(
+                Style.STRUCTURE,
+                "Something that stands on the field, which a robot runs into: a hub, a tower,"
+                    + " a wall's face. Click one for its name and size")),
+        active::get);
   }
 
   /**
@@ -137,8 +178,12 @@ final class FieldLayer implements Layer {
         Legend.outline(Style.MUTED, "The field's walls, around its carpet"),
         Legend.fill(
             Style.MUTED,
-            "An AprilTag where the layout has it, and raised ground: a bump,"
-                + " a ramp or a platform. Click one for its numbers"));
+            "Raised ground the robot drives over: a bump, a ramp or a platform."
+                + " Click one for its numbers"),
+        Legend.fill(
+            Style.FACE,
+            "An AprilTag's face, where the layout has it. The tick stands out of the side it is"
+                + " read from, and its back is faint. Click one for its numbers"));
   }
 
   /** Raised ground as its triangles: a bump's ridge, a ramp, or a platform and its ramps. */

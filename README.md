@@ -405,7 +405,8 @@ Each takes `at(...)` (where in its frame, turned or not), `style(...)`, `inspect
 `reveal(ids...)`.
 
 **Styles** are the page's color tokens by meaning, never colors: `Style.OK`, `BAD`, `MUTED`,
-`ACCENT`, `TRUTH`, each `.dashed()` or not. Color never carries meaning alone: a dashed line is
+`ACCENT`, `TRUTH`, `STRUCTURE` (something solid a robot runs into, filled strongly) and `FACE` (a
+printed face read from one side, lit), each `.dashed()` or not. Color never carries meaning alone: a dashed line is
 something not to trust as drawn (a rejected measurement, a bound, the simulator's truth). The page
 takes each token from its theme, light or dark.
 
@@ -502,7 +503,15 @@ draws the loop asked for.
 Each of these is a layer the legend switches:
 
 - **Field:** the field model's walls and carpet, its raised ground (bumps, ramps, platforms), and
-  its AprilTags where the layout puts them. **Tag numbers** are a layer of their own.
+  its AprilTags where the layout puts them. Each tag shows the side it is read from: its face is a
+  lit slab on the side its pose looks out of, with a tick standing out of its middle, and its back
+  is a faint slab behind. From above that is a short thick line with a tick on its readable side;
+  in 3D, a bright front and a dim back. **Tag numbers** are a layer of their own.
+- **Field elements:** what stands on the field and a robot runs into (`FieldModel.elements()`): a
+  hub, a tower, a trench's column, a wall's face. Each of an element's blocks is a solid, filled
+  strongly where raised ground is faint, in a color of its own in both themes. A click on one says
+  the element's name, how much floor it covers, how tall it is, and the tags that hang on it.
+  Nothing in it moves, so it is described with the field and never sent again.
 - **Robot:** at the estimate (`Localization/Pose3d`), on the ground under it and tilted as its IMU
   said, as its `RobotDefinition` describes it: its frame and bumpers from `Body` with an arrow out
   the front; each wheel at its module, turned to its measured angle; each camera as a short arrow

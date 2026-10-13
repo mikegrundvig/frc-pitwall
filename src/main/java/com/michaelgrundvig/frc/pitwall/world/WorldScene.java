@@ -20,7 +20,7 @@ import java.util.function.Supplier;
  * the simulator where the robot really was. It has a layer for each of:
  *
  * <ul>
- *   <li>the field the robot plays on, and its tags' numbers;
+ *   <li>the field the robot plays on, what stands on it, and its tags' numbers;
  *   <li>the robot where the estimate has it, with its wheels, cameras and gyro as its definition
  *       has them, and what rides on a joint where the joint was;
  *   <li>the wheels' drive arrows, and the switches and rangefinders;
@@ -150,7 +150,8 @@ public final class WorldScene {
    */
   public Scene scene(RobotSession session) {
     Newest newest = new Newest(session);
-    Scene scene = Scene.named(ID, "World").layer(field).layer(field.tagNumbers());
+    Scene scene =
+        Scene.named(ID, "World").layer(field).layer(field.elements()).layer(field.tagNumbers());
     for (WorldLayer layer : moving) {
       layer.follow(newest);
       scene.layer(layer);
