@@ -36,6 +36,8 @@ import java.util.Optional;
  *  "fired": {"bindings": [text], "timestampNanos"}}
  * }</pre>
  *
+ * <p>Live, the page is sent that with {@code "session"} beside it ({@link #wire(RobotSession)}).
+ *
  * <p>{@code fired} is the latest firing of a binding within about a second before the moment, with
  * when it was: a firing lasts one loop, and the page keeps it in sight for a second.
  */
@@ -96,6 +98,22 @@ public final class RobotWire {
     fired.put("bindings", lastFiring.map(Moment::fired).orElse(List.of()));
     fired.put("timestampNanos", lastFiring.map(Moment::timestampNanos).orElse(0L));
     wire.put("fired", fired);
+    return wire;
+  }
+
+  /**
+   * How much of the session is remembered, as the page is sent it beside the newest loop: {@code
+   * {"oldest", "oldestNanos", "startedNanos", "events"}}: the oldest loop the session holds and
+   * when it was, when the session began, and how many events it has found. With the newest loop's
+   * own index and time, it is the span a page's timeline covers.
+   */
+  public static Map<String, Object> wire(RobotSession session) {
+    Map<String, Object> wire = new LinkedHashMap<>();
+    long oldest = session.oldest();
+    wire.put("oldest", oldest);
+    session.timeOf(oldest).ifPresent(first -> wire.put("oldestNanos", first));
+    session.startedNanos().ifPresent(started -> wire.put("startedNanos", started));
+    wire.put("events", session.events().found());
     return wire;
   }
 

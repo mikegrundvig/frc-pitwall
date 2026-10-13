@@ -10,7 +10,9 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The Robot view, live: the newest moment of the session, sent to the pages that show the view, at
- * most {@link #PER_SECOND} times a second, and each time only what changed since the last.
+ * most {@link #PER_SECOND} times a second, and each time only what changed since the last. With it
+ * goes how much of the session is remembered and how many events it has found, which is what a
+ * page's timeline spans.
  *
  * <p>While no page shows the view the robot loop is not asked anything. While one does, the loop
  * reads the newest moment, makes its view and compares it with what was sent: the work of a few
@@ -94,7 +96,9 @@ public final class RobotFeed implements Feed {
     if (view.isEmpty()) {
       return false;
     }
-    sent = RobotWire.wire(view.get(), index, session.lastFiring(index));
+    Map<String, Object> wire = RobotWire.wire(view.get(), index, session.lastFiring(index));
+    wire.put("session", RobotWire.wire(session));
+    sent = wire;
     sentIndex = index;
     return true;
   }

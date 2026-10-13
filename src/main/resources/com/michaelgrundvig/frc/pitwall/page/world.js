@@ -14,6 +14,7 @@
 // about such a shape for two seconds after it's gone.
 
 import { robot, onChange, onConnection, showViews, send, h, replace, say } from "./core.js";
+import { cursor, onCursor, goLive } from "./cursor.js";
 
 let visible = false;
 let sceneId = null; // the scene shown
@@ -62,8 +63,15 @@ function mount(view) {
   ui.message = h("p", { class: "world-message", hidden: true });
   ui.held = h("p", { class: "world-held", hidden: true },
     "❚❚ Held: the drawing waits while the robot moves on. Release follows it again.");
+  // This view draws the robot live, whatever moment the page's cursor is on (cursor.js): while
+  // the cursor is on an earlier one, it says so, where the drawing is.
+  ui.earlier = h("p", { class: "world-earlier", role: "status", hidden: true },
+    h("span", null, "This is the robot live. The Robot view is showing an earlier moment."),
+    h("button", { type: "button", class: "small", onclick: goLive }, "Back to live"));
+  onCursor((at) => (ui.earlier.hidden = at.live));
+  ui.earlier.hidden = cursor().live;
   ui.details = h("aside", { class: "world-details card", hidden: true, "aria-live": "polite" });
-  ui.stage = h("div", { class: "world-stage" }, ui.canvas, ui.message, ui.held);
+  ui.stage = h("div", { class: "world-stage" }, ui.canvas, ui.message, ui.held, ui.earlier);
   view.classList.add("world");
   view.append(
     h("div", { class: "world-bar" }, ui.title, ui.pick,

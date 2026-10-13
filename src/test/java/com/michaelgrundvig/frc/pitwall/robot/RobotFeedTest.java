@@ -45,6 +45,11 @@ class RobotFeedTest {
     assertThat(in(first, "joints", "pivot", "needles")).containsEntry("now", 10.0);
     assertThat(in(first, "joints", "pivot", "scale")).containsEntry("upper", 135.0);
     assertThat(feed.sent()).isEqualTo(first);
+    assertThat(in(first, "session"))
+        .as("how much of the session is remembered goes with the newest loop")
+        .containsEntry("oldest", 0L)
+        .containsEntry("events", 0L)
+        .containsKeys("oldestNanos", "startedNanos");
 
     for (int more = 0; more < 3; more++) {
       loop(20);

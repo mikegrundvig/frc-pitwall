@@ -114,6 +114,17 @@ public final class RobotSession {
     return Optional.ofNullable(memory.at(index));
   }
 
+  /**
+   * When the loop with an index was, on the robot's clock, in nanoseconds; empty when it holds no
+   * such loop.
+   */
+  public OptionalLong timeOf(long index) {
+    synchronized (memory) {
+      boolean held = index >= memory.oldest() && index < memory.taken();
+      return held ? OptionalLong.of(memory.timeOf(index)) : OptionalLong.empty();
+    }
+  }
+
   /** The newest loop, or empty before the first. */
   public Optional<Moment> newest() {
     return moment(memory.taken() - 1);

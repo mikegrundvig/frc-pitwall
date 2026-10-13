@@ -227,7 +227,9 @@ class PitwallServerTest {
             "world.js",
             "scene-render.js",
             "scene-shapes.js",
+            "cursor.js",
             "robot.js",
+            "robot-moments.js",
             "robot-draw.js");
   }
 

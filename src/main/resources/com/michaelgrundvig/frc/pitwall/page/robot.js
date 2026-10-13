@@ -11,15 +11,24 @@
 // Offered only when the robot program hands Pitwall its robot's session (Pitwall.start(name,
 // session)). The robot sends the view only to pages that show it (core.js's showViews), at most 20
 // times a second, and each time only what changed; hiding the view, or the tab, stops it. What
-// arrives is the newest loop of the robot's log (robotView.live), and every card is drawn from
-// that alone, so drawing an earlier loop needs nothing more here than that loop.
+// arrives is the newest loop of the robot's log (robotView.live).
+//
+// It draws the moment the page's cursor is on (cursor.js): the newest loop while the cursor is
+// live, and otherwise that loop's view, asked of the robot and kept (robot-moments.js). Every card
+// is drawn from one loop's view alone, the same way whichever loop it is.
 
 import { robot, onChange, showViews, h, replace } from "./core.js";
+import { cursor, onCursor, span, noteTime } from "./cursor.js";
+import { wantView, forgetViews } from "./robot-moments.js";
 import { drawJoint, drawRange, builtFrom } from "./robot-draw.js";
 import { AXIS_NAMES, BUTTON_NAMES } from "./sim-drive.js";
 
+/** How many loops each side of the cursor's are fetched ahead: where a step goes next. */
+const BESIDE = 3;
+
 let visible = false;
 let ids = 0;
+let sessionOf = null; // when the session whose loops are kept began
 const ui = {};
 const cards = new Map(); // joint label -> its card's parts
 
@@ -38,6 +47,7 @@ function live() {
 }
 
 function mount(view) {
+  ui.view = view;
   ui.state = h("p", { class: "rv-state meta", "aria-live": "off" });
   ui.joints = h("div", { class: "rv-joints" });
   ui.waiting = h("p", { class: "rv-waiting" }, "Waiting for the robot's log.");
@@ -61,7 +71,11 @@ function mount(view) {
     if (!visible || !(snapshot || "robotView" in patch)) return;
     // A snapshot may be the first to say there is a Robot view: name it then, to be sent it.
     if (snapshot) showViews(offered() ? [offer().view] : []);
-    render();
+    // The newest loop is drawn only while the cursor is live: an earlier loop stays as it is.
+    if (snapshot || cursor().live) render();
+  });
+  onCursor(() => {
+    if (visible) render();
   });
 }
 
@@ -76,15 +90,37 @@ function hide() {
   showViews([]);
 }
 
+/** Draws the moment the cursor is on: the newest loop, or an earlier one once the robot answers. */
 function render() {
-  const view = live();
+  const held = span();
+  if (held && held.startedNanos !== sessionOf) {
+    sessionOf = held.startedNanos;
+    forgetViews(); // another robot program's session: its loops count from 0 again
+  }
+  const at = cursor();
+  if (at.live || !held) {
+    draw(live(), at);
+    return;
+  }
+  const near = [];
+  for (let by = 1; by <= BESIDE; by++) near.push(at.index + by, at.index - by);
+  wantView(at.index, (view) => {
+    if (view) noteTime(view.index, view.timestampNanos);
+    const now = cursor();
+    // Still wanted, and still held by the session: else the cursor has moved, and asks again.
+    if (visible && view && !now.live && now.index === at.index) draw(view, now);
+  }, near.filter((index) => index >= held.oldest && index <= held.newest));
+}
+
+function draw(view, at) {
   ui.waiting.hidden = Boolean(view);
   ui.joints.parentElement.hidden = !view;
   if (!view) {
     ui.state.textContent = "";
     return;
   }
-  ui.state.textContent = "Live · " + modeWords(view);
+  ui.state.textContent = (at.live ? "Live" : "Loop " + view.index) + " · " + modeWords(view);
+  ui.view.classList.toggle("earlier", !at.live);
   renderJoints(view);
   renderSensors(view);
   renderGates(view);
