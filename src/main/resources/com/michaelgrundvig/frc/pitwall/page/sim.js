@@ -433,7 +433,10 @@ function renderTime() {
   ui.pause.className = paused ? "primary" : "";
   ui.pause.disabled = !act;
   ui.step.disabled = !act || !paused;
-  ui.stepWhy.textContent = paused ? "" : "Step runs one loop of a paused simulator.";
+  // Step makes a new loop. Looking at the loops that already ran is the Robot view's time strip.
+  ui.stepWhy.textContent = paused
+    ? "Step runs one new loop. The Robot view's time strip looks back over the loops already run."
+    : "Step runs one new loop of a paused simulator.";
   ui.stop.disabled = !act;
 }
 

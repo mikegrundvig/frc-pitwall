@@ -15,11 +15,13 @@
 //
 // It draws the moment the page's cursor is on (cursor.js): the newest loop while the cursor is
 // live, and otherwise that loop's view, asked of the robot and kept (robot-moments.js). Every card
-// is drawn from one loop's view alone, the same way whichever loop it is.
+// is drawn from one loop's view alone, the same way whichever loop it is. The time strip along its
+// bottom (timeline.js) moves the cursor.
 
 import { robot, onChange, showViews, h, replace } from "./core.js";
 import { cursor, onCursor, span, noteTime } from "./cursor.js";
 import { wantView, forgetViews } from "./robot-moments.js";
+import { makeTimeline } from "./timeline.js";
 import { drawJoint, drawRange, builtFrom } from "./robot-draw.js";
 import { AXIS_NAMES, BUTTON_NAMES } from "./sim-drive.js";
 
@@ -66,7 +68,8 @@ function mount(view) {
           ui.sensors),
         h("section", { class: "card", "aria-label": "Gates" }, h("h2", null, "Gates"), ui.gates),
         h("section", { class: "card", "aria-label": "Gamepads" }, h("h2", null, "Gamepads"),
-          ui.pads, h("h3", { class: "rv-sub" }, "Fired"), ui.fired))));
+          ui.pads, h("h3", { class: "rv-sub" }, "Fired"), ui.fired))),
+    makeTimeline().element);
   onChange((patch, snapshot) => {
     if (!visible || !(snapshot || "robotView" in patch)) return;
     // A snapshot may be the first to say there is a Robot view: name it then, to be sent it.

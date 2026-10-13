@@ -765,3 +765,37 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .rv-pad { padding: var(--s1) 0; }
 .rv-pad-name, .rv-sub { font-size: var(--meta); color: var(--text-2); font-weight: 600; margin: var(--s1) 0 2px; }
 .rv-just { color: var(--edit); font-weight: 600; }
+
+/* ---- The time strip: the session's memory along the bottom of a view, with a mark for each event
+   and the page's cursor on it. It stays in sight while the view scrolls under it. A problem's mark
+   is taller, thicker and crossed, never told by its color alone; the cursor is a line with a
+   head, solid while live and in the color of an edit while it stands on an earlier loop. ---- */
+
+.ts { position: sticky; bottom: 0; z-index: 2; margin: var(--s3) calc(-1 * var(--s2)) calc(-1 * var(--s4));
+      padding: var(--s2) var(--s3); background: var(--surface); border: 1px solid var(--line-strong);
+      border-radius: 10px 10px 0 0; box-shadow: var(--shadow); }
+.ts-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+          gap: var(--s1) var(--s3); margin-bottom: var(--s1); }
+.ts-where { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); min-width: 0; }
+.ts-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+.ts-group { display: inline-flex; flex-wrap: wrap; gap: var(--s1); }
+.ts-status { font-size: var(--meta); padding: 5px var(--s2); }
+.ts-status.live { color: var(--ok); background: var(--surface-2); }
+.ts-status.earlier { color: var(--edit); background: var(--edit-tint); }
+.ts-time { font-size: var(--body); font-weight: 600; }
+.ts-seg button { min-height: 28px; }
+@media (pointer: coarse) { .ts-seg button { min-height: 44px; } }
+.ts-track { cursor: ew-resize; touch-action: none; border-radius: 6px; user-select: none; }
+.ts-drawing { display: block; }
+.ts-drawing text { font: 11px/1 var(--sans); fill: var(--text-2); }
+.ts-held { fill: var(--surface-2); stroke: var(--line); }
+.ts-tick { stroke: var(--line-strong); stroke-width: 1; }
+.ts-mark line { stroke: var(--text-2); stroke-width: 1.5; }
+.ts-mark text { fill: var(--text); font-weight: 700; paint-order: stroke; stroke: var(--surface-2);
+                stroke-width: 3px; }
+.ts-mark.problem line { stroke: var(--bad); stroke-width: 3; }
+.ts-mark.problem text { fill: var(--bad); }
+.ts-cursor line { stroke: var(--edit); stroke-width: 2; }
+.ts-cursor path { fill: var(--edit); }
+.ts-cursor.live line { stroke: var(--ok); }
+.ts-cursor.live path { fill: var(--ok); }

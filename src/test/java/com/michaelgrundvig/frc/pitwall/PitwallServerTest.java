@@ -230,6 +230,8 @@ class PitwallServerTest {
             "cursor.js",
             "robot.js",
             "robot-moments.js",
+            "timeline.js",
+            "session-events.js",
             "robot-draw.js");
   }
 
