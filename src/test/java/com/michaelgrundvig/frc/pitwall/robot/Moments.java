@@ -1,5 +1,20 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
+import com.michaelgrundvig.frc.world.record.GateTerm;
+import com.michaelgrundvig.frc.world.record.Holder;
+import com.michaelgrundvig.frc.world.record.Identity;
+import com.michaelgrundvig.frc.world.record.JointOwner;
+import com.michaelgrundvig.frc.world.record.JointPlace;
+import com.michaelgrundvig.frc.world.record.JointPlaces;
+import com.michaelgrundvig.frc.world.record.JointState;
+import com.michaelgrundvig.frc.world.record.MoveOutcome;
+import com.michaelgrundvig.frc.world.record.MoveProgress;
+import com.michaelgrundvig.frc.world.record.MoveReason;
+import com.michaelgrundvig.frc.world.record.MoveResult;
+import com.michaelgrundvig.frc.world.record.MoveTarget;
+import com.michaelgrundvig.frc.world.record.MoveTask;
+import com.michaelgrundvig.frc.world.robot.Joint;
+import com.michaelgrundvig.frc.world.robot.RobotDefinition;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -8,23 +23,48 @@ import java.util.Map;
 /**
  * Moments built by hand for the Robot view's tests: the test robot enabled in teleop with every
  * joint ready, idle and answering where it rests, every sensor clear, and then whatever a test
- * changes, one joint or sensor at a time.
+ * changes, one joint or sensor at a time. Each joint's facts are as the runtime would log them:
+ * where it is among its places is worked out by the model, and what holds it is what a test says
+ * the robot logged.
  */
 final class Moments {
+  /** The test robot's interlocks, by their index in its definition's {@code everyInterlock()}. */
+  static final Holder ROLLER_RULE = Holder.interlock(0);
+
+  static final Holder ARM_KEEP_OUT = Holder.interlock(1);
+  static final Holder CLAW_RULE = Holder.interlock(2);
+
+  private static final RobotDefinition ROBOT = TestRobot.definition();
+
+  /** One joint as a test has set it so far. */
+  private static final class OfJoint {
+    private Moment.Link link = Moment.Link.ANSWERS;
+    private double position;
+    private double velocity;
+    private double goal;
+    private JointState state = JointState.READY;
+    private JointOwner owner = JointOwner.IDLE;
+    private String command = "";
+    private String goalName = "";
+    private List<Holder> heldBy = List.of();
+    private Moment.LastMove lastMove = Moment.LastMove.NONE;
+  }
+
   private Moment.Enabled enabled = Moment.Enabled.ENABLED;
-  private final Map<String, Moment.OfJoint> joints = new LinkedHashMap<>();
+  private final Map<String, OfJoint> joints = new LinkedHashMap<>();
   private final Map<String, Moment.OfSensor> sensors = new LinkedHashMap<>();
   private final List<Moment.OfGate> gates = new ArrayList<>();
   private final List<String> fired = new ArrayList<>();
 
   private Moments() {
+    for (Joint joint : ROBOT.joints()) {
+      joints.put(joint.label(), new OfJoint());
+    }
     at("pivot", 1.5);
-    running("roller", 0);
-    atMeters("elevator", 0);
     at("arm", -45);
-    running("shooter", 0);
-    running("claw", 0);
-    sensors.put("claw beam", clear("claw beam"));
+    sensors.put(
+        "claw beam",
+        new Moment.OfSensor("claw beam", Moment.Link.ANSWERS, Moment.Switched.CLEAR, Double.NaN));
     sensors.put(
         "hopper", new Moment.OfSensor("hopper", Moment.Link.ANSWERS, Moment.Switched.CLEAR, 0.8));
   }
@@ -34,46 +74,29 @@ final class Moments {
     return new Moments();
   }
 
-  private static Moment.OfSensor clear(String label) {
-    return new Moment.OfSensor(label, Moment.Link.ANSWERS, Moment.Switched.CLEAR, Double.NaN);
-  }
-
   Moments disabled() {
     enabled = Moment.Enabled.DISABLED;
     return this;
   }
 
-  /** A joint that turns, idle and holding at an angle in degrees. */
+  /** A joint that turns, holding at an angle in degrees. */
   Moments at(String label, double degrees) {
-    return put(idle(label, Math.toRadians(degrees), 0, Math.toRadians(degrees)));
+    joint(label).position = Math.toRadians(degrees);
+    joint(label).goal = Math.toRadians(degrees);
+    return this;
   }
 
-  /** A joint that slides, idle and holding at a length in meters. */
+  /** A joint that slides, holding at a length in meters. */
   Moments atMeters(String label, double meters) {
-    return put(idle(label, meters, 0, meters));
+    joint(label).position = meters;
+    joint(label).goal = meters;
+    return this;
   }
 
-  /** A joint run at speeds, idle and turning at a speed in rpm. */
+  /** A joint run at speeds, turning at a speed in rpm. */
   Moments running(String label, double rpm) {
-    return put(idle(label, 0, rpm * 2 * Math.PI / 60, 0));
-  }
-
-  private static Moment.OfJoint idle(String label, double position, double velocity, double goal) {
-    return new Moment.OfJoint(
-        label,
-        Moment.Link.ANSWERS,
-        position,
-        velocity,
-        0,
-        goal,
-        position,
-        0,
-        Double.NaN,
-        Moment.Encoder.HEALTHY,
-        "READY",
-        "idle",
-        "",
-        "");
+    joint(label).velocity = rpm * 2 * Math.PI / 60;
+    return this;
   }
 
   /**
@@ -83,73 +106,55 @@ final class Moments {
    *     in rpm: what the runtime logs as its goal
    */
   Moments asked(String label, String command, String goalName, double goal) {
-    Moment.OfJoint was = joint(label);
-    boolean turnsOrRuns = !label.equals("elevator");
-    boolean runs = List.of("roller", "shooter", "claw").contains(label);
-    double inUnits = goal;
-    if (runs) {
-      inUnits = goal * 2 * Math.PI / 60;
-    } else if (turnsOrRuns) {
-      inUnits = Math.toRadians(goal);
+    OfJoint joint = joint(label);
+    joint.owner = JointOwner.COMMAND;
+    joint.command = command;
+    joint.goalName = goalName;
+    boolean runs = !jointNamed(label).holdsPositions();
+    joint.goal = runs ? goal * 2 * Math.PI / 60 : Math.toRadians(goal);
+    return this;
+  }
+
+  /** What the robot logged as holding a joint. */
+  Moments heldBy(String label, Holder... holders) {
+    joint(label).heldBy = List.of(holders);
+    return this;
+  }
+
+  /** A joint's motor controller answers as given, and the joint stands as given. */
+  Moments standing(String label, Moment.Link link, JointState state) {
+    joint(label).link = link;
+    joint(label).state = state;
+    return this;
+  }
+
+  /** The last move on a joint arrived at one of its places, in so many seconds. */
+  Moments arrivedAt(String label, String place, double seconds) {
+    Joint joint = jointNamed(label);
+    int index = 0;
+    while (!joint.positions().get(index).name().equals(place)) {
+      index++;
     }
-    return put(
-        new Moment.OfJoint(
-            label,
-            was.link(),
-            was.position(),
-            was.velocity(),
-            was.appliedVolts(),
-            inUnits,
-            was.setpoint(),
-            was.setpointVelocity(),
-            was.absoluteAt(),
-            was.encoder(),
-            was.state(),
-            command,
-            goalName,
-            was.outcome()));
-  }
-
-  /** A joint's motor controller answers as given, and its state reads as given. */
-  Moments standing(String label, Moment.Link link, String state) {
-    Moment.OfJoint was = joint(label);
-    return put(
-        new Moment.OfJoint(
-            label,
-            link,
-            was.position(),
-            was.velocity(),
-            was.appliedVolts(),
-            was.goal(),
-            was.setpoint(),
-            was.setpointVelocity(),
-            was.absoluteAt(),
-            was.encoder(),
-            state,
-            was.command(),
-            was.goalName(),
-            was.outcome()));
-  }
-
-  /** How the last move on a joint ended, as the runtime words it. */
-  Moments lastMove(String label, String outcome) {
-    Moment.OfJoint was = joint(label);
-    return put(
-        new Moment.OfJoint(
-            label,
-            was.link(),
-            was.position(),
-            was.velocity(),
-            was.appliedVolts(),
-            was.goal(),
-            was.setpoint(),
-            was.setpointVelocity(),
-            was.absoluteAt(),
-            was.encoder(),
-            was.state(),
-            was.command(),
-            was.goalName(),
-            outcome));
+    double target = joint.positions().get(index).value();
+    MoveOutcome part =
+        new MoveOutcome(
+            MoveResult.ARRIVED,
+            MoveTask.GO_TO,
+            MoveProgress.BEGUN,
+            seconds,
+            ROBOT.joints().indexOf(joint),
+            Identity.NONE,
+            MoveTarget.PLACE,
+            index,
+            target,
+            target,
+            0,
+            seconds,
+            MoveReason.NONE,
+            Identity.NONE);
+    joint(label).lastMove =
+        new Moment.LastMove(label + " → " + place, List.of(part), "", List.of());
+    return this;
   }
 
   /** The record has nothing of a joint: the robot program does not drive it. */
@@ -163,8 +168,13 @@ final class Moments {
     return this;
   }
 
+  /** A gate, with what keeps it from holding in a team's own words. */
   Moments gate(String name, Moment.Held held, String... blocking) {
-    gates.add(new Moment.OfGate(name, held, List.of(blocking)));
+    List<GateTerm> terms = new ArrayList<>();
+    for (int each = 0; each < blocking.length; each++) {
+      terms.add(GateTerm.text(each));
+    }
+    gates.add(new Moment.OfGate(name, held, terms, List.of(blocking)));
     return this;
   }
 
@@ -173,25 +183,71 @@ final class Moments {
     return this;
   }
 
-  private Moment.OfJoint joint(String label) {
-    Moment.OfJoint joint = joints.get(label);
+  private OfJoint joint(String label) {
+    OfJoint joint = joints.get(label);
     if (joint == null) {
       throw new IllegalArgumentException("the moment has no joint " + label);
     }
     return joint;
   }
 
-  private Moments put(Moment.OfJoint joint) {
-    joints.put(joint.label(), joint);
-    return this;
+  private static Joint jointNamed(String label) {
+    return ROBOT.joints().stream()
+        .filter(joint -> joint.label().equals(label))
+        .findFirst()
+        .orElseThrow();
+  }
+
+  /**
+   * Where a joint is among its places, as the runtime logs it: by the model, within 2° or 1 cm of a
+   * place; unknown while it does not know; and for a joint that only runs, what it runs at.
+   */
+  private static JointPlace placeOf(Joint joint, OfJoint now) {
+    if (!joint.holdsPositions()) {
+      for (int output = 0; output < joint.outputs().size(); output++) {
+        if (joint.outputs().get(output).name().equals(now.goalName)) {
+          return JointPlace.running(output);
+        }
+      }
+      return JointPlace.STOPPED;
+    }
+    if (now.state.standing() != JointState.Standing.READY) {
+      return JointPlace.UNKNOWN;
+    }
+    double band = joint instanceof Joint.Revolute ? Math.toRadians(2) : 0.01;
+    return new JointPlaces(joint, band).at(now.position);
   }
 
   Moment build() {
+    List<Moment.OfJoint> built = new ArrayList<>();
+    for (Map.Entry<String, OfJoint> entry : joints.entrySet()) {
+      OfJoint now = entry.getValue();
+      built.add(
+          new Moment.OfJoint(
+              entry.getKey(),
+              now.link,
+              now.position,
+              now.velocity,
+              0,
+              now.goal,
+              now.position,
+              0,
+              Double.NaN,
+              Moment.Encoder.HEALTHY,
+              now.state,
+              "",
+              now.owner,
+              now.command,
+              now.goalName,
+              placeOf(jointNamed(entry.getKey()), now),
+              now.heldBy,
+              now.lastMove));
+    }
     return new Moment(
         1_000_000_000L,
         enabled,
         Moment.Mode.TELEOPERATED,
-        List.copyOf(joints.values()),
+        built,
         List.copyOf(sensors.values()),
         gates,
         fired,
@@ -200,6 +256,6 @@ final class Moments {
 
   /** The test robot's view of this moment. */
   RobotView view() {
-    return RobotView.of(TestRobot.definition(), RobotSession.LOOP_SECONDS, build());
+    return RobotView.of(ROBOT, build());
   }
 }

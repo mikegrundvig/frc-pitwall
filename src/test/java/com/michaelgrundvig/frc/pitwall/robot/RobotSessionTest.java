@@ -3,6 +3,18 @@ package com.michaelgrundvig.frc.pitwall.robot;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import com.michaelgrundvig.frc.world.record.GateTerm;
+import com.michaelgrundvig.frc.world.record.Holder;
+import com.michaelgrundvig.frc.world.record.Identity;
+import com.michaelgrundvig.frc.world.record.JointOwner;
+import com.michaelgrundvig.frc.world.record.JointPlace;
+import com.michaelgrundvig.frc.world.record.JointState;
+import com.michaelgrundvig.frc.world.record.MoveOutcome;
+import com.michaelgrundvig.frc.world.record.MoveProgress;
+import com.michaelgrundvig.frc.world.record.MoveReason;
+import com.michaelgrundvig.frc.world.record.MoveResult;
+import com.michaelgrundvig.frc.world.record.MoveTarget;
+import com.michaelgrundvig.frc.world.record.MoveTask;
 import java.util.List;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
@@ -15,6 +27,24 @@ import org.junit.jupiter.api.Test;
 class RobotSessionTest {
   private final FakeRecord record = FakeRecord.ofTheTestRobotAtRest();
   private final RobotSession session = RobotSession.of(TestRobot.definition());
+
+  /** The pivot arriving at its "in", as the runtime logs a move's outcome. */
+  private static final MoveOutcome ARRIVED_IN =
+      new MoveOutcome(
+          MoveResult.ARRIVED,
+          MoveTask.GO_TO,
+          MoveProgress.BEGUN,
+          0.5,
+          0,
+          Identity.NONE,
+          MoveTarget.PLACE,
+          0,
+          Math.toRadians(1.5),
+          Math.toRadians(1.5),
+          0,
+          0.5,
+          MoveReason.NONE,
+          Identity.NONE);
 
   private Moment taken() {
     session.take(record);
@@ -29,18 +59,22 @@ class RobotSessionTest {
         .at(4_020_000_000L)
         .joint("pivot", Math.toRadians(62), Math.toRadians(300))
         .put(LogKeys.joint("pivot") + LogKeys.APPLIED_VOLTS, 7.5)
+        .put(pivot + LogKeys.OWNER, "COMMAND")
         .put(pivot + LogKeys.COMMAND, "Intake")
         .put(pivot + LogKeys.GOAL, Math.toRadians(130))
         .put(pivot + LogKeys.GOAL_NAME, "out")
         .put(pivot + LogKeys.SETPOINT, Math.toRadians(63))
         .put(pivot + LogKeys.SETPOINT_VELOCITY, Math.toRadians(310))
-        .put(pivot + LogKeys.OUTCOME, "in: ARRIVED in 0.50 s")
+        .put(pivot + LogKeys.AT, JointPlace.between(0, 1))
+        .put(pivot + LogKeys.HELD_BY, new Holder[] {Holder.interlock(1), Holder.noPosition(0)})
+        .put(pivot + LogKeys.OUTCOME, new MoveOutcome[] {ARRIVED_IN})
+        .put(pivot + LogKeys.OUTCOME_NAME, "pivot → in")
         .put(pivot + LogKeys.ABSOLUTE_AT, Math.toRadians(62.2))
         .sensor("claw beam", true, true, Double.NaN)
         .sensor("hopper", false, false, Double.NaN)
         .gate("piece in", true)
         .gate("ready to feed", false, "not aimed at the Hub", "shooter not at goal", "a third")
-        .put(LogKeys.FIRED, new String[] {"operator right trigger starts Intake while held"})
+        .fired("operator right trigger: while held: Intake")
         .put(LogKeys.gamepad(1) + LogKeys.BUTTONS, 0b1000_0000L)
         .put(LogKeys.gamepad(1) + LogKeys.AXES, new float[] {0, 0.25f, 0, 0, 0, 1})
         .put(LogKeys.gamepad(1) + LogKeys.POVS, new long[] {90});
@@ -63,10 +97,19 @@ class RobotSessionTest {
     assertThat(joint.setpointVelocity()).isCloseTo(Math.toRadians(310), within(1e-6));
     assertThat(joint.absoluteAt()).isCloseTo(Math.toRadians(62.2), within(1e-6));
     assertThat(joint.encoder()).isEqualTo(Moment.Encoder.HEALTHY);
-    assertThat(joint.state()).isEqualTo("READY");
+    assertThat(joint.state()).isEqualTo(JointState.READY);
+    assertThat(joint.fault()).isEmpty();
+    assertThat(joint.owner()).isEqualTo(JointOwner.COMMAND);
     assertThat(joint.command()).isEqualTo("Intake");
     assertThat(joint.goalName()).isEqualTo("out");
-    assertThat(joint.outcome()).isEqualTo("in: ARRIVED in 0.50 s");
+    assertThat(joint.at()).isEqualTo(JointPlace.between(0, 1));
+    assertThat(joint.heldBy()).containsExactly(Holder.interlock(1), Holder.noPosition(0));
+    assertThat(joint.lastMove())
+        .isEqualTo(new Moment.LastMove("pivot → in", List.of(ARRIVED_IN), "", List.of()));
+    Moment.OfJoint roller = Objects.requireNonNull(moment.joint("roller"));
+    assertThat(roller.owner()).isEqualTo(JointOwner.IDLE);
+    assertThat(roller.heldBy()).isEmpty();
+    assertThat(roller.lastMove().hasEnded()).as("no move has ended on the roller").isFalse();
 
     assertThat(moment.sensor("claw beam"))
         .isEqualTo(
@@ -77,12 +120,13 @@ class RobotSessionTest {
         .isEqualTo(Moment.Link.LOST);
     assertThat(moment.gates())
         .containsExactly(
-            new Moment.OfGate("piece in", Moment.Held.HOLDS, List.of()),
+            new Moment.OfGate("piece in", Moment.Held.HOLDS, List.of(), List.of()),
             new Moment.OfGate(
                 "ready to feed",
                 Moment.Held.DOES_NOT_HOLD,
+                List.of(GateTerm.text(0), GateTerm.text(1)),
                 List.of("not aimed at the Hub", "shooter not at goal")));
-    assertThat(moment.fired()).containsExactly("operator right trigger starts Intake while held");
+    assertThat(moment.fired()).containsExactly("operator right trigger: while held: Intake");
     Moment.OfGamepad operator = moment.gamepads().get(1);
     assertThat(operator.isDown(7)).isTrue();
     assertThat(operator.isDown(6)).isFalse();
@@ -163,7 +207,7 @@ class RobotSessionTest {
       boolean fires = loop == 10;
       record
           .at(loop * 20_000_000L)
-          .put(LogKeys.FIRED, fires ? new String[] {"driver A starts Shoot"} : new String[0]);
+          .fired(fires ? new String[] {"driver A starts Shoot"} : new String[0]);
       session.take(record);
     }
 
@@ -182,15 +226,15 @@ class RobotSessionTest {
   @Test
   void itsMemoryIsFixedHoweverMuchTheRecordHas() {
     assertThat(session.capacity()).as("five minutes at 50 loops a second").isEqualTo(15_000);
-    // Six joints and two sensors: 20 doubles, 36 floats, 87 shorts and 3 longs.
-    assertThat(session.bytesPerMoment()).isEqualTo(20 * 8 + 36 * 4 + 87 * 2 + 3 * 8);
-    assertThat(session.bytes()).isEqualTo(502L * 15_000);
+    // Six joints and two sensors: 20 doubles, 42 floats, 161 shorts and 3 longs.
+    assertThat(session.bytesPerMoment()).isEqualTo(20 * 8 + 42 * 4 + 161 * 2 + 3 * 8);
+    assertThat(session.bytes()).isEqualTo(674L * 15_000);
 
     for (int gate = 0; gate < SessionMemory.GATES + 3; gate++) {
       record.gate("gate " + gate, true);
     }
     for (int loop = 0; loop < Words.MOST + 50; loop++) {
-      record.put(LogKeys.jointOutputs("pivot") + LogKeys.OUTCOME, "move " + loop);
+      record.put(LogKeys.jointOutputs("pivot") + LogKeys.COMMAND, "move " + loop);
       session.take(record);
     }
 
@@ -199,7 +243,7 @@ class RobotSessionTest {
     assertThat(session.gatesNotKept()).isEqualTo(3);
     assertThat(session.texts()).isEqualTo(session.mostTexts());
     Moment.OfJoint pivot = Objects.requireNonNull(moment.joint("pivot"));
-    assertThat(pivot.outcome()).isEqualTo(Words.TOO_MANY);
+    assertThat(pivot.command()).isEqualTo(Words.TOO_MANY);
     assertThat(session.meanTakeMicros()).isPositive();
     assertThat(session.slowestTakeMicros()).isGreaterThanOrEqualTo(session.meanTakeMicros());
   }
@@ -207,9 +251,9 @@ class RobotSessionTest {
   /** A long text is kept short, so the table of texts is bounded in bytes as well as in number. */
   @Test
   void aLongTextIsKeptShort() {
-    record.put(LogKeys.jointOutputs("pivot") + LogKeys.STATE, "FAULTED: " + "x".repeat(500));
+    record.put(LogKeys.jointOutputs("pivot") + LogKeys.FAULT, "x".repeat(500));
 
     Moment.OfJoint pivot = Objects.requireNonNull(taken().joint("pivot"));
-    assertThat(pivot.state()).hasSize(Words.LONGEST + 1).endsWith("…");
+    assertThat(pivot.fault()).hasSize(Words.LONGEST + 1).endsWith("…");
   }
 }

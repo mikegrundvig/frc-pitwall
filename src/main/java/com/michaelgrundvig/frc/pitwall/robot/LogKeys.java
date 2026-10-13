@@ -9,6 +9,10 @@ package com.michaelgrundvig.frc.pitwall.robot;
  * /Joints/pivot/Position}. AdvantageKit's record is looked up by exactly these, so reading one
  * builds no text.
  *
+ * <p>What the robot did is logged as facts, the model's records ({@code
+ * com.michaelgrundvig.frc.world.record}), each written only when it changes. A loop's record still
+ * holds every key's latest value, so each is read every loop.
+ *
  * <p>AdvantageKit puts a program's inputs under their own keys and its outputs under {@link
  * #OUTPUTS}. In a replay the outputs are under {@code /ReplayOutputs/}, which Pitwall never reads,
  * because its page is not served while replaying.
@@ -82,10 +86,16 @@ public final class LogKeys {
    */
   public static final String ABSOLUTE_CONNECTED = "/Absolute/Connected";
 
-  /** Under a joint's outputs: where it stands ("READY", "HOMING: ...", "FAULTED: ..."). */
+  /** Under a joint's outputs: where it stands: a {@code JointState}. */
   public static final String STATE = "/State";
 
-  /** Under a joint's outputs: who asked it this loop: a command's name, or "idle". */
+  /** Under a joint's outputs: the text of its fault, empty while it is not faulted. */
+  public static final String FAULT = "/Fault";
+
+  /** Under a joint's outputs: who asked it this loop: a {@code JointOwner}, by its name. */
+  public static final String OWNER = "/Owner";
+
+  /** Under a joint's outputs: the name of the command that asked it, empty when none did. */
   public static final String COMMAND = "/Command";
 
   /** Under a joint's outputs: where it is headed or held, or the number it was asked to run at. */
@@ -94,14 +104,32 @@ public final class LogKeys {
   /** Under a joint's outputs: the name of what it was asked for ("out"), or empty. */
   public static final String GOAL_NAME = "/GoalName";
 
+  /** Under a joint's outputs: where it is among its places: a {@code JointPlace}. */
+  public static final String AT = "/At";
+
+  /** Under a joint's outputs: what holds it short of what it was asked: {@code Holder}s. */
+  public static final String HELD_BY = "/HeldBy";
+
   /** Under a joint's outputs: where its profile has it this loop. */
   public static final String SETPOINT = "/Setpoint";
 
   /** Under a joint's outputs: how fast its profile has it moving this loop. */
   public static final String SETPOINT_VELOCITY = "/SetpointVelocity";
 
-  /** Under a joint's outputs: how the last move on it ended, in words. */
+  /**
+   * Under a joint's outputs: how the last move on it ended, a {@code MoveOutcome} for each joint
+   * the move moved; empty before any has.
+   */
   public static final String OUTCOME = "/Outcome";
+
+  /** Under a joint's outputs: the name of that move. */
+  public static final String OUTCOME_NAME = "/OutcomeName";
+
+  /** Under a joint's outputs: the text of that move's reason, where it has one. */
+  public static final String OUTCOME_WHY = "/OutcomeWhy";
+
+  /** Under a joint's outputs: what held the move's joints as it timed out: {@code Holder}s. */
+  public static final String OUTCOME_HELD_BY = "/OutcomeHeldBy";
 
   /** Under a joint's outputs: where its absolute encoder says it is, in its own units. */
   public static final String ABSOLUTE_AT = "/AbsoluteAt";
@@ -127,9 +155,15 @@ public final class LogKeys {
   /** Where every gate logs whether it holds, each under its name: a boolean. */
   public static final String GATES = OUTPUTS + "Gates/";
 
-  /** Under a gate: the terms that keep it from holding, in words: strings. */
+  /** Under a gate: the terms that keep it from holding: {@code GateTerm}s. */
   public static final String BLOCKING = "/Blocking";
 
-  /** The bindings a press or a release started this loop, each in its own words: strings. */
+  /** Under a gate: the text its terms point into: strings. */
+  public static final String BLOCKING_TEXT = "/BlockingText";
+
+  /** The bindings a press or a release started this loop: {@code BindingFired}s. */
   public static final String FIRED = OUTPUTS + "Controls/Fired";
+
+  /** Every standing binding in its own words, which a fired binding points into: strings. */
+  public static final String BINDINGS = OUTPUTS + "Controls/Bindings";
 }

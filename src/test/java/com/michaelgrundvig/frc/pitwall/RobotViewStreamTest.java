@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.michaelgrundvig.frc.pitwall.experiment.ByHand;
 import com.michaelgrundvig.frc.pitwall.push.Broadcaster;
 import com.michaelgrundvig.frc.pitwall.robot.FakeRecord;
-import com.michaelgrundvig.frc.pitwall.robot.LogKeys;
 import com.michaelgrundvig.frc.pitwall.robot.RobotFeed;
 import com.michaelgrundvig.frc.pitwall.robot.RobotSession;
 import com.michaelgrundvig.frc.pitwall.robot.TestRobot;
@@ -22,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
@@ -106,8 +106,8 @@ class RobotViewStreamTest {
         .containsEntry("oldest", 0L)
         .containsEntry("newest", 9L)
         .containsEntry("rememberedLoops", 15_000L)
-        .containsEntry("bytesPerLoop", 502L)
-        .containsEntry("bytes", 7_530_000L)
+        .containsEntry("bytesPerLoop", 674L)
+        .containsEntry("bytes", 10_110_000L)
         .containsEntry("newestNanos", clock.get())
         .containsKeys("oldestNanos", "meanTakeMicros", "slowestTakeMicros", "texts");
 
@@ -142,18 +142,24 @@ class RobotViewStreamTest {
         .isEqualTo(List.of("pivot", "roller", "elevator", "arm", "shooter", "claw"));
     assertThat(number(in(whole, "joints", "pivot", "needles").get("now"))).isEqualTo(10);
 
-    record.put(LogKeys.FIRED, new String[] {"operator right trigger starts Intake"});
+    record.fired("operator right trigger starts Intake");
     for (int more = 0; more < 4; more++) {
       loop(40);
     }
-    loopUntil(() -> robot.has("patch"));
+    // The loops after the one that moved the pivot send patches too, of the time alone: the patch
+    // looked at is the one that says the pivot moved.
+    loopUntil(() -> robot.holding("patch", "\"needles\"").isPresent());
 
-    Map<String, Object> live = in(asMap(JSON.fromJson(robot.data("patch"))), "robotView", "live");
+    Map<String, Object> live =
+        in(
+            asMap(JSON.fromJson(robot.holding("patch", "\"needles\"").orElseThrow())),
+            "robotView",
+            "live");
     assertThat(in(live, "joints").keySet())
         .as("only the joint that moved")
         .containsExactly("pivot");
     assertThat(number(in(live, "joints", "pivot", "needles").get("now"))).isEqualTo(40);
-    assertThat(in(live, "joints", "pivot", "facts")).containsEntry("at", "40°, between in and out");
+    assertThat(in(live, "joints", "pivot", "facts")).containsEntry("at", "40°");
     assertThat(in(live, "fired"))
         .containsEntry("bindings", List.of("operator right trigger starts Intake"));
     assertThat(tune.count("patch") + tune.count("replace"))
@@ -204,6 +210,14 @@ class RobotViewStreamTest {
 
     int count(String name) {
       return (int) events.stream().filter(event -> event[0].equals(name)).count();
+    }
+
+    /** The data of the first event of a name that holds some text. */
+    Optional<String> holding(String name, String text) {
+      return events.stream()
+          .filter(event -> event[0].equals(name) && event[1].contains(text))
+          .map(event -> event[1])
+          .findFirst();
     }
 
     /** The latest event of a name's data. */

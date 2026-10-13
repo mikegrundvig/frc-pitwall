@@ -1,5 +1,11 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
+import com.michaelgrundvig.frc.world.record.GateTerm;
+import com.michaelgrundvig.frc.world.record.Holder;
+import com.michaelgrundvig.frc.world.record.Identity;
+import com.michaelgrundvig.frc.world.record.JointOwner;
+import com.michaelgrundvig.frc.world.record.JointPlace;
+import com.michaelgrundvig.frc.world.record.JointState;
 import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -8,8 +14,9 @@ import org.jspecify.annotations.Nullable;
  * The last few minutes of the robot, one {@link Moment} for each loop, in a ring of fixed size.
  *
  * <p>Its memory is taken once, as it is made, and never grows: a moment is kept as plain numbers in
- * four arrays, and its texts as small numbers ({@link Words}). When the ring is full, each new loop
- * replaces the oldest. A {@link Moment} is put together only when one is asked for.
+ * four arrays: a fact's fields each in their place, and its texts and its moves' outcomes as small
+ * numbers ({@link Words}, {@link Moves}). When the ring is full, each new loop replaces the oldest.
+ * A {@link Moment} is put together only when one is asked for.
  *
  * <p>A loop is known by its index, which counts from 0 at the first loop taken and never repeats,
  * so an index names the same loop for as long as the ring still holds it.
@@ -35,9 +42,32 @@ final class SessionMemory {
 
   // What one joint takes in each array.
   private static final int JOINT_DOUBLES = 3; // position, velocity, goal: what the rules judge
-  private static final int JOINT_FLOATS = 4; // applied volts, setpoint, its velocity, absolute
-  private static final int JOINT_SHORTS = 5; // flags, state, command, goal's name, outcome
-  private static final int GATE_SHORTS = 1 + BLOCKING_TERMS;
+  private static final int JOINT_FLOATS = 5; // applied volts, setpoint, its velocity, absolute,
+
+  // and how long its homing may take
+
+  /** How many of the things that hold a joint in one loop it keeps. */
+  static final int HOLDERS = 3;
+
+  // A joint's shorts: its flags, its state, three texts, where it is, what holds it, its last move.
+  private static final int STATE = 1;
+  private static final int FAULT = 2;
+  private static final int COMMAND = 3;
+  private static final int GOAL_NAME = 4;
+  private static final int WHERE = 5;
+  private static final int PLACE = 6;
+  private static final int OTHER = 7;
+  private static final int HELD_BY = 8;
+  private static final int LAST_MOVE = HELD_BY + HOLDERS;
+  private static final int JOINT_SHORTS = LAST_MOVE + 1;
+
+  /** A gate's shorts: its flags, and for each term its kind and what it points at. */
+  private static final int GATE_SHORTS = 1 + 2 * BLOCKING_TERMS;
+
+  /** How many indices a holder's or a term's place has room for, beside its kind. */
+  private static final int INDEX_BITS = 12;
+
+  private static final int INDEX_MASK = (1 << INDEX_BITS) - 1;
 
   // A joint's flags, and a sensor's.
   private static final int PRESENT = 1;
@@ -45,6 +75,10 @@ final class SessionMemory {
   private static final int FRESH = 4;
   private static final int MAGNET_BAD = 8;
   private static final int ENCODER_LOST = 16;
+  private static final int OWNER_SHIFT = 5;
+  // A joint's state: where it stands, what its homing pushes toward, and why it is faulted.
+  private static final int TOWARD_SHIFT = 2;
+  private static final int FAULT_SHIFT = 5;
   private static final int TRIPPED = 4;
   // A gate's flags.
   private static final int HOLDS = 2;
@@ -75,6 +109,7 @@ final class SessionMemory {
   private final short[] shorts;
 
   private final Words words = new Words();
+  private final Moves moves = new Moves();
   private final List<String> gateNames = new ArrayList<>();
 
   /** How many loops have been taken since the start. */
@@ -139,7 +174,7 @@ final class SessionMemory {
     shorts[slot * shortsEach + loopShort] = (short) flags;
   }
 
-  /** Puts one joint's numbers and where it stands. */
+  /** Puts one joint's numbers, and whether it and its encoder answer. */
   void putJoint(
       int joint,
       Moment.Link link,
@@ -168,13 +203,64 @@ final class SessionMemory {
     shorts[slot * shortsEach + joint * JOINT_SHORTS] = (short) flags;
   }
 
-  /** Puts one joint's texts, as the runtime logs them. */
-  void putJointTexts(int joint, String state, String command, String goalName, String outcome) {
+  /**
+   * Puts what one joint's facts say: where it stands, who asked it, where it is among its places,
+   * and the first {@link #HOLDERS} of the things that hold it. Call it after {@link #putJoint}.
+   */
+  void putJointFacts(
+      int joint,
+      JointState state,
+      String fault,
+      JointOwner owner,
+      String command,
+      String goalName,
+      JointPlace at,
+      Holder[] heldBy) {
     int s = slot * shortsEach + joint * JOINT_SHORTS;
-    shorts[s + 1] = words.numberOf(state);
-    shorts[s + 2] = words.numberOf(command);
-    shorts[s + 3] = words.numberOf(goalName);
-    shorts[s + 4] = words.numberOf(outcome);
+    shorts[s] |= (short) (owner.ordinal() << OWNER_SHIFT);
+    shorts[s + STATE] =
+        (short)
+            (state.standing().ordinal()
+                | state.toward().ordinal() << TOWARD_SHIFT
+                | state.fault().ordinal() << FAULT_SHIFT);
+    floats[slot * floatsEach + joint * JOINT_FLOATS + 4] = (float) state.secondsAllowed();
+    shorts[s + FAULT] = words.numberOf(fault);
+    shorts[s + COMMAND] = words.numberOf(command);
+    shorts[s + GOAL_NAME] = words.numberOf(goalName);
+    shorts[s + WHERE] = (short) at.where().ordinal();
+    shorts[s + PLACE] = (short) at.place();
+    shorts[s + OTHER] = (short) at.other();
+    for (int each = 0; each < HOLDERS && each < heldBy.length; each++) {
+      shorts[s + HELD_BY + each] = packed(heldBy[each].kind().ordinal(), heldBy[each].index());
+    }
+  }
+
+  /** Puts how the last move on one joint ended, by the number it is known by ({@link #move}). */
+  void putJointsLastMove(int joint, short move) {
+    shorts[slot * shortsEach + joint * JOINT_SHORTS + LAST_MOVE] = move;
+  }
+
+  /** The number an outcome of a move is known by, given one if it is new. */
+  short move(Moment.LastMove move) {
+    return moves.numberOf(move);
+  }
+
+  /**
+   * A kind and an index in one short, with zero left to mean nothing is there: the kind's number
+   * and one, above the index. An index of none ({@code -1}) is kept as the largest there is room
+   * for.
+   */
+  private static short packed(int kind, int index) {
+    return (short) ((kind + 1) << INDEX_BITS | (index & INDEX_MASK));
+  }
+
+  private static int kindOf(short packed) {
+    return (packed >>> INDEX_BITS & 0xF) - 1;
+  }
+
+  private static int indexOf(short packed) {
+    int index = packed & INDEX_MASK;
+    return index == INDEX_MASK ? Identity.NONE : index;
   }
 
   /** Puts one sensor's reading. */
@@ -199,19 +285,35 @@ final class SessionMemory {
     return gateNames.size() - 1;
   }
 
-  /** Puts one gate: whether it holds, and the first of the terms that keep it from holding. */
-  void putGate(int gate, Moment.Held held, String[] blocking) {
+  /**
+   * Puts one gate: whether it holds, and the first {@link #BLOCKING_TERMS} of the terms that keep
+   * it from holding. A term that points into the text logged beside the terms is kept with its
+   * text, so the text itself need not be.
+   */
+  void putGate(int gate, Moment.Held held, GateTerm[] blocking, String[] text) {
     int s = slot * shortsEach + gateShorts + gate * GATE_SHORTS;
     shorts[s] = (short) (PRESENT | (held == Moment.Held.HOLDS ? HOLDS : 0));
-    for (int term = 0; term < BLOCKING_TERMS && term < blocking.length; term++) {
-      shorts[s + 1 + term] = words.numberOf(blocking[term]);
+    for (int each = 0; each < BLOCKING_TERMS && each < blocking.length; each++) {
+      GateTerm term = blocking[each];
+      shorts[s + 1 + 2 * each] = (short) (term.kind().ordinal() + 1);
+      shorts[s + 2 + 2 * each] =
+          hasText(term.kind()) ? words.numberOf(textAt(text, term.index())) : (short) term.index();
     }
   }
 
-  /** Puts the bindings that fired in this loop: the first {@link #FIRED} of them. */
-  void putFired(String[] fired) {
+  /** Whether a term of this kind points into the text logged beside the terms. */
+  private static boolean hasText(GateTerm.Kind kind) {
+    return kind == GateTerm.Kind.TEXT || kind == GateTerm.Kind.THREW;
+  }
+
+  private static String textAt(String[] text, int index) {
+    return index >= 0 && index < text.length ? text[index] : "";
+  }
+
+  /** Puts the bindings that fired in this loop: the first {@link #FIRED} of so many. */
+  void putFired(String[] fired, int howMany) {
     int s = slot * shortsEach + firedShorts;
-    for (int each = 0; each < FIRED && each < fired.length; each++) {
+    for (int each = 0; each < FIRED && each < howMany; each++) {
       shorts[s + each] = words.numberOf(fired[each]);
     }
   }
@@ -325,11 +427,7 @@ final class SessionMemory {
     for (int gate = 0; gate < gateNames.size(); gate++) {
       int g = s + gateShorts + gate * GATE_SHORTS;
       if ((shorts[g] & PRESENT) != 0) {
-        gates.add(
-            new Moment.OfGate(
-                gateNames.get(gate),
-                (shorts[g] & HOLDS) != 0 ? Moment.Held.HOLDS : Moment.Held.DOES_NOT_HOLD,
-                texts(g + 1, BLOCKING_TERMS)));
+        gates.add(readGate(gate, g));
       }
     }
     List<Moment.OfGamepad> gamepads = new ArrayList<>();
@@ -356,6 +454,23 @@ final class SessionMemory {
         gamepads);
   }
 
+  private Moment.OfGate readGate(int gate, int g) {
+    List<GateTerm> terms = new ArrayList<>();
+    List<String> text = new ArrayList<>();
+    for (int each = 0; each < BLOCKING_TERMS && shorts[g + 1 + 2 * each] != 0; each++) {
+      GateTerm.Kind kind = GateTerm.Kind.values()[shorts[g + 1 + 2 * each] - 1];
+      short pointsAt = shorts[g + 2 + 2 * each];
+      if (hasText(kind)) {
+        terms.add(new GateTerm(kind, text.size()));
+        text.add(words.textOf(pointsAt));
+      } else {
+        terms.add(new GateTerm(kind, pointsAt));
+      }
+    }
+    Moment.Held held = (shorts[g] & HOLDS) != 0 ? Moment.Held.HOLDS : Moment.Held.DOES_NOT_HOLD;
+    return new Moment.OfGate(gateNames.get(gate), held, terms, text);
+  }
+
   private Moment.OfJoint readJoint(int from, int joint, int flags) {
     int d = from * doublesEach + joint * JOINT_DOUBLES;
     int f = from * floatsEach + joint * JOINT_FLOATS;
@@ -370,6 +485,12 @@ final class SessionMemory {
     } else if ((flags & MAGNET_BAD) != 0) {
       encoder = Moment.Encoder.MAGNET_BAD;
     }
+    int state = shorts[s + STATE];
+    List<Holder> heldBy = new ArrayList<>();
+    for (int each = 0; each < HOLDERS && shorts[s + HELD_BY + each] != 0; each++) {
+      short holder = shorts[s + HELD_BY + each];
+      heldBy.add(new Holder(Holder.Kind.values()[kindOf(holder)], indexOf(holder)));
+    }
     return new Moment.OfJoint(
         jointLabels.get(joint),
         link,
@@ -381,10 +502,19 @@ final class SessionMemory {
         floats[f + 2],
         floats[f + 3],
         encoder,
-        words.textOf(shorts[s + 1]),
-        words.textOf(shorts[s + 2]),
-        words.textOf(shorts[s + 3]),
-        words.textOf(shorts[s + 4]));
+        new JointState(
+            JointState.Standing.values()[state & 3],
+            JointState.Toward.values()[state >> TOWARD_SHIFT & 7],
+            floats[f + 4],
+            JointState.Fault.values()[state >> FAULT_SHIFT]),
+        words.textOf(shorts[s + FAULT]),
+        JointOwner.values()[flags >> OWNER_SHIFT & 3],
+        words.textOf(shorts[s + COMMAND]),
+        words.textOf(shorts[s + GOAL_NAME]),
+        new JointPlace(
+            JointPlace.Where.values()[shorts[s + WHERE]], shorts[s + PLACE], shorts[s + OTHER]),
+        heldBy,
+        moves.moveOf(shorts[s + LAST_MOVE]));
   }
 
   /** The texts kept in some places in a row, up to the first empty one. */

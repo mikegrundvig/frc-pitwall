@@ -1,5 +1,8 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
+import com.michaelgrundvig.frc.world.record.ControlSentences;
+import com.michaelgrundvig.frc.world.record.GateTerm;
+import com.michaelgrundvig.frc.world.record.JointState;
 import com.michaelgrundvig.frc.world.robot.ConditionReading;
 import com.michaelgrundvig.frc.world.robot.RobotDefinition;
 import java.util.ArrayList;
@@ -43,13 +46,9 @@ public record RobotView(
     fired = List.copyOf(fired);
   }
 
-  /**
-   * The robot in one moment.
-   *
-   * @param loopSeconds how long one of the robot's loops lasts, in seconds
-   */
-  public static RobotView of(RobotDefinition definition, double loopSeconds, Moment moment) {
-    return of(RobotPlan.of(definition, loopSeconds), moment);
+  /** The robot in one moment. */
+  public static RobotView of(RobotDefinition definition, Moment moment) {
+    return of(RobotPlan.of(definition), moment);
   }
 
   /** The robot in one moment, from what was already worked out of its definition. */
@@ -61,7 +60,7 @@ public record RobotView(
     }
     List<GateRow> gates = new ArrayList<>();
     for (Moment.OfGate gate : moment.gates()) {
-      gates.add(new GateRow(gate.name(), gate.held(), gate.blocking()));
+      gates.add(GateRow.of(plan.definition(), gate));
     }
     List<GamepadRow> gamepads = new ArrayList<>();
     for (Moment.OfGamepad gamepad : moment.gamepads()) {
@@ -141,9 +140,9 @@ public record RobotView(
   public enum Hold {
     /** No interlock restricts it. */
     FREE,
-    /** An interlock restricts it, and nothing asks it for what the interlock stops. */
+    /** Something holds it, and nothing asks anything of it: it is idle. */
     RESTRICTED,
-    /** An interlock holds it short of what a command asked. */
+    /** Something holds it short of what a command, or code outside any command, asked. */
     HELD
   }
 
@@ -246,14 +245,17 @@ public record RobotView(
   /**
    * A joint in words, the same facts the drawing shows.
    *
-   * @param at where it is: "130°, at out", "1998 rpm, intaking", "unknown"
+   * @param at where it is: "130°, at out", "1998 rpm, intaking", "unknown"; the place in the
+   *     model's words
    * @param told where it was told to go: "out, 130°", or "nothing"
-   * @param ownedBy who asked it: a command's name, or idle and what it does idle
-   * @param lastMove how the last move on it ended, or "none yet"
-   * @param state where it stands: "READY", "HOMING: toward its lower stop"
+   * @param ownedBy who asked it, in the model's words, and for an idle joint what it does idle
+   * @param lastMove how the last move on it ended, in the model's words, or "none yet"
+   * @param state where it stands, in the model's words: "READY", "HOMING: toward its lower stop,
+   *     for at most 9.5 s"
+   * @param standing where it stands
    * @param hold whether its interlocks leave it free, restrict it while nothing asks, or hold it
    *     short of what a command asked
-   * @param heldBy the interlocks that restrict or hold it, in the model's words
+   * @param heldBy the things that restrict or hold it, each in the model's words
    */
   public record Facts(
       String at,
@@ -261,6 +263,7 @@ public record RobotView(
       String ownedBy,
       String lastMove,
       String state,
+      JointState.Standing standing,
       Hold hold,
       List<String> heldBy) {
     public Facts {
@@ -380,11 +383,23 @@ public record RobotView(
    *
    * @param name the gate's name
    * @param held whether it holds
-   * @param blocking the terms that keep it from holding, in words
+   * @param blocking the terms that keep it from holding, each in the model's words
+   * @param why why it does not hold, in the model's words: "ready to feed is false: aimed at the
+   *     Hub, shooter at goal"; empty while it holds
    */
-  public record GateRow(String name, Moment.Held held, List<String> blocking) {
+  public record GateRow(String name, Moment.Held held, List<String> blocking, String why) {
     public GateRow {
       blocking = List.copyOf(blocking);
+    }
+
+    static GateRow of(RobotDefinition definition, Moment.OfGate gate) {
+      List<String> blocking = new ArrayList<>();
+      for (GateTerm term : gate.blocking()) {
+        blocking.add(ControlSentences.gateTerm(definition, gate.name(), term, gate.blockingText()));
+      }
+      boolean holds = gate.held() == Moment.Held.HOLDS;
+      String why = holds ? "" : ControlSentences.gateWhy(gate.name(), blocking);
+      return new GateRow(gate.name(), gate.held(), blocking, why);
     }
   }
 

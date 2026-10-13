@@ -10,6 +10,8 @@ import com.michaelgrundvig.frc.pitwall.robot.RobotView.Health;
 import com.michaelgrundvig.frc.pitwall.robot.RobotView.JointCard;
 import com.michaelgrundvig.frc.pitwall.robot.RobotView.Recorded;
 import com.michaelgrundvig.frc.pitwall.robot.RobotView.Turning;
+import com.michaelgrundvig.frc.world.record.Holder;
+import com.michaelgrundvig.frc.world.record.JointState;
 import com.michaelgrundvig.frc.world.robot.ConditionReading;
 import java.util.List;
 import java.util.function.UnaryOperator;
@@ -24,6 +26,9 @@ class RobotViewTest {
   private static final String ARM_RULE =
       "arm keeps out of -10° to 30° while elevator at most 0.8128 m";
   private static final String CLAW_RULE = "claw runs only when claw beam clear";
+
+  /** A joint homing toward its lower stop, as the runtime logs it. */
+  private static final JointState HOMING = JointState.homing(JointState.Toward.LOWER_STOP, 9.5);
 
   // ---- Cause across cards ----
 
@@ -60,7 +65,7 @@ class RobotViewTest {
         List.of(
             new Intake(
                 "asked to intake with the pivot short of 110°",
-                moment -> intaking(moment.at("pivot", 50)),
+                moment -> intaking(moment.at("pivot", 50)).heldBy("roller", Moments.ROLLER_RULE),
                 List.of(ROLLER_RULE),
                 RobotView.Hold.HELD,
                 Emphasis.WAITED_FOR,
@@ -74,7 +79,7 @@ class RobotViewTest {
                 ConditionReading.HOLDS),
             new Intake(
                 "idle with the pivot short: the rule restricts, and nothing waits",
-                moment -> moment.at("pivot", 50),
+                moment -> moment.at("pivot", 50).heldBy("roller", Moments.ROLLER_RULE),
                 List.of(ROLLER_RULE),
                 RobotView.Hold.RESTRICTED,
                 Emphasis.IN_FORCE,
@@ -89,7 +94,9 @@ class RobotViewTest {
             new Intake(
                 "asked while the pivot's motor controller is lost: unknown holds the roller",
                 moment ->
-                    intaking(moment.at("pivot", 130)).standing("pivot", Moment.Link.LOST, "READY"),
+                    intaking(moment.at("pivot", 130))
+                        .heldBy("roller", Moments.ROLLER_RULE)
+                        .standing("pivot", Moment.Link.LOST, JointState.READY),
                 List.of(ROLLER_RULE),
                 RobotView.Hold.HELD,
                 Emphasis.WAITED_FOR,
@@ -98,7 +105,8 @@ class RobotViewTest {
                 "asked while the pivot does not know where it is",
                 moment ->
                     intaking(moment.at("pivot", 130))
-                        .standing("pivot", Moment.Link.ANSWERS, "HOMING: toward its lower stop"),
+                        .heldBy("roller", Moments.ROLLER_RULE)
+                        .standing("pivot", Moment.Link.ANSWERS, HOMING),
                 List.of(ROLLER_RULE),
                 RobotView.Hold.HELD,
                 Emphasis.WAITED_FOR,
@@ -157,7 +165,10 @@ class RobotViewTest {
                 Emphasis.IN_FORCE),
             new Lift(
                 "the arm asked to scoring through the closed region: held at its edge",
-                moment -> moment.asked("arm", "Score", "scoring", -10),
+                moment ->
+                    moment
+                        .asked("arm", "Score", "scoring", -10)
+                        .heldBy("arm", Moments.ARM_KEEP_OUT),
                 List.of(ARM_RULE),
                 Emphasis.WAITED_FOR),
             new Lift(
@@ -170,8 +181,9 @@ class RobotViewTest {
                 moment ->
                     moment
                         .atMeters("elevator", 1.0)
-                        .standing("elevator", Moment.Link.LOST, "READY")
-                        .asked("arm", "Score", "scoring", -10),
+                        .standing("elevator", Moment.Link.LOST, JointState.READY)
+                        .asked("arm", "Score", "scoring", -10)
+                        .heldBy("arm", Moments.ARM_KEEP_OUT),
                 List.of(ARM_RULE),
                 Emphasis.WAITED_FOR));
 
@@ -210,7 +222,12 @@ class RobotViewTest {
   /** A held arm says where it was asked to go and where it is held instead. */
   @Test
   void aHeldJointSaysWhereItWasAskedAndWhereItIsHeadedInstead() {
-    JointCard arm = Moments.atRest().asked("arm", "Score", "scoring", -10).view().joint("arm");
+    JointCard arm =
+        Moments.atRest()
+            .asked("arm", "Score", "scoring", -10)
+            .heldBy("arm", Moments.ARM_KEEP_OUT)
+            .view()
+            .joint("arm");
 
     assertThat(arm.facts().told()).isEqualTo("scoring, 120°, headed for -10°");
     assertThat(arm.facts().ownedBy()).isEqualTo("Score");
@@ -228,6 +245,7 @@ class RobotViewTest {
       String what,
       Moment.Link link,
       Moment.Switched switched,
+      List<Holder> logged,
       String reading,
       Health health,
       List<String> heldBy,
@@ -243,6 +261,7 @@ class RobotViewTest {
                 "the beam clear",
                 Moment.Link.ANSWERS,
                 Moment.Switched.CLEAR,
+                List.of(),
                 "clear",
                 Health.FINE,
                 List.of(),
@@ -252,6 +271,7 @@ class RobotViewTest {
                 "the beam tripped",
                 Moment.Link.ANSWERS,
                 Moment.Switched.TRIPPED,
+                List.of(Moments.CLAW_RULE),
                 "tripped",
                 Health.FINE,
                 List.of(CLAW_RULE),
@@ -261,6 +281,7 @@ class RobotViewTest {
                 "the beam lost",
                 Moment.Link.LOST,
                 Moment.Switched.CLEAR,
+                List.of(Moments.CLAW_RULE),
                 "lost",
                 Health.NEEDS_ATTENTION,
                 List.of(CLAW_RULE),
@@ -272,6 +293,7 @@ class RobotViewTest {
           Moments.atRest()
               .sensor("claw beam", scenario.link(), scenario.switched(), Double.NaN)
               .asked("claw", "Grip", "gripping", 600)
+              .heldBy("claw", scenario.logged().toArray(Holder[]::new))
               .view();
 
       RobotView.SensorRow beam = view.sensor("claw beam");
@@ -382,12 +404,11 @@ class RobotViewTest {
         .isEqualTo("134.5°, above out");
 
     JointCard homing =
-        Moments.atRest()
-            .standing("pivot", Moment.Link.ANSWERS, "HOMING: toward its lower stop")
-            .view()
-            .joint("pivot");
+        Moments.atRest().standing("pivot", Moment.Link.ANSWERS, HOMING).view().joint("pivot");
     assertThat(homing.facts().at()).isEqualTo("unknown");
-    assertThat(homing.facts().state()).isEqualTo("HOMING: toward its lower stop");
+    assertThat(homing.facts().state())
+        .isEqualTo("HOMING: toward its lower stop, for at most 9.5 s");
+    assertThat(homing.facts().standing()).isEqualTo(JointState.Standing.HOMING);
   }
 
   /** A joint idle, its last move, and its own sensors, each as a fact a person can read. */
@@ -395,14 +416,14 @@ class RobotViewTest {
   void aJointsFactsSayWhoOwnsItHowItsLastMoveEndedAndHowItsSensorsAre() {
     JointCard pivot =
         Moments.atRest()
-            .lastMove("pivot", "out: ARRIVED in 0.62 s")
-            .standing("pivot", Moment.Link.STALE, "READY")
+            .arrivedAt("pivot", "in", 0.62)
+            .standing("pivot", Moment.Link.STALE, JointState.READY)
             .view()
             .joint("pivot");
 
     assertThat(pivot.facts().ownedBy()).isEqualTo("idle, holding");
     assertThat(pivot.facts().told()).isEqualTo("hold at 1.5°");
-    assertThat(pivot.facts().lastMove()).isEqualTo("out: ARRIVED in 0.62 s");
+    assertThat(pivot.facts().lastMove()).isEqualTo("pivot → in: ARRIVED in 0.62 s");
     assertThat(pivot.sensors())
         .extracting(RobotView.OwnSensor::label, RobotView.OwnSensor::reading)
         .containsExactly(
@@ -433,7 +454,7 @@ class RobotViewTest {
     RobotView view =
         Moments.atRest()
             .sensor("hopper", Moment.Link.ANSWERS, Moment.Switched.CLEAR, 0.4237)
-            .gate("piece in", Moment.Held.DOES_NOT_HOLD, "claw beam clear")
+            .gate("piece in", Moment.Held.DOES_NOT_HOLD, "claw beam clear", "arm stowed")
             .gate("ready", Moment.Held.HOLDS)
             .fired("operator right trigger starts Intake while held")
             .view();
@@ -445,11 +466,13 @@ class RobotViewTest {
     assertThat(hopper.range()).isCloseTo(1.3, within(1e-9));
     assertThat(hopper.on()).isEqualTo("chassis");
     assertThat(view.gates())
-        .extracting(RobotView.GateRow::name, RobotView.GateRow::held, RobotView.GateRow::blocking)
         .containsExactly(
-            org.assertj.core.groups.Tuple.tuple(
-                "piece in", Moment.Held.DOES_NOT_HOLD, List.of("claw beam clear")),
-            org.assertj.core.groups.Tuple.tuple("ready", Moment.Held.HOLDS, List.of()));
+            new RobotView.GateRow(
+                "piece in",
+                Moment.Held.DOES_NOT_HOLD,
+                List.of("claw beam clear", "arm stowed"),
+                "piece in is false: claw beam clear, arm stowed"),
+            new RobotView.GateRow("ready", Moment.Held.HOLDS, List.of(), ""));
     assertThat(view.fired()).containsExactly("operator right trigger starts Intake while held");
     assertThat(view.enabled()).isEqualTo(Moment.Enabled.ENABLED);
     assertThat(view.mode()).isEqualTo(Moment.Mode.TELEOPERATED);

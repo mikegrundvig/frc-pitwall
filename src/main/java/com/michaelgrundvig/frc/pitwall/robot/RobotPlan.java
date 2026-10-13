@@ -2,55 +2,33 @@ package com.michaelgrundvig.frc.pitwall.robot;
 
 import com.michaelgrundvig.frc.world.robot.Condition;
 import com.michaelgrundvig.frc.world.robot.Interlock;
-import com.michaelgrundvig.frc.world.robot.InterlockEnforcement;
 import com.michaelgrundvig.frc.world.robot.Joint;
-import com.michaelgrundvig.frc.world.robot.MechanismControl;
-import com.michaelgrundvig.frc.world.robot.PlaceNames;
 import com.michaelgrundvig.frc.world.robot.RobotDefinition;
 import com.michaelgrundvig.frc.world.robot.RobotMath;
 import com.michaelgrundvig.frc.world.robot.Sensor;
-import com.michaelgrundvig.frc.world.robot.Travel;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Everything about a robot that the Robot view needs and that never changes while the robot runs,
- * worked out once from its definition: its joints in the model's order, each with its travel, the
- * interlocks on it, the model's decision for them, and the interlocks elsewhere that depend on it.
+ * worked out once from its definition: its joints in the model's order, each with its free speed,
+ * the interlocks on it, and the interlocks elsewhere that depend on it.
  *
  * <p>It is a function of the definition alone, so a view made with it is still a function of the
  * definition and one moment.
  */
 final class RobotPlan {
   /**
-   * How near a named place a joint that turns must be to be said to be at it, when its control
-   * gives no band: the template's 2°, as {@link MechanismControl}'s bands say.
-   */
-  private static final double DEFAULT_ANGLE_BAND = Math.toRadians(2);
-
-  /** The same for a joint that slides: the template's 1 cm. */
-  private static final double DEFAULT_LENGTH_BAND = 0.01;
-
-  /**
    * One joint, with what the view needs of it.
    *
    * @param joint the joint
-   * @param travel where it is driven and how fast it can go, or null for a joint no motors of its
-   *     own drive
+   * @param freeSpeed how fast it can go with nothing loading it, in its units a second, or NaN for
+   *     a joint no motors of its own drive
    * @param interlocks the interlocks that restrict it, in the order the robot applies them
-   * @param enforcement the model's decision for those interlocks, or null for a joint with none
    * @param dependents the interlocks on other joints whose conditions are about this joint
-   * @param places its named places, as words for where it is
    */
   record OfJoint(
-      Joint joint,
-      @Nullable Travel travel,
-      List<Interlock> interlocks,
-      @Nullable InterlockEnforcement enforcement,
-      List<Interlock> dependents,
-      PlaceNames places) {}
+      Joint joint, double freeSpeed, List<Interlock> interlocks, List<Interlock> dependents) {}
 
   /**
    * One switch or rangefinder, with the interlocks whose conditions read it.
@@ -64,7 +42,7 @@ final class RobotPlan {
   private final List<OfJoint> joints = new ArrayList<>();
   private final List<OfSensor> sensors = new ArrayList<>();
 
-  private RobotPlan(RobotDefinition definition, double loopSeconds) {
+  private RobotPlan(RobotDefinition definition) {
     this.definition = definition;
     RobotMath math = definition.math();
     List<Interlock> every = definition.everyInterlock();
@@ -72,15 +50,7 @@ final class RobotPlan {
       List<Interlock> own = every.stream().filter(each -> each.joint().equals(joint)).toList();
       List<Interlock> dependents =
           every.stream().filter(each -> isAbout(each.condition(), joint)).toList();
-      Travel travel = travelOf(math, joint);
-      joints.add(
-          new OfJoint(
-              joint,
-              travel,
-              own,
-              enforcementOf(travel, own, loopSeconds),
-              dependents,
-              new PlaceNames(joint, arrivalBand(joint))));
+      joints.add(new OfJoint(joint, freeSpeedOf(math, joint), own, dependents));
     }
     for (Sensor.Placed placed : Parts.sensors(definition)) {
       List<Interlock> dependents =
@@ -89,12 +59,8 @@ final class RobotPlan {
     }
   }
 
-  /**
-   * @param loopSeconds how long one of the robot's loops lasts, in seconds, which the model's
-   *     keep-outs need
-   */
-  static RobotPlan of(RobotDefinition definition, double loopSeconds) {
-    return new RobotPlan(definition, loopSeconds);
+  static RobotPlan of(RobotDefinition definition) {
+    return new RobotPlan(definition);
   }
 
   RobotDefinition definition() {
@@ -111,34 +77,10 @@ final class RobotPlan {
     return sensors;
   }
 
-  /** The model's decision for a joint's interlocks, for a driven joint that has any. */
-  private static @Nullable InterlockEnforcement enforcementOf(
-      @Nullable Travel travel, List<Interlock> interlocks, double loopSeconds) {
-    if (travel == null || interlocks.isEmpty()) {
-      return null;
-    }
-    return new InterlockEnforcement(travel, interlocks, loopSeconds);
-  }
-
-  /** A joint's travel, for one that motors of its own drive under a control. */
-  private static @Nullable Travel travelOf(RobotMath math, Joint joint) {
-    Optional<MechanismControl> control = joint.driven().control();
-    if (control.isEmpty() || !math.motorsAlone(joint)) {
-      return null;
-    }
-    return Travel.of(math, joint, control.get());
-  }
-
-  /**
-   * How near a place a joint must be to be said to be at it: its control's band, or the default.
-   */
-  private static double arrivalBand(Joint joint) {
-    Optional<MechanismControl.Bands> bands =
-        joint.driven().control().flatMap(MechanismControl::bands);
-    if (bands.isPresent() && joint.holdsPositions()) {
-      return bands.get().enter();
-    }
-    return joint instanceof Joint.Revolute ? DEFAULT_ANGLE_BAND : DEFAULT_LENGTH_BAND;
+  /** A joint's free speed, for one that motors of its own drive under a control. */
+  private static double freeSpeedOf(RobotMath math, Joint joint) {
+    boolean driven = joint.driven().control().isPresent() && math.motorsAlone(joint);
+    return driven ? math.freeSpeed(joint) : Double.NaN;
   }
 
   /** Whether a condition is about a joint: where it is, or how fast it runs. */

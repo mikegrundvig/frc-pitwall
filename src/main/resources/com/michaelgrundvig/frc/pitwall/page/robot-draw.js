@@ -427,3 +427,24 @@ export function drawJoint(label, joint, titleId) {
   update(joint);
   return { element, update };
 }
+
+/**
+ * Draws a rangefinder's reading as a short bar from nothing to the farthest it reads: filled out
+ * to what it reads now, with a tick at the distance each rule on it compares with, drawn by how
+ * the rule stands. The row beside it says the same in words.
+ *
+ * @param sensor the sensor as the robot says it (robotView.live.sensors[label])
+ */
+export function drawRange(sensor) {
+  const width = 120;
+  const x = (meters) => 2 + clamp(meters / (sensor.range || 1), 0, 1) * (width - 4);
+  const parts = [line([2, 9], [width - 2, 9], "rv-range-track")];
+  if (finite(sensor.meters)) parts.push(line([2, 9], [x(sensor.meters), 9], "rv-range-now"));
+  for (const mark of sensor.marks) {
+    if (finite(mark.meters)) {
+      parts.push(line([x(mark.meters), 2], [x(mark.meters), 16], "rv-mark-edge " + cls(mark.emphasis)));
+    }
+  }
+  return svg("svg", { class: "rv-range", viewBox: "0 0 " + width + " 18", width, height: 18,
+                      "aria-hidden": "true" }, parts);
+}

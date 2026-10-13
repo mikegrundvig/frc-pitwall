@@ -24,13 +24,14 @@ import java.util.Optional;
  *      "bands": [{"lower", "upper", "shown", "emphasis", "reading", "rule", "dependsOn"}],
  *      "marks": [{"from", "to", "rule", "forJoint", "label", "sentence", "emphasis", "reading"}],
  *      "needles": {"now", "goal", "setpoint"},
- *      "facts": {"at", "told", "ownedBy", "lastMove", "state", "hold", "heldBy": [sentence]},
+ *      "facts": {"at", "told", "ownedBy", "lastMove", "state", "standing", "hold",
+ *                "heldBy": [sentence]},
  *      "sensors": [{"label", "reading", "health"}]}},
  *  "sensorOrder": [label, ...],
  *  "sensors": {label: {"kind", "on", "health", "reading", "meters", "range",
  *      "marks": [{"meters", "forJoint", "label", "sentence", "emphasis", "reading"}]}},
  *  "gateOrder": [name, ...],
- *  "gates": {name: {"held", "blocking": [term]}},
+ *  "gates": {name: {"held", "blocking": [term], "why"}},
  *  "gamepads": {port: {"down": [button], "axes": [number], "pov"}},
  *  "fired": {"bindings": [text], "timestampNanos"}}
  * }</pre>
@@ -77,6 +78,7 @@ public final class RobotWire {
       Map<String, Object> shown = new LinkedHashMap<>();
       shown.put("held", gate.held().name());
       shown.put("blocking", gate.blocking());
+      shown.put("why", gate.why());
       gates.put(gate.name(), shown);
     }
     wire.put("gateOrder", gateOrder);
@@ -152,6 +154,7 @@ public final class RobotWire {
     facts.put("ownedBy", joint.facts().ownedBy());
     facts.put("lastMove", joint.facts().lastMove());
     facts.put("state", joint.facts().state());
+    facts.put("standing", joint.facts().standing().name());
     facts.put("hold", joint.facts().hold().name());
     facts.put("heldBy", joint.facts().heldBy());
     wire.put("facts", facts);

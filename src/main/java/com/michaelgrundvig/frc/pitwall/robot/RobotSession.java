@@ -46,7 +46,7 @@ public final class RobotSession {
 
   private RobotSession(RobotDefinition definition, double loopSeconds, double rememberedSeconds) {
     this.definition = definition;
-    plan = RobotPlan.of(definition, loopSeconds);
+    plan = RobotPlan.of(definition);
     int capacity = (int) Math.max(1, Math.round(rememberedSeconds / loopSeconds));
     List<String> joints = Parts.jointLabels(definition);
     List<String> sensors = Parts.sensorLabels(definition);

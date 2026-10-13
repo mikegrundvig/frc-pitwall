@@ -1,5 +1,12 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
+import com.michaelgrundvig.frc.world.record.BindingFired;
+import com.michaelgrundvig.frc.world.record.GateTerm;
+import com.michaelgrundvig.frc.world.record.Holder;
+import com.michaelgrundvig.frc.world.record.JointOwner;
+import com.michaelgrundvig.frc.world.record.JointPlace;
+import com.michaelgrundvig.frc.world.record.JointState;
+import com.michaelgrundvig.frc.world.record.MoveOutcome;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,12 +32,19 @@ final class Extraction {
       String magnetBad,
       String absoluteConnected,
       String state,
+      String fault,
+      String owner,
       String command,
       String goal,
       String goalName,
+      String at,
+      String heldBy,
       String setpoint,
       String setpointVelocity,
       String outcome,
+      String outcomeName,
+      String outcomeWhy,
+      String outcomeHeldBy,
       String absoluteAt) {
     static JointKeys of(String label) {
       String in = LogKeys.joint(label);
@@ -44,12 +58,19 @@ final class Extraction {
           in + LogKeys.MAGNET_BAD,
           in + LogKeys.ABSOLUTE_CONNECTED,
           out + LogKeys.STATE,
+          out + LogKeys.FAULT,
+          out + LogKeys.OWNER,
           out + LogKeys.COMMAND,
           out + LogKeys.GOAL,
           out + LogKeys.GOAL_NAME,
+          out + LogKeys.AT,
+          out + LogKeys.HELD_BY,
           out + LogKeys.SETPOINT,
           out + LogKeys.SETPOINT_VELOCITY,
           out + LogKeys.OUTCOME,
+          out + LogKeys.OUTCOME_NAME,
+          out + LogKeys.OUTCOME_WHY,
+          out + LogKeys.OUTCOME_HELD_BY,
           out + LogKeys.ABSOLUTE_AT);
     }
   }
@@ -72,13 +93,42 @@ final class Extraction {
   }
 
   /** One gate's keys, and the place the memory keeps it in. */
-  private record GateKeys(int place, String holds, String blocking) {}
+  private record GateKeys(int place, String holds, String blocking, String blockingText) {}
+
+  /**
+   * How the last move on one joint ended, as last taken: the log's own lists and texts, and the
+   * number the memory knows them by. The log hands the same lists back until a move ends, so a loop
+   * in which none did compares four references and makes nothing.
+   */
+  private static final class MoveTaken {
+    private MoveOutcome[] parts = NO_PARTS;
+    private Holder[] heldAsItEnded = NO_HOLDERS;
+    private String name = "";
+    private String why = "";
+    private short number;
+
+    boolean isStill(MoveOutcome[] parts, String name, String why, Holder[] heldAsItEnded) {
+      return this.parts == parts
+          && this.heldAsItEnded == heldAsItEnded
+          && this.name.equals(name)
+          && this.why.equals(why);
+    }
+  }
+
+  private static final MoveOutcome[] NO_PARTS = new MoveOutcome[0];
+  private static final Holder[] NO_HOLDERS = new Holder[0];
+  private static final GateTerm[] NO_TERMS = new GateTerm[0];
+  private static final BindingFired[] NONE_FIRED = new BindingFired[0];
 
   private final SessionMemory memory;
   private final List<JointKeys> joints = new ArrayList<>();
   private final List<SensorKeys> sensors = new ArrayList<>();
   private final List<GamepadKeys> gamepads = new ArrayList<>();
   private final List<GateKeys> gates = new ArrayList<>();
+  private final List<MoveTaken> moves = new ArrayList<>();
+
+  /** The bindings that fired, each as the robot's list of its bindings says it: used every loop. */
+  private final String[] firedSentences = new String[SessionMemory.FIRED];
 
   /** The names of the gates found so far, kept or not, so that each is looked at once. */
   private final List<String> gatesSeen = new ArrayList<>();
@@ -96,6 +146,7 @@ final class Extraction {
   Extraction(SessionMemory memory, List<String> jointLabels, List<String> sensorLabels) {
     this.memory = memory;
     jointLabels.forEach(label -> joints.add(JointKeys.of(label)));
+    jointLabels.forEach(label -> moves.add(new MoveTaken()));
     sensorLabels.forEach(label -> sensors.add(SensorKeys.of(label)));
     for (int port = 0; port < SessionMemory.GAMEPADS; port++) {
       gamepads.add(GamepadKeys.of(port));
@@ -118,10 +169,14 @@ final class Extraction {
         if (record.has(keys.holds())) {
           Moment.Held held =
               record.flag(keys.holds(), false) ? Moment.Held.HOLDS : Moment.Held.DOES_NOT_HOLD;
-          memory.putGate(keys.place(), held, record.texts(keys.blocking()));
+          memory.putGate(
+              keys.place(),
+              held,
+              record.facts(keys.blocking(), NO_TERMS),
+              record.texts(keys.blockingText()));
         }
       }
-      memory.putFired(record.texts(LogKeys.FIRED));
+      takeFired(record);
       for (int gamepad = 0; gamepad < gamepads.size(); gamepad++) {
         GamepadKeys keys = gamepads.get(gamepad);
         long[] povs = record.wholes(keys.povs());
@@ -163,12 +218,65 @@ final class Extraction {
         record.number(keys.setpointVelocity(), Double.NaN),
         record.number(keys.absoluteAt(), Double.NaN),
         encoder(record, keys));
-    memory.putJointTexts(
+    memory.putJointFacts(
         joint,
-        record.text(keys.state(), ""),
+        record.fact(keys.state(), JointState.UNHOMED),
+        record.text(keys.fault(), ""),
+        owner(record.text(keys.owner(), "")),
         record.text(keys.command(), ""),
         record.text(keys.goalName(), ""),
-        record.text(keys.outcome(), ""));
+        record.fact(keys.at(), JointPlace.UNKNOWN),
+        record.facts(keys.heldBy(), NO_HOLDERS));
+    memory.putJointsLastMove(joint, lastMove(record, moves.get(joint), keys));
+  }
+
+  /** Who asked a joint, from the name the log holds; nothing, for a name that is not one. */
+  private static JointOwner owner(String name) {
+    return switch (name) {
+      case "COMMAND" -> JointOwner.COMMAND;
+      case "OUTSIDE_ANY_COMMAND" -> JointOwner.OUTSIDE_ANY_COMMAND;
+      default -> JointOwner.IDLE;
+    };
+  }
+
+  /**
+   * The number the memory knows a joint's last move by. The move is looked up in the memory only in
+   * the loop it changed, which is the loop a move on the joint ended.
+   */
+  private short lastMove(LoopRecord record, MoveTaken taken, JointKeys keys) {
+    MoveOutcome[] parts = record.facts(keys.outcome(), NO_PARTS);
+    Holder[] heldAsItEnded = record.facts(keys.outcomeHeldBy(), NO_HOLDERS);
+    String name = record.text(keys.outcomeName(), "");
+    String why = record.text(keys.outcomeWhy(), "");
+    if (taken.isStill(parts, name, why, heldAsItEnded)) {
+      return taken.number;
+    }
+    taken.parts = parts;
+    taken.heldAsItEnded = heldAsItEnded;
+    taken.name = name;
+    taken.why = why;
+    taken.number =
+        memory.move(new Moment.LastMove(name, List.of(parts), why, List.of(heldAsItEnded)));
+    return taken.number;
+  }
+
+  /**
+   * Takes the bindings that fired in this loop, each as its sentence in the robot's list of its
+   * bindings, which a fired binding points into.
+   */
+  private void takeFired(LoopRecord record) {
+    BindingFired[] fired = record.facts(LogKeys.FIRED, NONE_FIRED);
+    if (fired.length == 0) {
+      memory.putFired(LoopRecord.NO_TEXTS, 0);
+      return;
+    }
+    String[] bindings = record.texts(LogKeys.BINDINGS);
+    int taken = Math.min(fired.length, firedSentences.length);
+    for (int each = 0; each < taken; each++) {
+      int binding = fired[each].binding();
+      firedSentences[each] = binding >= 0 && binding < bindings.length ? bindings[binding] : "";
+    }
+    memory.putFired(firedSentences, taken);
   }
 
   private static Moment.Link link(boolean connected, boolean fresh) {
@@ -216,7 +324,11 @@ final class Extraction {
     keysLastLoop = keys;
     record.forEachKey(
         key -> {
-          if (!key.startsWith(LogKeys.GATES) || key.endsWith(LogKeys.BLOCKING)) {
+          boolean isAGatesOwn =
+              key.startsWith(LogKeys.GATES)
+                  && !key.endsWith(LogKeys.BLOCKING)
+                  && !key.endsWith(LogKeys.BLOCKING_TEXT);
+          if (!isAGatesOwn) {
             return;
           }
           String name = key.substring(LogKeys.GATES.length());
@@ -229,7 +341,8 @@ final class Extraction {
             place = memory.gate(name);
           }
           if (place >= 0) {
-            gates.add(new GateKeys(place, key, key + LogKeys.BLOCKING));
+            gates.add(
+                new GateKeys(place, key, key + LogKeys.BLOCKING, key + LogKeys.BLOCKING_TEXT));
           } else {
             gatesNotKept = gatesSeen.size() - gates.size();
           }

@@ -1,5 +1,11 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
+import com.michaelgrundvig.frc.world.record.GateTerm;
+import com.michaelgrundvig.frc.world.record.Holder;
+import com.michaelgrundvig.frc.world.record.JointOwner;
+import com.michaelgrundvig.frc.world.record.JointPlace;
+import com.michaelgrundvig.frc.world.record.JointState;
+import com.michaelgrundvig.frc.world.record.MoveOutcome;
 import java.util.List;
 
 /**
@@ -15,7 +21,8 @@ import java.util.List;
  * @param joints each driven joint the record has, by its label, in the model's order
  * @param sensors each switch and rangefinder the record has, by its label
  * @param gates each gate, by its name, in the order the record first had them
- * @param fired the bindings a press or a release started in this loop, each in its own words
+ * @param fired the bindings a press or a release started in this loop, each as the robot's list of
+ *     its bindings says it
  * @param gamepads the gamepads, by port from 0
  */
 public record Moment(
@@ -94,10 +101,14 @@ public record Moment(
    * @param setpointVelocity how fast its profile has it moving
    * @param absoluteAt where its absolute encoder says it is
    * @param encoder how its absolute encoder was doing
-   * @param state where it stands, as the runtime's {@code State} says it
-   * @param command who asked it this loop, as the runtime's {@code Command} says it
+   * @param state where it stands in knowing where it is
+   * @param fault the text of its fault, empty while it is not faulted
+   * @param owner who asked it this loop
+   * @param command the name of the command that asked, empty when none did
    * @param goalName the name of what it was asked for, or empty
-   * @param outcome how the last move on it ended, as the runtime's {@code Outcome} says it
+   * @param at where it is among its named places, or what it runs at
+   * @param heldBy what holds it short of what it was asked, in the order it is applied
+   * @param lastMove how the last move on it ended
    */
   public record OfJoint(
       String label,
@@ -110,10 +121,43 @@ public record Moment(
       double setpointVelocity,
       double absoluteAt,
       Encoder encoder,
-      String state,
+      JointState state,
+      String fault,
+      JointOwner owner,
       String command,
       String goalName,
-      String outcome) {}
+      JointPlace at,
+      List<Holder> heldBy,
+      LastMove lastMove) {
+    public OfJoint {
+      heldBy = List.copyOf(heldBy);
+    }
+  }
+
+  /**
+   * How the last move on a joint ended, as the robot logged it: every joint's part of the move, and
+   * what is logged beside them. The model's {@code MoveSentences.outcome} makes its sentence.
+   *
+   * @param name the move's name
+   * @param parts each joint's part of the move, in the move's order; empty before any move ended
+   * @param why the text of the move's reason, where it has one
+   * @param heldAsItEnded what held the move's joints as it timed out
+   */
+  public record LastMove(
+      String name, List<MoveOutcome> parts, String why, List<Holder> heldAsItEnded) {
+    /** No move has ended on the joint yet. */
+    public static final LastMove NONE = new LastMove("", List.of(), "", List.of());
+
+    public LastMove {
+      parts = List.copyOf(parts);
+      heldAsItEnded = List.copyOf(heldAsItEnded);
+    }
+
+    /** Whether any move has ended on the joint. */
+    public boolean hasEnded() {
+      return !parts.isEmpty();
+    }
+  }
 
   /**
    * One switch or rangefinder in one loop.
@@ -130,11 +174,13 @@ public record Moment(
    *
    * @param name the gate's name
    * @param held whether it held
-   * @param blocking the terms that kept it from holding, in words; empty while it held
+   * @param blocking the terms that kept it from holding; empty while it held, or it has none
+   * @param blockingText the text those terms point into: a team's own words, or what was thrown
    */
-  public record OfGate(String name, Held held, List<String> blocking) {
+  public record OfGate(String name, Held held, List<GateTerm> blocking, List<String> blockingText) {
     public OfGate {
       blocking = List.copyOf(blocking);
+      blockingText = List.copyOf(blockingText);
     }
   }
 

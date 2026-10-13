@@ -44,6 +44,18 @@ public interface LoopRecord {
   /** A list of whole numbers, or {@link #NO_WHOLES}. */
   long[] wholes(String key);
 
+  /**
+   * A fact, one of the model's records, or what to answer otherwise. The same fact is handed back
+   * for as long as the log holds the same value, so reading one every loop makes nothing new.
+   */
+  <R extends Record> R fact(String key, R otherwise);
+
+  /**
+   * A list of facts, or what to answer otherwise. It is the record's own list while the log holds
+   * the same value, and must not be changed.
+   */
+  <R extends Record> R[] facts(String key, R[] otherwise);
+
   /** Whether the record has a key. */
   boolean has(String key);
 

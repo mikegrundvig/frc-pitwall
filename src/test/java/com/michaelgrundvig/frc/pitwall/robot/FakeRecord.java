@@ -1,5 +1,13 @@
 package com.michaelgrundvig.frc.pitwall.robot;
 
+import com.michaelgrundvig.frc.world.record.BindingFired;
+import com.michaelgrundvig.frc.world.record.BindingStart;
+import com.michaelgrundvig.frc.world.record.GateTerm;
+import com.michaelgrundvig.frc.world.record.Holder;
+import com.michaelgrundvig.frc.world.record.Identity;
+import com.michaelgrundvig.frc.world.record.JointPlace;
+import com.michaelgrundvig.frc.world.record.JointState;
+import com.michaelgrundvig.frc.world.record.MoveOutcome;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -13,7 +21,10 @@ public final class FakeRecord implements LoopRecord {
   private final Map<String, Object> values = new LinkedHashMap<>();
   private long timestampNanos;
 
-  /** Sets a key's value: a Boolean, a Double, a Long, a String, or an array of one of those. */
+  /**
+   * Sets a key's value: a Boolean, a Double, a Long, a String, one of the model's facts, or an
+   * array of one of those.
+   */
   public FakeRecord put(String key, Object value) {
     values.put(key, value);
     return this;
@@ -38,13 +49,20 @@ public final class FakeRecord implements LoopRecord {
         .put(in + LogKeys.VELOCITY, velocity)
         .put(in + LogKeys.APPLIED_VOLTS, 0.0)
         .put(in + LogKeys.MAGNET_BAD, false)
-        .put(out + LogKeys.STATE, "READY")
-        .put(out + LogKeys.COMMAND, "idle")
+        .put(out + LogKeys.STATE, JointState.READY)
+        .put(out + LogKeys.FAULT, "")
+        .put(out + LogKeys.OWNER, "IDLE")
+        .put(out + LogKeys.COMMAND, "")
         .put(out + LogKeys.GOAL, position)
         .put(out + LogKeys.GOAL_NAME, "")
+        .put(out + LogKeys.AT, JointPlace.UNNAMED)
+        .put(out + LogKeys.HELD_BY, new Holder[0])
         .put(out + LogKeys.SETPOINT, position)
         .put(out + LogKeys.SETPOINT_VELOCITY, 0.0)
-        .put(out + LogKeys.OUTCOME, "");
+        .put(out + LogKeys.OUTCOME, new MoveOutcome[0])
+        .put(out + LogKeys.OUTCOME_NAME, "")
+        .put(out + LogKeys.OUTCOME_WHY, "")
+        .put(out + LogKeys.OUTCOME_HELD_BY, new Holder[0]);
   }
 
   /** Logs a sensor as the runtime does. */
@@ -55,9 +73,32 @@ public final class FakeRecord implements LoopRecord {
         .put(in + LogKeys.METERS, meters);
   }
 
-  /** Logs a gate as the runtime does. */
+  /** Logs a gate as the runtime does, with what keeps it from holding in a team's own words. */
   public FakeRecord gate(String name, boolean holds, String... blocking) {
-    return put(LogKeys.GATES + name, holds).put(LogKeys.GATES + name + LogKeys.BLOCKING, blocking);
+    GateTerm[] terms = new GateTerm[blocking.length];
+    for (int each = 0; each < blocking.length; each++) {
+      terms[each] = GateTerm.text(each);
+    }
+    return put(LogKeys.GATES + name, holds)
+        .put(LogKeys.GATES + name + LogKeys.BLOCKING, terms)
+        .put(LogKeys.GATES + name + LogKeys.BLOCKING_TEXT, blocking);
+  }
+
+  /**
+   * Logs the bindings that fired in a loop as the runtime does: each a fact that points into the
+   * list of the robot's bindings, which is logged beside it.
+   */
+  public FakeRecord fired(String... bindings) {
+    BindingFired[] fired = new BindingFired[bindings.length];
+    for (int each = 0; each < bindings.length; each++) {
+      fired[each] =
+          new BindingFired(
+              each, 1, BindingFired.Control.RIGHT_TRIGGER, Identity.NONE, BindingStart.WHILE_HELD);
+    }
+    if (bindings.length > 0) {
+      put(LogKeys.BINDINGS, bindings);
+    }
+    return put(LogKeys.FIRED, fired);
   }
 
   @Override
@@ -106,6 +147,28 @@ public final class FakeRecord implements LoopRecord {
   }
 
   @Override
+  public <R extends Record> R fact(String key, R otherwise) {
+    Object value = values.get(key);
+    if (value == null || value.getClass() != otherwise.getClass()) {
+      return otherwise;
+    }
+    @SuppressWarnings("unchecked") // it is of the class asked for
+    R fact = (R) value;
+    return fact;
+  }
+
+  @Override
+  public <R extends Record> R[] facts(String key, R[] otherwise) {
+    Object value = values.get(key);
+    if (value == null || value.getClass() != otherwise.getClass()) {
+      return otherwise;
+    }
+    @SuppressWarnings("unchecked") // it is of the class asked for
+    R[] facts = (R[]) value;
+    return facts;
+  }
+
+  @Override
   public int keyCount() {
     return values.size();
   }
@@ -132,7 +195,7 @@ public final class FakeRecord implements LoopRecord {
         .joint("claw", 0, 0)
         .sensor("claw beam", true, false, Double.NaN)
         .sensor("hopper", true, false, 0.8)
-        .put(LogKeys.FIRED, new String[0]);
+        .fired();
     for (int port = 0; port < 2; port++) {
       record
           .put(LogKeys.gamepad(port) + LogKeys.BUTTONS, 0L)

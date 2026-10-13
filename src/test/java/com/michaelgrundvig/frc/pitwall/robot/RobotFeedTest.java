@@ -100,10 +100,10 @@ class RobotFeedTest {
   /** A firing is kept in what is sent for about a second, with when it was. */
   @Test
   void aFiringStaysInWhatIsSentForAboutASecond() {
-    record.put(LogKeys.FIRED, new String[] {"operator right trigger starts Intake"});
+    record.fired("operator right trigger starts Intake");
     loop(10);
     long firedAt = nanos.get();
-    record.put(LogKeys.FIRED, new String[0]);
+    record.fired();
     for (int more = 0; more < 10; more++) {
       loop(10);
     }

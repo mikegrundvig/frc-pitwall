@@ -18,6 +18,12 @@ import com.michaelgrundvig.frc.pitwall.robot.RobotView.Turning;
 import com.michaelgrundvig.frc.world.config.Rules;
 import com.michaelgrundvig.frc.world.physical.Shape;
 import com.michaelgrundvig.frc.world.physical.Vector3;
+import com.michaelgrundvig.frc.world.record.Holder;
+import com.michaelgrundvig.frc.world.record.JointOwner;
+import com.michaelgrundvig.frc.world.record.JointPlace;
+import com.michaelgrundvig.frc.world.record.JointSentences;
+import com.michaelgrundvig.frc.world.record.JointState;
+import com.michaelgrundvig.frc.world.record.MoveSentences;
 import com.michaelgrundvig.frc.world.robot.Condition;
 import com.michaelgrundvig.frc.world.robot.Interlock;
 import com.michaelgrundvig.frc.world.robot.Joint;
@@ -26,8 +32,8 @@ import com.michaelgrundvig.frc.world.robot.MechanismControl;
 import com.michaelgrundvig.frc.world.robot.Output;
 import com.michaelgrundvig.frc.world.robot.Position;
 import com.michaelgrundvig.frc.world.robot.Range;
+import com.michaelgrundvig.frc.world.robot.RobotDefinition;
 import com.michaelgrundvig.frc.world.robot.Sensor;
-import com.michaelgrundvig.frc.world.robot.Travel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -48,8 +54,7 @@ final class JointCards {
     Drawn drawn = drawn(joint);
     Display display = Display.of(joint, drawn);
     Moment.OfJoint now = moment.joint(joint.label());
-    Prose.@Nullable Story story = now == null ? null : Prose.story(now);
-    String goalName = story == null ? "" : story.goalName();
+    String goalName = now == null ? "" : now.goalName();
     return new JointCard(
         joint.label(),
         drawn,
@@ -59,17 +64,16 @@ final class JointCards {
         ticks(planned, drawn, display, goalName),
         bands(planned, display, causes),
         marks(planned, drawn, display, causes),
-        now == null || story == null ? NO_NEEDLES : needles(planned, drawn, display, now, story),
-        now == null || story == null
-            ? NOT_RECORDED
-            : facts(planned, drawn, moment, now, story, causes),
+        now == null ? NO_NEEDLES : needles(planned, drawn, display, now),
+        now == null ? NOT_RECORDED : facts(plan, planned, drawn, moment, now),
         now == null ? List.of() : ownSensors(plan, joint, moment, now));
   }
 
   private static final Needles NO_NEEDLES = new Needles(Double.NaN, Double.NaN, Double.NaN);
 
   private static final Facts NOT_RECORDED =
-      new Facts("not in the record", "", "", "", "", Hold.FREE, List.of());
+      new Facts(
+          "not in the record", "", "", "", "", JointState.Standing.UNHOMED, Hold.FREE, List.of());
 
   /** How a joint is drawn, by its kind. */
   static Drawn drawn(Joint joint) {
@@ -167,9 +171,8 @@ final class JointCards {
    * motors of its own drive has none, and is drawn to the fastest of its named speeds.
    */
   private static double topSpeed(RobotPlan.OfJoint planned) {
-    Travel travel = planned.travel();
-    if (travel != null) {
-      return travel.freeSpeed();
+    if (Double.isFinite(planned.freeSpeed())) {
+      return planned.freeSpeed();
     }
     double fastest = 1;
     for (Output output : planned.joint().outputs()) {
@@ -288,7 +291,7 @@ final class JointCards {
    * or for a voltage or a duty cycle the speed it would run the joint at with nothing loading it.
    */
   private static double speedOf(RobotPlan.OfJoint planned, Output output) {
-    if (Causes.asked(output) instanceof JointAsk.AtOutput atOutput) {
+    if (asked(output) instanceof JointAsk.AtOutput atOutput) {
       return atOutput.unloadedSpeed(topSpeed(planned));
     }
     return 0;
@@ -405,99 +408,129 @@ final class JointCards {
   // ---- Where it is, where it was told to go, and where its profile has it ----
 
   private static Needles needles(
-      RobotPlan.OfJoint planned,
-      Drawn drawn,
-      Display display,
-      Moment.OfJoint now,
-      Prose.Story story) {
+      RobotPlan.OfJoint planned, Drawn drawn, Display display, Moment.OfJoint now) {
+    boolean idle = now.owner() == JointOwner.IDLE;
     if (drawn != Drawn.DIAL) {
+      // An idle joint's profile is not running, so where it has the joint says nothing.
       return new Needles(
           display.number(now.position()),
           display.number(now.goal()),
-          display.number(now.setpoint()));
+          idle ? Double.NaN : display.number(now.setpoint()));
     }
     return new Needles(
-        display.number(now.velocity()),
-        display.number(speedAsked(planned, now, story)),
-        Double.NaN);
+        display.number(now.velocity()), display.number(speedAsked(planned, now)), Double.NaN);
   }
 
   /**
    * The speed a joint run at speeds was asked for, or NaN when nothing asked it to run. An output
    * asked for by name is drawn where its tick is.
    */
-  private static double speedAsked(
-      RobotPlan.OfJoint planned, Moment.OfJoint now, Prose.Story story) {
-    if (story.asked() == Prose.Asked.BY_NOTHING) {
+  private static double speedAsked(RobotPlan.OfJoint planned, Moment.OfJoint now) {
+    if (now.owner() == JointOwner.IDLE) {
       return Double.NaN;
     }
-    Output named = Causes.outputNamed(planned.joint(), story.goalName());
+    Output named = outputNamed(planned.joint(), now.goalName());
     if (named != null) {
       return speedOf(planned, named);
     }
     return now.goal();
   }
 
-  // ---- The same in words ----
+  static @Nullable Position placeNamed(Joint joint, String name) {
+    for (Position position : joint.positions()) {
+      if (position.name().equals(name)) {
+        return position;
+      }
+    }
+    return null;
+  }
+
+  static @Nullable Output outputNamed(Joint joint, String name) {
+    for (Output output : joint.outputs()) {
+      if (output.name().equals(name)) {
+        return output;
+      }
+    }
+    return null;
+  }
+
+  /** Running at a named output, as an ask of the joint, which says how fast it then runs. */
+  private static JointAsk asked(Output output) {
+    if (!output.runs()) {
+      return JointAsk.NEUTRAL;
+    }
+    return switch (output.kind()) {
+      case VELOCITY -> new JointAsk.AtVelocity(output.value());
+      case VOLTAGE -> new JointAsk.AtVoltage(output.value());
+      case DUTY_CYCLE -> new JointAsk.AtDutyCycle(output.value());
+    };
+  }
+
+  // ---- The same in words: every sentence the model has a function for is the model's ----
 
   private static Facts facts(
-      RobotPlan.OfJoint planned,
-      Drawn drawn,
-      Moment moment,
-      Moment.OfJoint now,
-      Prose.Story story,
-      Causes causes) {
+      RobotPlan plan, RobotPlan.OfJoint planned, Drawn drawn, Moment moment, Moment.OfJoint now) {
+    RobotDefinition definition = plan.definition();
     List<String> heldBy = new ArrayList<>();
-    for (Interlock holding : causes.holding(planned.joint())) {
-      heldBy.add(holding.toString());
+    for (Holder holder : now.heldBy()) {
+      heldBy.add(JointSentences.heldBy(definition, List.of(holder)));
     }
+    Moment.LastMove last = now.lastMove();
+    String lastMove =
+        last.hasEnded()
+            ? MoveSentences.outcome(
+                definition, last.name(), last.parts(), last.heldAsItEnded(), last.why())
+            : "none yet";
     return new Facts(
-        at(planned, drawn, now, story),
-        told(planned, drawn, now, story),
-        ownedBy(planned.joint(), moment, story),
-        story.lastMove().isEmpty() ? "none yet" : story.lastMove(),
-        story.state(),
-        hold(heldBy, story),
+        at(planned.joint(), drawn, now),
+        told(planned, drawn, now),
+        ownedBy(planned.joint(), moment, now),
+        lastMove,
+        JointSentences.state(definition, planned.joint(), now.state(), now.fault()),
+        now.state().standing(),
+        hold(now),
         heldBy);
   }
 
   /**
-   * Whether a joint's interlocks leave it free. A run-only-when restricts its joint whether or not
-   * anything asks the joint to run, so a joint at rest is only restricted; it is held once a
-   * command asks it for something and an interlock stops that.
+   * Whether anything holds a joint. An interlock holds a joint whether or not anything asks the
+   * joint to move, so a joint at rest is only restricted; it is held once a command, or code
+   * outside any command, asks something of it.
    */
-  private static Hold hold(List<String> heldBy, Prose.Story story) {
-    if (heldBy.isEmpty()) {
+  private static Hold hold(Moment.OfJoint now) {
+    if (now.heldBy().isEmpty()) {
       return Hold.FREE;
     }
-    return story.asked() == Prose.Asked.BY_A_COMMAND ? Hold.HELD : Hold.RESTRICTED;
+    return now.owner() == JointOwner.IDLE ? Hold.RESTRICTED : Hold.HELD;
   }
 
-  /** Where a joint is: its position and its place among its named places, or how fast it runs. */
-  private static String at(
-      RobotPlan.OfJoint planned, Drawn drawn, Moment.OfJoint now, Prose.Story story) {
-    Joint joint = planned.joint();
+  /**
+   * Where a joint is: its position and its place among its named places, or how fast it runs and
+   * the named output it runs at. The place is the robot's own fact, in the model's words.
+   */
+  private static String at(Joint joint, Drawn drawn, Moment.OfJoint now) {
+    JointPlace place = now.at();
+    String inWords = JointSentences.place(joint, place, now.position());
     if (drawn == Drawn.DIAL) {
       String speed = Double.isFinite(now.velocity()) ? speedText(joint, now.velocity()) : "unknown";
-      return story.goalName().isEmpty() ? speed : speed + ", " + story.goalName();
+      return place.where() == JointPlace.Where.RUNNING ? speed + ", " + inWords : speed;
     }
-    if (story.standing() == Prose.Standing.NOT_READY || !Double.isFinite(now.position())) {
-      return "unknown";
+    boolean isOnlyAPlace =
+        place.where() == JointPlace.Where.UNKNOWN
+            || place.where() == JointPlace.Where.UNNAMED
+            || !Double.isFinite(now.position());
+    if (isOnlyAPlace) {
+      return inWords;
     }
-    String position = joint.shown(now.position());
-    if (joint.positions().isEmpty()) {
-      return position;
-    }
-    return position + ", " + planned.places().at(now.position());
+    return joint.shown(now.position()) + ", " + inWords;
   }
 
   /** Where a joint was told to go, or what it was told to run at. */
-  private static String told(
-      RobotPlan.OfJoint planned, Drawn drawn, Moment.OfJoint now, Prose.Story story) {
+  private static String told(RobotPlan.OfJoint planned, Drawn drawn, Moment.OfJoint now) {
     Joint joint = planned.joint();
-    boolean asked = story.asked() == Prose.Asked.BY_A_COMMAND;
+    boolean asked = now.owner() != JointOwner.IDLE;
     if (drawn == Drawn.DIAL) {
-      Output named = Causes.outputNamed(joint, story.goalName());
+      Output named = outputNamed(joint, now.goalName());
       if (named != null) {
         return named.name() + ", " + shown(joint, named);
       }
@@ -507,7 +540,7 @@ final class JointCards {
       return "nothing";
     }
     String headedFor = joint.shown(now.goal());
-    Position named = Causes.placeNamed(joint, story.goalName());
+    Position named = placeNamed(joint, now.goalName());
     if (named == null) {
       return asked ? headedFor : "hold at " + headedFor;
     }
@@ -517,19 +550,20 @@ final class JointCards {
   }
 
   /**
-   * Who asked the joint in this loop: the command, as the runtime names it, or idle and what the
-   * joint does idle. A joint that holds positions holds one; any other is at neutral, where its
-   * motors brake or coast as its control says.
+   * Who asked the joint in this loop, in the model's words, and for an idle joint what it does
+   * idle. A joint that holds positions holds one; any other is at neutral, where its motors brake
+   * or coast as its control says.
    */
-  private static String ownedBy(Joint joint, Moment moment, Prose.Story story) {
-    if (story.asked() == Prose.Asked.BY_A_COMMAND) {
-      return story.command();
+  private static String ownedBy(Joint joint, Moment moment, Moment.OfJoint now) {
+    String owner = JointSentences.owner(now.owner(), now.command());
+    if (now.owner() != JointOwner.IDLE) {
+      return owner;
     }
     if (moment.enabled() == Moment.Enabled.DISABLED) {
-      return "idle, robot disabled";
+      return owner + ", robot disabled";
     }
     if (joint.holdsPositions()) {
-      return "idle, holding";
+      return owner + ", holding";
     }
     boolean coasts =
         joint
@@ -537,7 +571,7 @@ final class JointCards {
             .control()
             .map(control -> control.neutralMode() == MechanismControl.NeutralMode.COAST)
             .orElse(false);
-    return coasts ? "idle, coasting" : "idle, stopped";
+    return coasts ? owner + ", coasting" : owner + ", stopped";
   }
 
   // ---- Its own sensors ----

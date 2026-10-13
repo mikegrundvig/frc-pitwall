@@ -15,7 +15,7 @@
 // that alone, so drawing an earlier loop needs nothing more here than that loop.
 
 import { robot, onChange, showViews, h, replace } from "./core.js";
-import { drawJoint, builtFrom } from "./robot-draw.js";
+import { drawJoint, drawRange, builtFrom } from "./robot-draw.js";
 import { AXIS_NAMES, BUTTON_NAMES } from "./sim-drive.js";
 
 let visible = false;
@@ -139,11 +139,11 @@ function updateCard(card, joint) {
   const facts = joint.facts;
   const held = facts.hold === "HELD";
   const recorded = joint.recorded === "IN_THE_RECORD";
-  const ready = !recorded || facts.state === "READY";
+  const ready = !recorded || facts.standing === "READY";
   card.el.classList.toggle("held", held);
   replace(card.tags,
     held && h("span", { class: "tag refused" }, "✗ held"),
-    !ready && h("span", { class: "tag tuned" }, "● " + facts.state.split(":")[0].toLowerCase()),
+    !ready && h("span", { class: "tag tuned" }, "● " + facts.standing.toLowerCase()),
     !recorded && h("span", { class: "tag plain" }, "not in the record"));
   replace(card.facts,
     fact("At", facts.at),
@@ -210,16 +210,15 @@ function renderSensors(view) {
   }));
 }
 
-/** A rangefinder's reading as a small bar out to its range, with each rule's distance marked. */
+/**
+ * A rangefinder's reading as a small bar out to its range, with a tick at the distance each rule
+ * on it compares with (robot-draw.js), and the same distances in words.
+ */
 function rangeBar(sensor) {
-  const share = (meters) => (Math.min(1, Math.max(0, meters / sensor.range)) * 100).toFixed(1);
-  const bar = h("progress", { class: "rv-range", max: "100",
-    value: typeof sensor.meters === "number" ? share(sensor.meters) : "0",
-    "aria-label": "Distance, of its " + sensor.range + " m range" });
-  const marks = sensor.marks.filter((mark) => typeof mark.meters === "number")
-    .map((mark) => mark.meters + " m").join(", ");
-  return h("div", { class: "rv-ranged" }, bar,
-    marks && h("span", { class: "meta" }, "rules at " + marks));
+  const marks = sensor.marks.filter((mark) => typeof mark.meters === "number");
+  return h("div", { class: "rv-ranged" }, drawRange(sensor),
+    marks.length > 0 && h("span", { class: "meta" }, "rules at "
+        + marks.map((mark) => mark.meters + " m").join(", ")));
 }
 
 function renderGates(view) {
@@ -232,8 +231,7 @@ function renderGates(view) {
           holds ? "✓" : "✗"),
         h("span", { class: "k" }, name),
         h("span", { class: "v" }, holds ? "holds" : "does not hold")),
-      !holds && gate.blocking.length > 0
-        && h("div", { class: "meta" }, "Waiting for: " + gate.blocking.join(", ")));
+      !holds && gate.blocking.length > 0 && h("div", { class: "meta" }, gate.why));
   }), !(view.gateOrder || []).length && h("li", { class: "meta" }, "No gates."));
 }
 
