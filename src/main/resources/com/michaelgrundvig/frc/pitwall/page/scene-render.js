@@ -6,6 +6,12 @@
 // draws only when something changed (a patch, a drag, a resize), never in a loop, so a page left on
 // a still robot costs the laptop nothing. Colors are the page's theme tokens, read through computed
 // style, light or dark. The canvas is sized by the page's stylesheet: nothing here writes a style.
+//
+// Labels are a fixed size on screen, so zoomed out they crowd what they name. Each drawing they are
+// laid out on the screen (layoutLabels): a label that belongs to the scene's focus (the robot: its
+// cameras' names) is moved straight out from the robot until it is clear of it, with a thin leader
+// back to where it was; any other label (a tag's number) fades while the robot or one of its
+// labels is over it, and comes back as they move off.
 
 import * as THREE from "/three/three.module.min.js";
 import { OrbitControls } from "/three/OrbitControls.js";
@@ -16,6 +22,18 @@ const PICK_PIXELS = 12;
 
 /** A label's height on screen, in CSS pixels, at any zoom. */
 const LABEL_PIXELS = 15;
+
+/** How far a label stays clear of the robot's outline and of another label, in CSS pixels. */
+const LABEL_CLEAR = 4;
+
+/** How far under the robot a label is before it has faded as far as it goes, in CSS pixels. */
+const FADE_PIXELS = 8;
+
+/** How faint a label under the robot is drawn: there, and out of the way. */
+const FADED = 0.12;
+
+/** A leader is drawn once its label has moved this far, in CSS pixels. */
+const LEADER_FROM = 6;
 
 // What a legend needs of how shapes are drawn, so its samples use the drawing's own styles.
 export { TOKENS, tokenOf, isDashed } from "./scene-shapes.js";
@@ -53,6 +71,13 @@ export class SceneRenderer {
     this.layers = new Map(); // layer id -> {shown, ids: Set, moment: [built]}
     this.values = new Map();
     this.labels = [];
+    this.focus = null; // the frame the scene is about (the robot), whose labels are kept clear
+    // The leaders from labels that were moved, all in one object, drawn over everything.
+    this.leaderMaterial = new THREE.LineBasicMaterial({ depthTest: false, transparent: true });
+    this.leaders = new THREE.LineSegments(new THREE.BufferGeometry(), this.leaderMaterial);
+    this.leaders.renderOrder = 9;
+    this.leaders.frustumCulled = false;
+    this.scene.add(this.leaders);
     this.bounds = new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(10, 10, 1));
     this.selected = null;
     this.revealed = new Set(); // the shape clicked and those it reveals: shown whatever their layer
@@ -100,6 +125,7 @@ export class SceneRenderer {
    */
   describe(description) {
     this.clear();
+    this.focus = (description && description.focus) || null;
     const layers = (description && description.layers) || {};
     // Every layer's frames first, since a shape may be in a frame another layer adds.
     this.frames.set("field", this.root);
@@ -388,6 +414,7 @@ export class SceneRenderer {
   render() {
     if (this.followed) this.keepFollowing();
     this.sizeLabels();
+    this.layoutLabels();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -456,6 +483,133 @@ export class SceneRenderer {
       const meters = LABEL_PIXELS * this.metersPerPixel(at);
       sprite.scale.set(meters * sprite.userData.aspect, meters, 1);
     }
+  }
+
+  /** A point of the scene on the canvas, in CSS pixels from its top left. */
+  onScreen(point) {
+    const v = point.clone().project(this.camera);
+    return [(v.x + 1) / 2 * this.canvas.clientWidth, (1 - v.y) / 2 * this.canvas.clientHeight];
+  }
+
+  /**
+   * The focus's outline on the canvas: the box around the shapes drawn in its own frame (the
+   * robot's frame, bumpers and front arrow), as {x, y, w, h} about its middle, or null without one.
+   */
+  focusOnScreen() {
+    const frame = this.focus ? this.frames.get(this.focus) : null;
+    if (!frame) return null;
+    const box = new THREE.Box3();
+    for (const built of this.shapes.values()) {
+      if (built.label || built.object.parent !== frame || !this.isShown(built)) continue;
+      box.expandByObject(built.object);
+    }
+    if (box.isEmpty()) return null;
+    let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
+    for (const x of [box.min.x, box.max.x]) {
+      for (const y of [box.min.y, box.max.y]) {
+        for (const z of [box.min.z, box.max.z]) {
+          const [px, py] = this.onScreen(new THREE.Vector3(x, y, z));
+          left = Math.min(left, px);
+          right = Math.max(right, px);
+          top = Math.min(top, py);
+          bottom = Math.max(bottom, py);
+        }
+      }
+    }
+    return { x: (left + right) / 2, y: (top + bottom) / 2,
+             w: right - left + 2 * LABEL_CLEAR, h: bottom - top + 2 * LABEL_CLEAR };
+  }
+
+  /**
+   * Lays the labels out on the screen so they stay off the focus (the robot) and off each other.
+   *
+   * <p>A label in the focus's own frame is the robot's (a camera's name): it moves straight out
+   * from the robot's middle, just far enough to clear the robot's outline, and then on in small
+   * steps while it still lies on a label placed before it. How far is worked out from where things
+   * are on screen and nothing else, so as the robot moves a label moves with it and doesn't jump.
+   * A leader runs from where the label was to its near edge.
+   *
+   * <p>Any other label (a tag's number) stays where it is and fades by how far the robot, or one
+   * of the robot's labels, lies over it: gradually, so it never blinks.
+   */
+  layoutLabels() {
+    const robot = this.focusOnScreen();
+    const frame = this.focus ? this.frames.get(this.focus) : null;
+    const mine = [];
+    const others = [];
+    const at = new THREE.Vector3();
+    for (const built of this.shapes.values()) {
+      const sprite = built.label;
+      if (!sprite) continue;
+      sprite.center.set(0.5, 0.5);
+      sprite.material.opacity = 1;
+      if (!robot || !this.isShown(built)) continue;
+      sprite.getWorldPosition(at);
+      const [x, y] = this.onScreen(at);
+      const placed = { sprite, x, y, w: LABEL_PIXELS * sprite.userData.aspect, h: LABEL_PIXELS,
+                       world: at.clone() };
+      let inFocus = false;
+      for (let object = sprite.parent; object; object = object.parent) {
+        if (object === frame) inFocus = true;
+      }
+      (inFocus ? mine : others).push(placed);
+    }
+    const leaders = [];
+    const obstacles = robot ? [robot] : [];
+    for (const label of mine) {
+      let dx = label.x - robot.x;
+      let dy = label.y - robot.y;
+      const length = Math.hypot(dx, dy);
+      // A label at the robot's very middle goes up the screen.
+      [dx, dy] = length < 1e-6 ? [0, -1] : [dx / length, dy / length];
+      // Just far enough along its way out to be clear of the robot on one axis.
+      const needX = (label.w + robot.w) / 2 - Math.abs(label.x - robot.x);
+      const needY = (label.h + robot.h) / 2 - Math.abs(label.y - robot.y);
+      let out = needX <= 0 || needY <= 0 ? 0
+        : Math.min(Math.abs(dx) > 1e-6 ? needX / Math.abs(dx) : Infinity,
+          Math.abs(dy) > 1e-6 ? needY / Math.abs(dy) : Infinity);
+      const moved = (by) => ({ x: label.x + dx * by, y: label.y + dy * by, w: label.w, h: label.h });
+      for (let tries = 0; tries < 80
+          && obstacles.slice(1).some((other) => overlap(moved(out), other) > 0); tries++) {
+        out += 3;
+      }
+      const placed = moved(out);
+      obstacles.push({ ...placed, w: placed.w + 2 * LABEL_CLEAR, h: placed.h + 2 * LABEL_CLEAR });
+      label.sprite.center.set(0.5 - (dx * out) / label.w, 0.5 + (dy * out) / label.h);
+      // The leader stops at the label's near edge.
+      const edge = Math.min(Math.abs(dx) > 1e-6 ? label.w / 2 / Math.abs(dx) : Infinity,
+        Math.abs(dy) > 1e-6 ? label.h / 2 / Math.abs(dy) : Infinity);
+      const reach = out - edge;
+      if (out > LEADER_FROM && reach > 2) leaders.push([label, dx * reach, dy * reach]);
+    }
+    for (const label of others) {
+      let under = 0;
+      for (const obstacle of obstacles) under = Math.max(under, overlap(label, obstacle));
+      const faded = Math.min(1, Math.max(0, under / FADE_PIXELS));
+      label.sprite.material.opacity = 1 - (1 - FADED) * faded;
+    }
+    this.drawLeaders(leaders);
+  }
+
+  /** Draws the leaders: each from where a label was to so many pixels right and down of it. */
+  drawLeaders(leaders) {
+    this.camera.updateMatrixWorld();
+    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+    const points = [];
+    for (const [label, pixelsRight, pixelsDown] of leaders) {
+      const meters = this.metersPerPixel(label.world);
+      points.push(label.world, label.world.clone()
+        .addScaledVector(right, pixelsRight * meters).addScaledVector(up, -pixelsDown * meters));
+    }
+    if (points.length !== this.leaderPoints) {
+      // Another number of leaders needs a buffer of another size.
+      this.leaders.geometry.dispose();
+      this.leaders.geometry = new THREE.BufferGeometry();
+      this.leaderPoints = points.length;
+    }
+    this.leaders.geometry.setFromPoints(points);
+    this.leaders.visible = points.length > 0;
   }
 
   /** A label's sprite: its text drawn in the page's text color, with an outline to stand out. */
@@ -542,6 +696,7 @@ export class SceneRenderer {
     this.kit.recolor(colors);
     this.renderer.setClearColor(color("--surface", "#ffffff"));
     if (this.gridMaterial) this.gridMaterial.color.copy(colors.grid);
+    this.leaderMaterial.color.copy(colors.muted);
     for (const sprite of this.labels) this.paintLabel(sprite);
     this.draw();
   }
@@ -677,10 +832,20 @@ export class SceneRenderer {
 
   dispose() {
     this.clear();
+    this.leaders.geometry.dispose();
+    this.leaderMaterial.dispose();
     this.topControls.dispose();
     this.aroundControls.dispose();
     this.renderer.dispose();
   }
+}
+
+/**
+ * How far two boxes on the screen ({x, y, w, h} about their middles) lie over each other: the
+ * lesser of how far they overlap across and down, in pixels; zero or less when they don't.
+ */
+function overlap(a, b) {
+  return Math.min((a.w + b.w) / 2 - Math.abs(a.x - b.x), (a.h + b.h) / 2 - Math.abs(a.y - b.y));
 }
 
 /** How far a point is from a segment, in the same units. */
