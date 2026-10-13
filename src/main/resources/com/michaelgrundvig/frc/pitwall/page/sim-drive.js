@@ -81,6 +81,7 @@ const listeners = [];
 let slot = storedSlot();
 let armed = false;
 let hidden = false;
+let missed = false; // the tab was hidden while this page drove, and nobody has been told yet
 let focused = true;
 let inField = false;
 
@@ -118,6 +119,7 @@ export function status() {
     gamepad: { on: gamepad.on, slot, pads: gamepad.pads.map(({ id, standard, drives }) => ({
       id, standard, drives })) },
     hidden,
+    missed,
     inputs,
     problem,
   };
@@ -151,6 +153,12 @@ export function setSlot(chosen) {
   }
   if (gamepad.on && !hidden) readPads();
   update();
+}
+
+/** The note that the tab was hidden while it drove has been read. */
+export function sawMissed() {
+  missed = false;
+  notify();
 }
 
 /** Stops driving, keyboard and gamepad: the simulator is stopping. */
@@ -198,6 +206,7 @@ function arm() {
     const nowHidden = document.visibilityState === "hidden";
     // Back in view, the gamepads are read afresh first: what was read before is stale.
     if (!nowHidden && gamepad.on) readPads();
+    if (nowHidden && (keyboard.on || gamepad.on)) missed = true;
     pause(() => (hidden = nowHidden));
     poll();
   });

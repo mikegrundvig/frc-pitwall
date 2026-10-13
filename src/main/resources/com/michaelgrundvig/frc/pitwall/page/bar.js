@@ -5,6 +5,7 @@
 // robot sits unchanged).
 
 import { robot, onChange, onConnection, send, h, byId, say, announce } from "./core.js";
+import { onDrive } from "./sim-drive.js";
 
 let name;
 let badge;
@@ -49,6 +50,7 @@ export function mountBar() {
   band = byId("band");
   onChange(render);
   onConnection(renderConnection);
+  onDrive(showPill);
   // How long since the robot was last heard, written in place each second: nothing around it is
   // rebuilt.
   setInterval(renderSince, 1000);
@@ -97,7 +99,7 @@ function render(patch, snapshot) {
  * @param live whether it drives right now
  * @param hidden whether it would, but the tab is hidden
  */
-export function showDriving(text, live, hidden) {
+function showDriving(text, live, hidden) {
   const className = "pill driving " + (live ? "on" : "locked");
   if (driving.textContent !== (text || "") || driving.className !== className) {
     driving.hidden = !text;
@@ -107,6 +109,24 @@ export function showDriving(text, live, hidden) {
   }
   notDriving = Boolean(text) && hidden;
   showTitle();
+}
+
+/**
+ * The bar's word on driving: ⌨ for the keys, 🎮 for a gamepad, and why not when it doesn't.
+ */
+function showPill(status) {
+  const marks = [status.keyboard.on && "⌨", status.gamepad.on && "🎮"].filter(Boolean)
+    .join(" ");
+  if (!marks) {
+    showDriving(null, false, false);
+    return;
+  }
+  const keysOnly = status.keyboard.on && !status.gamepad.on;
+  const why = status.hidden ? "Not driving: tab hidden"
+    : keysOnly && status.keyboard.paused === "field" ? "Paused: typing"
+    : keysOnly && status.keyboard.paused === "window" ? "Paused: window"
+    : null;
+  showDriving(marks + " " + (why || "Driving"), !why, status.hidden);
 }
 
 /**
