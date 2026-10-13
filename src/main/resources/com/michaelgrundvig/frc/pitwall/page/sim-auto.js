@@ -28,9 +28,12 @@ export function makeAuto({ compact = false } = {}) {
   ui.lines = h("ul", { class: "slist" });
   ui.choices = h("div", { class: "dchoices" });
   ui.message = h("p", { class: "message", hidden: true });
-  ui.run = h("button", { type: "button", class: "primary",
-                         onclick: () => enableInAutonomous(ui.message) },
-    "▶ Set autonomous and enable");
+  ui.run = h("button", { type: "button", class: "primary", onclick: () => {
+    // It doesn't keep the focus once pressed: a Space or an Enter meant for something else must
+    // not enable the robot again after it's disabled.
+    ui.run.blur();
+    enableInAutonomous(ui.message);
+  } }, "▶ Set autonomous and enable");
   ui.why = h("p", { class: "meta" });
   const element = block("Autonomous", compact, ui.lines, ui.choices,
     h("div", { class: "acts" }, ui.run), ui.why, ui.message);

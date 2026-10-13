@@ -2,7 +2,7 @@
 // view, and, small, in the state bar on every view. One of them, mounted twice.
 //
 // Enable is only ever this button, pressed: no key enables, and nothing else on the page does it
-// as a side effect. Disable is this button, and Esc from anywhere on the page (keys.js). Neither
+// as a side effect. Pressed, it hands the focus to Disable. Disable is this button, and Esc from anywhere on the page (keys.js). Neither
 // exists on a real robot: its Driver Station enables it, and the page only shows its mode.
 
 import { robot, h, replace } from "./core.js";
@@ -25,7 +25,13 @@ export function makeEnable({ small = false } = {}) {
   ui.message = small ? null : h("p", { class: "message", hidden: true });
   ui.enable = h("button", {
     type: "button", class: (small ? "" : "big ") + "primary enable",
-    onclick: () => enable(ui.message),
+    onclick: () => {
+      // Enable never keeps the focus once it's pressed: a Space or an Enter meant for something
+      // else must not enable the robot again after it's disabled. Disable takes it, where a stray
+      // press is harmless.
+      ui.disable.focus({ preventScroll: true });
+      enable(ui.message);
+    },
     "aria-describedby": small ? null : stateId + " " + whyId,
     title: small ? "Enable the simulated robot, in the Driver Station's mode" : null,
   }, "▶ Enable");

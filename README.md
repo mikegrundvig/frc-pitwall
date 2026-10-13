@@ -78,7 +78,8 @@ has no such section and none of the routes (they answer 404), so none of these c
 
 - **Enable and Disable in the state bar**, beside the mode, on every view (`sim-enable.js`, the
   same control as the *Sim* view's bar, small). Enable is a button, pressed: no key enables, and
-  nothing enables as a side effect. On a robot the bar shows the mode and has nothing to press
+  nothing enables as a side effect. Pressed, it hands the focus to Disable, so a Space or an Enter
+  meant for something else can't enable the robot again once it's disabled. On a robot the bar shows the mode and has nothing to press
   about it; the Driver Station enables a robot.
 - **The side dock** (`side-dock.js`) is a place beside every view that the page owns. A panel
   registers with `addPanel({id, title, label, offered(), mount(element), show(), hide()})` and the
