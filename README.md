@@ -111,9 +111,13 @@ the joint it depends on. Each is drawn by how it stands, and says so in words in
 | in force: solid | not met, and nothing asks the joint to run | closed |
 | waited for: thick, in the color of trouble | it holds the joint short of what a command asked | it holds the joint at its edge |
 
-What holds a joint is not read from the log's sentence. `Causes` reads each condition from the
-loop's positions and sensors, as the runtime does (a joint that doesn't know where it is, or a lost
-sensor, reads as unknown, and restricts), and the model's own `InterlockEnforcement` decides.
+What holds a joint is the robot's own fact: each joint logs the things that hold it (the model's
+`Holder`), and an interlock among them is one of the definition's, by its index. A joint that is
+held while nothing asks anything of it is said to be restricted, and held once a command asks. What
+the log does not carry, `Causes` reads with the model's own conditions from the loop's positions
+and sensors, as the runtime does: where on the other joint's card a condition holds, and whether a
+keep-out's region is closed while it holds nothing (a joint that doesn't know where it is, or a
+lost sensor, reads as unknown, and restricts).
 
 ### From the log to the page
 
@@ -122,15 +126,22 @@ sensor, reads as unknown, and restricts), and the model's own `InterlockEnforcem
   that names AdvantageKit is still `AdvantageKitLog`; the session reads a `LoopRecord`, which a
   test fills by hand.
 - **The keys** are the runtime's, and `robot/LogKeys` is the one place they are written: the
-  contract between the two. `robot/Prose` is the one place that reads what the runtime logs in
-  words (a joint's state, who asked it, how its last move ended).
+  contract between the two, which the runtime's `RobotViewKeysEndToEndTest` holds a real session's
+  log to. What the robot did is logged as facts, the model's records
+  (`com.michaelgrundvig.frc.world.record`): where a joint stands, who asked it, where it is among
+  its places, what holds it, how its last move ended, a gate's terms, a binding that fired. Every
+  sentence the page shows of them is made by the model's own functions (`JointSentences`,
+  `MoveSentences`, `ControlSentences`), so the page and the log's readers say the same words.
 - **A moment** is what the view shows of one loop: the time, the mode, each joint's readings and
   what it was told, each sensor, each gate with what blocks it, the bindings that fired, and the
-  gamepads. Taking one reads about a hundred values and allocates nothing.
-- **The session's memory** is a ring of the last five minutes of moments, in arrays taken once: 602
-  bytes a loop for a robot with eight joints and two sensors, 9 MB in all. It keeps at most 16
-  gates with two blocking terms each, four fired bindings a loop, two gamepads, and 4096 different
-  texts; past those it keeps the first and says how many it left out (`GET /api/robot`).
+  gamepads. Taking one reads about two hundred values and allocates nothing: the robot writes a
+  fact only when it changes, and a fact is made out of the log's bytes only then.
+- **The session's memory** is a ring of the last five minutes of moments, in arrays taken once: 810
+  bytes a loop for a robot with eight joints and two sensors, 12 MB in all. A fact's fields are
+  kept each in its place; texts, and the outcomes of moves, are kept once each in tables of their
+  own and known by a number. It keeps at most three things holding a joint, 16 gates with two
+  blocking terms each, four fired bindings a loop, two gamepads, 4096 different texts and 1024
+  outcomes of moves; past those it keeps the first.
 - **The view** is a function of the robot's definition and one moment (`RobotView.of`), so any loop
   the session holds is drawn by the same code as the newest.
 - **Live,** the newest loop's view goes to the pages that show it, as the `robot` view, at most 20
