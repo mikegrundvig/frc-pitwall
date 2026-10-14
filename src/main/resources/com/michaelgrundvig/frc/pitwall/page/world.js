@@ -27,7 +27,9 @@
 // wheel's module, the robot itself), and the panel then ends in their faults, applied and undone
 // right there: the same rows as the Sim view's (sim-faults.js). A fault that happens at a place on
 // the field (setting the robot down) can take the place from the next click on the drawing. On a
-// robot the answer names no parts, and there is no simulator to have any.
+// robot the answer names no parts, and there is no simulator to have any. A shape may also offer a
+// fault ready to apply as it stands (a start: place the robot here), a button of its own
+// (world-offers.js) that makes the same request, for the simulator only.
 //
 // The legend is the Layers button's panel, over the drawing: a row for each layer, which switches
 // it on and off, and, when asked (What the marks mean), under each shown layer what each kind of
@@ -41,6 +43,7 @@ import { makeTimeline } from "./timeline.js";
 import { makeEventList } from "./event-list.js";
 import { isSimulator, onSim } from "./sim-state.js";
 import { makeFaultsOf, applyAt } from "./sim-faults.js";
+import { makeOffers } from "./world-offers.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -75,6 +78,8 @@ let liveOnly = []; // the layers that have no earlier loop to show, as the robot
 let hovering = null; // a frame in which the shape under the pointer is looked for
 let fails = null; // the faults of the simulator's parts the shape inspected is: sim-faults.js's
 let failsOf = ""; // the parts those are of
+let offersOf = ""; // the offers the card shows, as the robot said them
+let offerButtons = null; // their buttons: world-offers.js
 let placing = null; // the fault's row whose place the next click on the drawing gives
 const chosen = readKept(LAYERS_KEY, {}); // "scene/layer" -> shown, as chosen in this browser
 const legend = readKept(LEGEND_KEY, {}); // {open, meanings}, as chosen in this browser
@@ -126,8 +131,9 @@ function mount(view) {
   // the faults of the part it is, built once for a part so a number being typed is kept.
   ui.said = h("div", { "aria-live": "polite" });
   ui.fails = h("section", { class: "world-fails", hidden: true, "aria-label": "What fails" });
+  ui.offers = h("section", { class: "world-offers-section", hidden: true, "aria-label": "Offers" });
   ui.details = h("aside", { class: "world-details card", hidden: true, "aria-label": "Details" },
-    ui.said, ui.fails);
+    ui.said, ui.offers, ui.fails);
   // Over the drawing's top left corner, and before it for the keyboard: the view's name, the
   // cameras and Layers, with the legend's panel under them. Only they take the pointer there.
   ui.stage = h("div", { class: "world-stage" },
@@ -180,6 +186,7 @@ function mount(view) {
   // A fault put on or undone from anywhere shows on the part's rows here.
   onSim((what) => {
     if (what.faults && visible && fails) fails.render();
+    if (visible && offerButtons) offerButtons.render();
   });
 }
 
@@ -590,6 +597,7 @@ function showDetails(waiting = "") {
     replace(ui.said, h("div", { class: "world-details-head" },
       h("h2", null, inspected.id), close), h("p", { class: "muted" }, waiting));
     showFails([]);
+    showOffers([]);
     return;
   }
   const details = h("dl", { class: "world-facts" },
@@ -611,6 +619,7 @@ function showDetails(waiting = "") {
     h("div", { class: "world-details-head" }, h("h2", null, inspection.title), close),
     details,
     actions.length ? h("div", { class: "world-actions" }, actions) : null);
+  showOffers(inspection.offers || []);
   showFails(inspection.components || []);
 }
 
@@ -633,6 +642,23 @@ function showFails(parts) {
   }
   if (fails) fails.render();
   ui.fails.hidden = !fails || !fails.any();
+}
+
+/**
+ * Under the details, the faults the shape offers to apply as they stand ("Place the robot here"):
+ * none on a robot, and none for a shape that offers none. Built once for an offer, so what became
+ * of a press stays on the card.
+ */
+function showOffers(offers) {
+  const wanted = isSimulator() ? offers : [];
+  const key = JSON.stringify(wanted);
+  if (key !== offersOf) {
+    offersOf = key;
+    offerButtons = wanted.length ? makeOffers(wanted) : null;
+    ui.offers.replaceChildren(...(offerButtons ? [offerButtons.element] : []));
+  }
+  if (offerButtons) offerButtons.render();
+  ui.offers.hidden = !offerButtons;
 }
 
 /** Arms a fault to be applied where the drawing is next clicked, or lets it go again. */
@@ -683,6 +709,7 @@ function closeDetails() {
   inspected = null;
   inspection = null;
   showFails([]);
+  showOffers([]);
   detailsShown(false);
   if (renderer) renderer.select(null);
 }

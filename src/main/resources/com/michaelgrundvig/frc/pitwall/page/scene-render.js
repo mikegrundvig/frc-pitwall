@@ -20,6 +20,12 @@ import { Kit, TOKENS, build, measureDashes, restyle, setPose } from "./scene-sha
 /** How far from a thin line a click still picks it, in CSS pixels. */
 const PICK_PIXELS = 12;
 
+/** How much farther a line flat on the floor counts when a click picks, in CSS pixels. */
+const FLOOR_PENALTY = 4;
+
+/** How high above the floor a line may be and still lie on it, in meters. */
+const FLOOR_HEIGHT = 0.01;
+
 /** A label's height on screen, in CSS pixels, at any zoom. */
 const LABEL_PIXELS = 15;
 
@@ -732,7 +738,9 @@ export class SceneRenderer {
     for (const built of this.shapes.values()) {
       if (!built.def.inspect || !this.isShown(built)) continue;
       for (const line of built.lines) {
-        const distance = this.pixelsTo(line, x, y, rect);
+        // A line flat on the floor (a start's outline) counts a few pixels farther than one above
+        // it, so a robot standing on a start is still the one clicked at its bumpers.
+        const distance = this.pixelsTo(line, x, y, rect) + (this.onTheFloor(line) ? FLOOR_PENALTY : 0);
         if (distance < lineDistance) {
           lineDistance = distance;
           nearestLine = built;
@@ -748,6 +756,18 @@ export class SceneRenderer {
     }
     const picked = nearestLine || nearestSolid;
     return picked ? { id: picked.def.id, layer: picked.layer } : null;
+  }
+
+  /** Whether a line lies flat on the floor: none of its points is above a centimeter. */
+  onTheFloor(line) {
+    const position = line.geometry.getAttribute("position");
+    const v = new THREE.Vector3();
+    for (let i = 0; position && i < position.count; i++) {
+      if (v.fromBufferAttribute(position, i).applyMatrix4(line.matrixWorld).z > FLOOR_HEIGHT) {
+        return false;
+      }
+    }
+    return Boolean(position);
   }
 
   isShown(built) {

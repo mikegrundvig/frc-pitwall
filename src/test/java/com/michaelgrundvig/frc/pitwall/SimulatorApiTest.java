@@ -22,6 +22,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -105,6 +106,18 @@ class SimulatorApiTest {
                                       Inspection.of("The lamp")
                                           .component("Lamp")
                                           .component("A part the simulator doesn't have"));
+                          scene
+                              .box("lamp.base", SceneBuilder.ROOT)
+                              .size(1, 1, 1)
+                              .inspect(
+                                  () ->
+                                      Inspection.of("The lamp's base")
+                                          .offer(
+                                              new Inspection.FaultOffer(
+                                                  "Put it out", "Lamp", "Out", Map.of()))
+                                          .offer(
+                                              new Inspection.FaultOffer(
+                                                  "Break it", "Ghost", "Out", Map.of())));
                         }
                       }));
 
@@ -221,7 +234,8 @@ class SimulatorApiTest {
     var clicked = send("GET", "/api/scenes/room/inspect/lamp.shade", null, null);
 
     assertThat(clicked.statusCode()).isEqualTo(200);
-    assertThat(clicked.body()).contains("\"title\":\"The lamp\"", "\"components\":[\"Lamp\"]}");
+    assertThat(clicked.body())
+        .contains("\"title\":\"The lamp\"", "\"components\":[\"Lamp\"],\"offers\":[]}");
 
     var applied =
         send(
@@ -237,6 +251,22 @@ class SimulatorApiTest {
             "{\"component\": \"Lamp\", \"fault\": \"Out\", \"undo\": true}");
     assertThat(undone.statusCode()).isEqualTo(200);
     assertThat(lampOut).isFalse();
+  }
+
+  /**
+   * A click on a shape that offers a fault as it stands is answered with the offer, so the page can
+   * apply it by the same names: for a part the simulator has, and not for one it hasn't.
+   */
+  @Test
+  void aClickOnAShapeThatOffersAFaultIsAnsweredWithTheOfferForAPartTheSimulatorHas()
+      throws Exception {
+    var clicked = send("GET", "/api/scenes/room/inspect/lamp.base", null, null);
+
+    assertThat(clicked.statusCode()).isEqualTo(200);
+    assertThat(clicked.body())
+        .endsWith(
+            "\"offers\":[{\"label\":\"Put it out\",\"component\":\"Lamp\",\"fault\":\"Out\","
+                + "\"values\":{}}]}");
   }
 
   /**

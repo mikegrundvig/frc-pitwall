@@ -17,6 +17,7 @@ import com.michaelgrundvig.frc.pitwall.scene.Scenes;
 import com.michaelgrundvig.frc.pitwall.scene.StillState;
 import com.michaelgrundvig.frc.world.field.Element;
 import com.michaelgrundvig.frc.world.field.FieldModel;
+import com.michaelgrundvig.frc.world.field.Place;
 import com.michaelgrundvig.frc.world.field.Symmetry;
 import com.michaelgrundvig.frc.world.field.Tag;
 import com.michaelgrundvig.frc.world.field.TagLayout;
@@ -35,7 +36,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
+import org.wpilib.math.geometry.Pose2d;
 import org.wpilib.math.geometry.Pose3d;
+import org.wpilib.math.geometry.Rotation2d;
 import org.wpilib.math.geometry.Rotation3d;
 import org.wpilib.math.geometry.Translation2d;
 
@@ -59,6 +62,9 @@ class WorldSceneTest {
           1.2,
           Material.ALUMINUM);
 
+  /** A start on blue's half, 3 m from the wall and 2 m across, facing the field. */
+  private static final Place START = Place.at("Left", new Pose2d(3, 2, Rotation2d.ZERO));
+
   /** A field with two tags on its far wall, facing back down the field, and a post on each half. */
   private static final FieldModel FIELD =
       FieldModel.builder(
@@ -71,6 +77,7 @@ class WorldSceneTest {
                       Tag.nominal(8, new Pose3d(16.5, 5, 1.4, new Rotation3d(0, 0, Math.PI))))),
               Symmetry.ROTATED)
           .elements(List.of(POST))
+          .starts(List.of(START))
           .build();
 
   /** The robot program's words: verdict 0 is accepted and 1 the gate, solver 1 a single tag. */
@@ -235,6 +242,16 @@ class WorldSceneTest {
         public Optional<String> robot() {
           return Optional.of("Robot");
         }
+
+        @Override
+        public Optional<Inspection.FaultOffer> placingTheRobotAt(Pose2d pose) {
+          return Optional.of(
+              new Inspection.FaultOffer(
+                  "Place the robot here",
+                  "Robot",
+                  "Placed",
+                  Map.of("X", pose.getX(), "Y", pose.getY())));
+        }
       };
 
   /**
@@ -295,6 +312,64 @@ class WorldSceneTest {
           .as(shape)
           .isEmpty();
     }
+  }
+
+  /**
+   * Where the robot may start is a layer of its own, shown unless switched off: each start of both
+   * alliances is the robot's bumpers as a dashed outline in a frame at the start's pose, with an
+   * arrow out of its front and the alliance's name and the start's beside it. A click on one says
+   * its name, alliance and pose, and in the simulator offers to place the robot there.
+   */
+  @Test
+  void theSceneCarriesEachStartOfBothAlliancesAndAClickOnOneSaysWhereItIs() {
+    WorldScene simulated =
+        WorldScene.of(
+            ROBOT,
+            () -> FIELD,
+            WorldScene.Truth.IN_THE_RECORD,
+            WORDS,
+            camera -> Optional.empty(),
+            SIMULATED);
+    scenes.add(simulated.scene(session));
+    String described = JSON.toJson(scenes.descriptions());
+
+    assertThat(described)
+        .contains("\"starts\":{\"title\":\"Starting positions\",\"shown\":true")
+        .contains("\"id\":\"start.blue.0.outline\",\"kind\":\"polygon\"")
+        .contains("\"style\":\"muted dashed\",\"inspect\":true")
+        .contains("\"id\":\"start.blue.0.name\"", "\"text\":\"Blue left\"")
+        .contains("\"id\":\"start.red.0.name\"", "\"text\":\"Red left\"")
+        .contains("\"mark\":\"outline\",\"style\":\"muted dashed\"");
+    assertThat(scenes.inspect(WorldScene.ID, "start.red.0.outline").orElseThrow())
+        .satisfies(
+            start -> {
+              assertThat(start.title()).isEqualTo("Red left start");
+              assertThat(start.details())
+                  .extracting(Inspection.Detail::label, Inspection.Detail::value)
+                  .contains(
+                      tuple("Name", "Left"),
+                      tuple("Alliance", "Red"),
+                      tuple("Where", "x 13.500 m, y 6.000 m"),
+                      tuple("Heading", "180.0°"));
+              assertThat(start.offers())
+                  .containsExactly(
+                      new Inspection.FaultOffer(
+                          "Place the robot here", "Robot", "Placed", Map.of("X", 13.5, "Y", 6.0)));
+            });
+    assertThat(scenes.inspect(WorldScene.ID, "start.blue.0.facing"))
+        .as("the arrow is no thing to click: the outline is")
+        .isEmpty();
+  }
+
+  /** On a robot, a click on a start says where it is and offers nothing to do. */
+  @Test
+  void onARobotAClickOnAStartOffersNoPlacing() {
+    onAPage();
+
+    Inspection start = scenes.inspect(WorldScene.ID, "start.blue.0.outline").orElseThrow();
+
+    assertThat(start.title()).isEqualTo("Blue left start");
+    assertThat(start.offers()).isEmpty();
   }
 
   /** A real robot's record has no true pose, and its view no layer for one. */

@@ -877,6 +877,9 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
                  border-top: 1px solid var(--line); padding-top: var(--s3); }
 .world-action { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
 .world-action .gate { flex-basis: 100%; font-size: var(--meta); }
+/* In the simulator, what the shape clicked offers to do as it stands: a start sets the robot down. */
+.world-offers-section { margin-top: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line); }
+.world-offer .message { margin-top: var(--s1); }
 /* In the simulator, the faults of the part clicked, under what the robot said of it. */
 .world-fails { margin-top: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line); }
 .world-fails h3 { font-size: var(--body); }

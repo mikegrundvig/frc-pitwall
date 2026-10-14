@@ -1086,6 +1086,7 @@ public final class PitwallServer implements AutoCloseable {
       shown.put("details", details);
       shown.put("actions", offered);
       shown.put("components", partsThatCanFail(inspection));
+      shown.put("offers", faultsOffered(inspection));
       sendJson(exchange, 200, shown);
     }
 
@@ -1098,10 +1099,7 @@ public final class PitwallServer implements AutoCloseable {
       if (simulator == null) {
         return List.of();
       }
-      Set<String> known = new HashSet<>();
-      for (Component component : simulator.components().components()) {
-        known.add(component.name());
-      }
+      Set<String> known = declaredParts(simulator);
       // In the order the shape names them: the part itself first.
       List<String> parts = new ArrayList<>();
       for (String name : inspection.components()) {
@@ -1110,6 +1108,39 @@ public final class PitwallServer implements AutoCloseable {
         }
       }
       return parts;
+    }
+
+    /**
+     * The faults a clicked shape offers to apply as they stand, of those whose part the simulator
+     * has: none on a robot, so its page is never offered one.
+     */
+    private List<Object> faultsOffered(Inspection inspection) {
+      Simulator simulator = state.simulator();
+      List<Object> offered = new ArrayList<>();
+      if (simulator == null) {
+        return offered;
+      }
+      Set<String> known = declaredParts(simulator);
+      for (Inspection.FaultOffer offer : inspection.offers()) {
+        if (known.contains(offer.component())) {
+          Map<String, Object> shown = new LinkedHashMap<>();
+          shown.put("label", offer.label());
+          shown.put("component", offer.component());
+          shown.put("fault", offer.fault());
+          shown.put("values", offer.values());
+          offered.add(shown);
+        }
+      }
+      return offered;
+    }
+
+    /** The names of the parts the simulation declared. */
+    private Set<String> declaredParts(Simulator simulator) {
+      Set<String> known = new HashSet<>();
+      for (Component component : simulator.components().components()) {
+        known.add(component.name());
+      }
+      return known;
     }
 
     /**

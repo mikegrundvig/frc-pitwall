@@ -1,6 +1,8 @@
 package com.michaelgrundvig.frc.pitwall.world;
 
+import com.michaelgrundvig.frc.pitwall.scene.Inspection;
 import java.util.Optional;
+import org.wpilib.math.geometry.Pose2d;
 
 /**
  * Which of the simulator's parts each part of the robot is, by the name the robot's simulation
@@ -36,6 +38,11 @@ public interface SimulatedParts {
         public Optional<String> robot() {
           return Optional.empty();
         }
+
+        @Override
+        public Optional<Inspection.FaultOffer> placingTheRobotAt(Pose2d pose) {
+          return Optional.empty();
+        }
       };
 
   /** The camera with this name in the robot's definition. */
@@ -57,4 +64,13 @@ public interface SimulatedParts {
 
   /** The robot as a whole: what can be shoved, hit, tilted and set down somewhere. */
   Optional<String> robot();
+
+  /**
+   * The fault that sets the robot down at a pose, with the pose's numbers in it: the simulation's
+   * own "placed", offered where a place on the field is clicked. Empty where the robot can't be set
+   * down.
+   *
+   * @param pose where, in the field's frame
+   */
+  Optional<Inspection.FaultOffer> placingTheRobotAt(Pose2d pose);
 }

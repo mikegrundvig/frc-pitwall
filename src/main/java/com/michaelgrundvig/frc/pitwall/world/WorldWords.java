@@ -5,6 +5,7 @@ import static org.wpilib.units.Units.Meters;
 
 import com.michaelgrundvig.frc.pitwall.robot.SightingSentences;
 import com.michaelgrundvig.frc.pitwall.scene.Inspection;
+import com.michaelgrundvig.frc.world.field.Alliance;
 import com.michaelgrundvig.frc.world.robot.Body;
 import com.michaelgrundvig.frc.world.robot.CameraConfig;
 import com.michaelgrundvig.frc.world.robot.ImuMount;
@@ -26,6 +27,24 @@ final class WorldWords {
   /** A camera's frame on the page, by its id ({@link CameraConfig#id()}). */
   static String cameraFrame(String cameraId) {
     return "camera." + cameraId;
+  }
+
+  /**
+   * A start's name on the page, with its alliance's: {@code Blue left} for blue's {@code Left}. A
+   * name that starts with a capital word stays as written ({@code Blue AMP side}).
+   */
+  static String startName(Alliance alliance, String placeName) {
+    boolean asWritten = placeName.length() > 1 && Character.isUpperCase(placeName.charAt(1));
+    String rest =
+        asWritten
+            ? placeName
+            : placeName.substring(0, 1).toLowerCase(Locale.ROOT) + placeName.substring(1);
+    return capitalized(alliance.name()) + " " + rest;
+  }
+
+  /** A constant's name as a word: {@code BLUE} is {@code Blue}. */
+  static String capitalized(String constant) {
+    return constant.substring(0, 1) + constant.substring(1).toLowerCase(Locale.ROOT);
   }
 
   /** A tag's frame on the page. */

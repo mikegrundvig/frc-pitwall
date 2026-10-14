@@ -12,6 +12,7 @@ import com.michaelgrundvig.frc.world.field.Surface;
 import com.michaelgrundvig.frc.world.field.Tag;
 import com.michaelgrundvig.frc.world.physical.TriangleMesh;
 import com.michaelgrundvig.frc.world.physical.Vector3;
+import com.michaelgrundvig.frc.world.robot.Body;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -21,8 +22,8 @@ import org.wpilib.math.geometry.Pose3d;
 /**
  * The field as the field model has it: its carpet and walls, its raised ground (bumps, ramps,
  * platforms), and its AprilTags where the layout puts them, each drawn so the side it is read from
- * shows. Their numbers are a layer of their own ({@link #tagNumbers}), and so is what stands on the
- * field ({@link #elements}). Nothing here moves.
+ * shows. Their numbers are a layer of their own ({@link #tagNumbers}), and so are what stands on
+ * the field ({@link #elements}) and where a robot may start ({@link #starts}). Nothing here moves.
  */
 final class FieldLayer implements Layer {
   /** The side of an AprilTag's printed square, in meters. FRC's 36h11 tags are 6.5 in. */
@@ -41,13 +42,19 @@ final class FieldLayer implements Layer {
   private static final double TAG_NUMBER_OUT = 0.25;
 
   private final Supplier<FieldModel> active;
+  private final Body body;
+  private final SimulatedParts simulated;
 
   /**
    * @param active the field the robot believes it plays on, which is the selected venue's once
    *     there is one
+   * @param body the robot's size, which a start's outline is drawn at
+   * @param simulated which of the simulator's parts the robot is, for setting it down on a start
    */
-  FieldLayer(Supplier<FieldModel> active) {
+  FieldLayer(Supplier<FieldModel> active, Body body, SimulatedParts simulated) {
     this.active = active;
+    this.body = body;
+    this.simulated = simulated;
   }
 
   /**
@@ -147,6 +154,24 @@ final class FieldLayer implements Layer {
                 Style.STRUCTURE,
                 "Something that stands on the field, which a robot runs into: a hub, a tower,"
                     + " a wall's face. Click one for its name and size")),
+        active::get);
+  }
+
+  /**
+   * Where a robot may start, for both alliances, a layer of its own so the page can hide it: the
+   * robot's bumpers as an outline on the floor at each start, with its name ({@link StartShapes}).
+   * A field whose game has no starts has none to draw.
+   */
+  StillLayer starts() {
+    return new StillLayer(
+        "starts",
+        "Starting positions",
+        scene -> StartShapes.describe(scene, body, active.get(), simulated),
+        List.of(
+            Legend.outline(
+                Style.MUTED.dashed(),
+                "Where the robot may start, its bumpers' size, with an arrow out of its front."
+                    + " Click one for its pose")),
         active::get);
   }
 
