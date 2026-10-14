@@ -8,6 +8,18 @@
 // same control as the Sim view's: sim-enable.js). On a real robot the bar shows the mode and has
 // nothing to press about it: the Driver Station enables a robot, never this page. The one switch
 // is sim-state.js's isSimulator(), and the control is not even built until it says yes.
+//
+// The bar is two groups. The first is the robot: its name, Enable and Disable, its mode, the link.
+// Enable and Disable stand right after the name, where nothing beside them can move them: what
+// comes and goes (the driving pill, a lost link's words) is to their right. The second group is
+// this page: whether it drives, the side dock's buttons, tuning, the theme. On one line while both
+// fit; on a narrow window the second group is a second line, always, so nothing jumps there when
+// the driving pill appears.
+//
+// Tuning's switch and the theme are what the bar can spare. Where the bar is full (the simulator's,
+// on a laptop) they fold into a small menu at its end, opened and closed by its own button, which
+// shows a lock while tuning is off; everywhere else they stand in the bar itself. The stylesheet
+// decides which (pitwall.css: .bar-menu).
 
 import { robot, onChange, onConnection, send, h, byId, say, announce } from "./core.js";
 import { onDrive, release } from "./sim-drive.js";
@@ -25,12 +37,15 @@ let drivingText;
 let enabler = null; // Enable and Disable, built only in the simulator
 let notDriving = false;
 let title = "Pitwall";
-let tuningPill;
-let tuningButton;
+let tuningLocked;
+let tuningSwitch;
+let tuningState;
 let uncommitted;
 let band;
 let bandSince;
 let themeButton;
+let menu;
+let menuButton;
 
 /** The theme: the system's, or light or dark whatever the system says (a bright pit). */
 const THEMES = { system: "◐ System", light: "☀ Light", dark: "☾ Dark" };
@@ -51,19 +66,24 @@ export function mountBar() {
     h("button", { type: "button", onclick: release,
                   title: "Stop driving from this page: the keys type as usual again" },
       "Switch off"));
-  tuningButton = h("button", { type: "button", onclick: switchTuning });
-  tuningPill = h("span", { class: "pill", hidden: true });
+  // Tuning is a switch, which says its state and changes it; the field's lock takes its place.
+  tuningState = h("span");
+  tuningSwitch = h("button", { type: "button", role: "switch", class: "switch tuning", hidden: true,
+                               "aria-label": "Tuning", onclick: switchTuning },
+    h("span", { class: "knob" }), h("span", null, "Tuning"), tuningState);
+  tuningLocked = h("span", { class: "pill locked", hidden: true }, "🔒 Tuning locked: field");
   uncommitted = h("a", { href: "#changes", class: "uncommitted", hidden: true });
   themeButton = h("button", { type: "button", class: "theme", onclick: nextTheme });
   showTheme();
   byId("bar").append(
-    h("span", { class: "brand" }, "Pitwall", name, badge),
-    code,
-    h("span", { class: "spacer" }),
-    connection, mode, driving,
-    // The side dock's buttons, one for each panel it has (side-dock.js fills it).
-    h("span", { class: "bar-panels", id: "bar-panels" }),
-    tuningPill, uncommitted, themeButton);
+    // The robot. Enable and Disable go before the mode, in the simulator (renderEnabler).
+    h("div", { class: "bar-main" },
+      h("span", { class: "brand" }, "Pitwall", name, badge), mode, connection, code),
+    // This page.
+    h("div", { class: "bar-more" }, driving,
+      // The side dock's buttons, one for each panel it has (side-dock.js fills it).
+      h("span", { class: "bar-panels", id: "bar-panels" }),
+      uncommitted, makeMenu()));
   bandSince = h("span");
   band = byId("band");
   onChange(render);
@@ -73,6 +93,41 @@ export function mountBar() {
   // How long since the robot was last heard, written in place each second: nothing around it is
   // rebuilt.
   setInterval(renderSince, 1000);
+}
+
+/**
+ * Tuning and the theme, with the button that opens them where they are a menu. It closes with the
+ * same button, or a press anywhere else on the page; never with Esc, which is the robot's
+ * (keys.js).
+ */
+function makeMenu() {
+  menuButton = h("button", { type: "button", class: "bar-menu-button", "aria-expanded": "false",
+                             "aria-controls": "bar-menu", onclick: () => openMenu(!menuIsOpen()) });
+  menu = h("span", { class: "bar-menu" }, menuButton,
+    h("span", { class: "bar-menu-items", id: "bar-menu" }, tuningLocked, tuningSwitch,
+      themeButton));
+  document.addEventListener("pointerdown", (event) => {
+    if (menuIsOpen() && !menu.contains(event.target)) openMenu(false);
+  });
+  showMenuButton(true);
+  return menu;
+}
+
+function menuIsOpen() {
+  return menu.classList.contains("open");
+}
+
+function openMenu(open) {
+  menu.classList.toggle("open", open);
+  menuButton.setAttribute("aria-expanded", String(open));
+}
+
+/** The menu's button says when tuning is off, which the menu otherwise keeps out of sight. */
+function showMenuButton(tuningOn) {
+  menuButton.textContent = tuningOn ? "⋯" : "🔒 ⋯";
+  menuButton.classList.toggle("locked", !tuningOn);
+  menuButton.title = tuningOn ? "Tuning and theme" : "Tuning is off. Tuning and theme";
+  menuButton.setAttribute("aria-label", menuButton.title);
 }
 
 function render(patch, snapshot) {
@@ -144,7 +199,7 @@ function renderEnabler(what) {
   }
   if (!enabler) {
     enabler = makeEnable({ small: true });
-    mode.after(enabler.element);
+    mode.before(enabler.element);
     what = ALL;
   }
   enabler.render(what);
@@ -166,7 +221,7 @@ function showPill(status) {
     : keysOnly && status.keyboard.paused === "window" ? "Paused: click the page"
     : null;
   const what = status.keyboard.on && status.gamepad.on ? "Keys and gamepad drive"
-    : status.keyboard.on ? "Keys drive the robot" : "Gamepad drives the robot";
+    : status.keyboard.on ? "Keys drive" : "Gamepad drives";
   showDriving(marks + " " + (why || what), !why, status.hidden);
 }
 
@@ -187,21 +242,13 @@ function showTitle() {
 
 function renderTuning() {
   const session = robot.doc.tuning;
-  tuningPill.hidden = false;
-  if (session.fieldConnected) {
-    tuningPill.className = "pill locked";
-    tuningPill.replaceChildren("🔒 Tuning locked: field");
-  } else if (session.enabled) {
-    tuningPill.className = "pill on";
-    tuningButton.className = "";
-    tuningButton.textContent = "Switch off";
-    tuningPill.replaceChildren("✓ Tuning on", tuningButton);
-  } else {
-    tuningPill.className = "pill locked";
-    tuningButton.className = "primary";
-    tuningButton.textContent = "Switch on";
-    tuningPill.replaceChildren("🔒 Tuning off", tuningButton);
-  }
+  tuningLocked.hidden = !session.fieldConnected;
+  tuningSwitch.hidden = Boolean(session.fieldConnected);
+  tuningSwitch.setAttribute("aria-checked", String(Boolean(session.enabled)));
+  tuningState.textContent = session.enabled ? " · on" : " · off";
+  tuningSwitch.title = session.enabled ? "Tuning is on: values can change. Switch it off"
+    : "Tuning is off: values can't change. Switch it on";
+  showMenuButton(Boolean(session.enabled) && !session.fieldConnected);
 }
 
 async function switchTuning() {
@@ -243,8 +290,9 @@ export function tuningOffBanner(what) {
 }
 
 function renderConnection(connected) {
+  connection.title = connected && !robot.stopped ? "Connected to the robot" : "";
   document.body.classList.toggle("stale", !connected);
-  tuningButton.disabled = !connected;
+  tuningSwitch.disabled = !connected;
   showEnabled();
   if (robot.stopped) {
     // Stopped from this page: the program ended on purpose, so it isn't a lost link.
@@ -254,7 +302,9 @@ function renderConnection(connected) {
   } else if (connected) {
     connection.className = "conn up";
     // The robot program answers before its loop first runs: until then, there's nothing to show.
-    connection.replaceChildren(robot.doc ? "● Connected" : "● Connected, waiting for the robot loop");
+    // Its word may go where the bar is full (the stylesheet's choice): the mark alone says it then.
+    connection.replaceChildren("● ", robot.doc ? h("span", { class: "word" }, "Connected")
+      : "Connected, waiting for the robot loop");
     if (robot.doc) announce("Connected to the robot.");
   } else {
     connection.className = "conn down";

@@ -173,16 +173,21 @@ input[readonly] { background: var(--surface-2); }
                                                           filter: brightness(1.15); }
 @media (pointer: coarse) { .side-button { min-height: 44px; } }
 
-.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: var(--s2) var(--s4);
-       background: var(--surface); border-bottom: 1px solid var(--line); }
-.brand { font-weight: 700; font-size: var(--value); display: flex; align-items: center; gap: var(--s2); }
-.robot-name { font-weight: 400; }
-.badge { font: 700 12px/1 var(--sans); letter-spacing: .08em; padding: 4px 7px; border-radius: 4px;
-         border: 1.5px solid currentColor; }
-.badge.sim { color: var(--text-2); }
+/* The state bar: two groups, the robot's and this page's, on one line while both fit. Each group
+   moves whole, so Enable and Disable, right after the robot's name, are never moved by what comes
+   and goes beside them. */
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px var(--s3);
+       padding: 6px var(--s3); background: var(--surface); border-bottom: 1px solid var(--line); }
+.bar-main, .bar-more { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.bar-more { margin-left: auto; justify-content: flex-end; }
+.brand { font-weight: 700; font-size: var(--value); display: flex; align-items: center; gap: var(--s2);
+         min-width: 0; }
+.robot-name { font-weight: 400; max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge { display: inline-block; font: 700 12px/1 var(--sans); letter-spacing: .08em; padding: 4px 7px;
+         border-radius: 4px; border: 1.5px solid currentColor; }
+.badge.sim { display: inline-block; color: var(--text-2); }
 .badge.real { background: var(--text); color: var(--surface); border-color: var(--text); }
 .bar .code { font-size: var(--meta); color: var(--muted); }
-.bar .spacer { flex: 1; }
 .conn { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .conn.up { color: var(--ok); }
 .conn.down { color: var(--bad); }
@@ -211,22 +216,59 @@ input[readonly] { background: var(--surface-2); }
 @media (pointer: coarse) { .pill button { min-height: 44px; } }
 .uncommitted { font-weight: 600; color: inherit; text-decoration: none; }
 .uncommitted b { color: var(--tuned); }
-.theme { font-size: 14px; }
-.mode, .uncommitted { display: inline-flex; align-items: center; gap: .3em; }
+.theme { font-size: 14px; min-height: 34px; }
+.mode, .uncommitted { display: inline-flex; align-items: center; gap: .3em; white-space: nowrap; }
+/* Tuning, a switch in the bar: off is in the color of a lock, with the word. */
+.switch.tuning { min-height: 34px; font-weight: 600; }
+.switch.tuning[aria-checked="false"] { color: var(--lock); border-color: var(--lock); background: var(--lock-tint); }
+/* Tuning and the theme stand in the bar itself, and their menu's button is not there, wherever the
+   bar has the room: on a robot's page, and on a wide screen. */
+.bar-menu, .bar-menu-items { display: contents; }
+.bar-menu-button { display: none; min-width: 34px; min-height: 34px; padding: 2px var(--s2);
+                   border-radius: 999px; font-weight: 700; }
+.bar-menu-button.locked { color: var(--lock); border-color: var(--lock); background: var(--lock-tint); }
+.bar-menu-button[aria-expanded="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
+.bar-menu-button[aria-expanded="true"]:hover:not(:disabled) { background: var(--text); filter: brightness(1.15); }
 /* Below a wide laptop, the bar keeps to one line: the code (in Pit's status too) goes, and the
    theme button is its mark alone. */
 @media (max-width: 1099px) {
   .theme .word { display: none; }
-}
-/* The simulator's bar holds more (Enable, Disable, the panel's button), so the code goes sooner. */
-@media (max-width: 1499px) {
-  .bar:has(.enabler) .code { display: none; }
-}
-@media (max-width: 1099px) {
   .bar .code { display: none; }
 }
+/* The simulator's bar holds more (Enable, Disable, the driving pill, the panel's button), so the
+   code goes sooner. Below a wide screen the count of what is to commit is left to the Changes tab,
+   which has it too, and tuning and the theme fold into a menu at the bar's end, under its own
+   button. */
+@media (max-width: 1799px) {
+  .bar:has(.enabler) .code { display: none; }
+}
+@media (max-width: 1599px) {
+  .bar:has(.enabler) .uncommitted { display: none; }
+  .bar:has(.enabler) .bar-menu { display: inline-flex; position: relative; }
+  .bar:has(.enabler) .bar-menu-button { display: inline-block; }
+  .bar:has(.enabler) .bar-menu-items { display: none; }
+  .bar:has(.enabler) .bar-menu.open .bar-menu-items {
+    display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2);
+    position: absolute; z-index: 9; top: calc(100% + 6px); right: 0; width: max-content;
+    padding: 10px; border-radius: 10px; background: var(--surface);
+    border: 1px solid var(--line-strong); box-shadow: var(--shadow); }
+  .bar:has(.enabler) .bar-menu-items .theme .word { display: inline; }
+}
+/* A little narrower, the link's word goes while the robot is heard: its mark stays, and the words
+   come back the moment it is not. */
+@media (max-width: 1339px) {
+  .bar:has(.enabler) .conn.up .word { display: none; }
+}
+/* Narrower than everything fits on one line, the simulator's bar is two lines on purpose: the
+   robot's, then this page's. Always, and not only once the driving pill shows, so nothing moves
+   down the page when it does. */
+@media (max-width: 1259px) {
+  .bar:has(.enabler) .bar-more { flex: 1 1 100%; justify-content: flex-start; }
+  .bar:has(.enabler) .bar-menu.open .bar-menu-items { right: auto; left: 0; }
+  .bar:has(.enabler) .conn.up .word { display: inline; }
+}
 @media (max-width: 719px) {
-  .bar { padding: var(--s2) var(--s3); gap: 6px 10px; }
+  .bar { padding: 6px var(--s3); gap: 6px 10px; }
   .bar .code, .bar .theme { display: none; }
 }
 
@@ -242,7 +284,7 @@ input[readonly] { background: var(--surface-2); }
 
 .tabs { display: flex; gap: 2px; padding: 0 var(--s3); background: var(--surface);
         border-bottom: 1px solid var(--line); overflow-x: auto; }
-.tab { display: inline-flex; align-items: center; padding: 10px 14px; min-height: 44px; font-weight: 600;
+.tab { display: inline-flex; align-items: center; padding: var(--s2) 14px; min-height: 40px; font-weight: 600;
        color: var(--text-2); text-decoration: none; border-bottom: 3px solid transparent; white-space: nowrap; }
 .tab[aria-current="page"] { color: var(--text); border-bottom-color: var(--accent); }
 .tab .count { display: inline-block; min-width: 20px; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
