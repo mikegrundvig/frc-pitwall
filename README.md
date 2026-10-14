@@ -123,7 +123,11 @@ has no such section and none of the routes (they answer 404), so none of these c
   it called each part: a camera, the gyro, a module (a wheel), and on the bumpers the robot itself
   with the backup IMU, which has no shape. A fault two of whose numbers are a place on the field
   (`Fault.Builder.point(x, y)`: setting the robot down) gets *Apply where I click*, which takes
-  the place from the next click on the drawing.
+  the place from the next click on the drawing. A shape may instead offer one fault ready to apply
+  (`Inspection.offer(FaultOffer)`: the part's and the fault's names and its numbers, set), a
+  button of its own in the card that makes the same request. A start offers the robot's own
+  placing there (`SimulatedParts.placingTheRobotAt(pose)`); the answer's `"offers"` are those
+  whose part the simulator has, so on a robot there are none.
 
 ### The page's keys
 
@@ -500,7 +504,8 @@ in the middle; the canvas is drawn at the size it is shown, never stretched. On 
 drawing is a fixed share of the screen and the card is under it.
 
 A click picks the nearest
-inspectable line within 12 px, so a thin ray is easy to hit, else the solid under the pointer, and
+inspectable line within 12 px (one lying flat on the floor, a start's outline, counts 4 px farther, so
+a robot standing on it is still what its bumpers pick), so a thin ray is easy to hit, else the solid under the pointer, and
 asks about the loop shown; the pointer over a shape shows what it reveals (a camera's name and
 view) while it is there. It draws only when a patch arrives or
 something is dragged, never in a loop.
@@ -552,6 +557,13 @@ Each of these is a layer the legend switches:
   strongly where raised ground is faint, in a color of its own in both themes. A click on one says
   the element's name, how much floor it covers, how tall it is, and the tags that hang on it.
   Nothing in it moves, so it is described with the field and never sent again.
+- **Starting positions:** where a robot may start (`FieldModel.starts()`), for both alliances: the
+  robot's bumpers as a faint dashed outline on the floor at each start, an arrow out of its front,
+  and its name with its alliance's ("Blue left") beside it. A click says its name, alliance and
+  pose (x, y, heading), and in the simulator offers *Place the robot here*, which is the robot's
+  own placing with that pose. The starts depend on the robot's size, which the runtime gives the
+  field with its body, so they are described with the field and never sent again. A game that
+  defines none has an empty layer.
 - **Robot:** at the estimate (`Localization/Pose3d`), on the ground under it and tilted as its IMU
   said, as its `RobotDefinition` describes it: its frame and bumpers from `Body` with an arrow out
   the front; each wheel at its module, turned to its measured angle; each camera as a short arrow
