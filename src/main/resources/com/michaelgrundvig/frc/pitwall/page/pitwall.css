@@ -809,9 +809,11 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
                    width: fit-content; max-width: calc(100% - 16px); padding: 6px 10px;
                    border-radius: 8px; font-size: var(--meta); font-weight: 600; color: var(--warn);
                    background: var(--warn-tint); border: 1px solid var(--warn); }
-/* The strip and the list of events, under the drawing: the same dock as under the Robot view. */
-.view.world .dock { position: static; margin: 0; flex: none; }
-.view.world .dock .el-list { height: 96px; }
+/* The strip and the list of events, under the drawing: the same dock as under the Robot view, in
+   the page's flow. No joint has a card here, so the list has no word on them. */
+.view.world .dock { position: static; margin: 0; flex: none; border-radius: 10px; box-shadow: none;
+                    border-color: var(--line); }
+.view.world .el-hint { display: none; }
 /* The details of what was clicked: a card over the drawing's right side, or its left (under the
    bar) when what was clicked is on the right. No taller than the drawing: it scrolls under its
    title, which keeps its Close in reach. */
@@ -932,31 +934,46 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
                    background: var(--edit-tint); }
 
 /* ---- The time strip: the session's memory along the bottom of a view, with a mark for each event
-   and the page's cursor on it. It is docked there with the list of events over it, and both stay
-   in sight while the view scrolls under them. A problem's mark
+   and the page's cursor on it. It is docked there with the list of events beside it, and both
+   stay in sight while the view scrolls under them. A problem's mark
    is thicker and crossed, never told by its color alone; the cursor is a line with a
    head, solid while live and in the color of an edit while it stands on an earlier loop. ---- */
 
 .dock { position: sticky; bottom: 0; z-index: 2; margin: var(--s3) calc(-1 * var(--s2)) calc(-1 * var(--s4));
-        pointer-events: none; }
-.dock > * { pointer-events: auto; background: var(--surface); border: 1px solid var(--line-strong);
-            box-shadow: var(--shadow); }
-.dock > :first-child { border-radius: 10px 10px 0 0; }
+        display: grid; grid-template-columns: minmax(0, 1fr); background: var(--surface);
+        border: 1px solid var(--line-strong); border-radius: 10px 10px 0 0; box-shadow: var(--shadow); }
+/* Before the robot's session is known there is neither a strip nor a list, and so no dock. */
+.dock:not(:has(> :not([hidden]))) { display: none; }
 @media (max-width: 719px) { .dock { margin-bottom: calc(-1 * var(--s3)); } }
-/* On a laptop the strip and the list sit side by side, the list standing taller, so together they
-   cover a corner of the cards and not half of them; a folded list leaves the strip the width. */
-@container views (min-width: 900px) {
-  .dock { display: grid; align-items: end; grid-template-columns: minmax(0, 1fr) minmax(300px, 34%); }
-  .dock:has(.el:not([open])) { grid-template-columns: minmax(0, 1fr) auto; }
-  .dock .ts { grid-column: 1; grid-row: 1; border-radius: 10px 0 0 0; }
-  .dock .el { grid-column: 2; grid-row: 1; border-left: none; border-radius: 10px 10px 0 0; }
+/* Beside each other, the strip and the list are the dock's two columns, the same height: the strip
+   sets it, and the list's rows scroll in it. Neither ever lies over the other. A folded list is
+   its title alone, and the strip has the rest of the width. On a view too narrow for both (a
+   phone, or a view squeezed by a wide side dock) the list is under the strip. */
+.dock .el { border-top: 1px solid var(--line); }
+@container views (min-width: 700px) {
+  .dock { grid-template-columns: minmax(0, 1fr) 264px; }
+  .dock:has(.el.folded) { grid-template-columns: minmax(0, 1fr) auto; }
+  .dock .el { border-top: none; border-left: 1px solid var(--line); min-height: 148px; }
+  .dock .el.folded { min-height: 0; }
 }
-.ts { padding: var(--s2) var(--s3); }
-.ts-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-          gap: var(--s1) var(--s3); margin-bottom: var(--s1); }
-.ts-where { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); min-width: 0; }
-.ts-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+@container views (min-width: 900px) {
+  .dock { grid-template-columns: minmax(0, 1fr) clamp(316px, 28%, 340px); }
+}
+/* Where the strip's controls take three lines once the cursor stands on an earlier loop (a laptop
+   with the side dock open), the dock is that tall from the start: going back in time moves nothing
+   above it. */
+@container views (min-width: 900px) and (max-width: 1180px) {
+  .dock .el { min-height: 160px; }
+  .dock .el.folded { min-height: 0; }
+}
+.ts { min-width: 0; padding: 6px var(--s3); display: flex; flex-direction: column;
+      justify-content: space-between; gap: var(--s1); }
+.ts-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+.ts-where { display: flex; align-items: center; gap: var(--s2); white-space: nowrap; }
 .ts-group { display: inline-flex; flex-wrap: wrap; gap: var(--s1); }
+.ts-bar .small { padding: 2px 7px; font-size: var(--meta); }
+.ts-note { flex: 1 1 100%; }
+.ts-note:empty { display: none; }
 .ts-status { font-size: var(--meta); padding: 5px var(--s2); }
 .ts-status.live { color: var(--ok); background: var(--surface-2); }
 .ts-status.earlier { color: var(--edit); background: var(--edit-tint); }
@@ -982,23 +999,30 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
    events of the cursor's own loop are marked with a bar and bold, and a problem with a cross and
    the word, never by color alone. ---- */
 
-.el { padding: var(--s1) var(--s3); }
-.el summary { cursor: pointer; display: flex; align-items: baseline; gap: var(--s2); min-height: 28px;
-              font-weight: 700; }
-.el summary::before { content: "▸"; color: var(--text-2); }
-.el[open] summary::before { content: "▾"; }
-.el summary::-webkit-details-marker { display: none; }
+.el { min-width: 0; min-height: 110px; padding: var(--s1) var(--s3) 6px; display: flex; flex-direction: column; }
+.el.folded { min-height: 0; }
+.el-head { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+           gap: 2px var(--s2); min-height: 30px; }
+.el-toggle { display: flex; align-items: baseline; gap: var(--s2); min-height: 28px; font-weight: 700;
+             white-space: nowrap; }
+button.el-toggle:hover:not(:disabled) { text-decoration: none; }
+.el-toggle::before { content: "▾"; color: var(--text-2); }
+.el.folded .el-toggle::before { content: "▸"; }
 .el-count { font-weight: 400; }
-.el-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2);
-             margin: 2px 0 var(--s1); }
+.el-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); }
 .el-filter .chip { min-height: 26px; font-size: var(--meta); }
-.el-list { list-style: none; margin: 0; padding: 0; height: 148px; overflow: auto; position: relative;
-           font-size: var(--meta); border-top: 1px solid var(--line); }
-.el-row { display: grid; grid-template-columns: 64px 14px minmax(0, 1fr); gap: var(--s1);
+.el-body { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.el-hint { margin: 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The list is as tall as the strip beside it leaves it, five rows at the least (three under the
+   strip, on a narrow view), and its rows scroll. */
+.el-list { list-style: none; margin: 0; padding: 0; flex: 1 1 0; min-height: 0; overflow: auto;
+           position: relative; font-size: var(--meta); border-top: 1px solid var(--line); }
+@media (pointer: coarse) { .el-toggle { min-height: 44px; } }
+.el-row { display: grid; grid-template-columns: minmax(64px, max-content) 14px minmax(0, 1fr); gap: var(--s1);
           width: 100%; padding: 2px var(--s1); border-left: 3px solid transparent; border-radius: 0; }
 button.el-row:hover:not(:disabled) { background: var(--surface-2); text-decoration: none; }
 .el-row:focus-visible { outline-offset: -3px; }
-.el-time { color: var(--text-2); text-align: right; }
+.el-time { color: var(--text-2); text-align: right; white-space: nowrap; }
 .el-said { overflow-wrap: anywhere; }
 .el-row[aria-current="true"] { border-left-color: var(--edit); background: var(--edit-tint); font-weight: 700; }
 .el-list .problem .el-said, .el-list .problem .el-mark { color: var(--bad); font-weight: 600; }

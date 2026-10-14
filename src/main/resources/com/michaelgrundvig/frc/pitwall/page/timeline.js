@@ -39,6 +39,9 @@ const MARK_REACH = 7;
 
 const TRACK_HEIGHT = 46;
 
+/** How wide a character of a tick's time is drawn, at most, in pixels (11 px type). */
+const TICK_LABEL_PIXELS = 7;
+
 function svg(tag, attributes, ...children) {
   const made = document.createElementNS(SVG, tag);
   for (const [key, value] of Object.entries(attributes || {})) made.setAttribute(key, value);
@@ -82,18 +85,19 @@ export function makeTimeline() {
     heldEnd = null;
     draw();
   });
-  ui.live = h("button", { type: "button", class: "ts-live", title: "Back to live (Esc or L)",
+  ui.live = h("button", { type: "button", class: "small ts-live", title: "Back to live (Esc or L)",
                           onclick: goLive }, "Back to live");
   ui.drawing = svg("svg", { class: "ts-drawing", "aria-hidden": "true", height: TRACK_HEIGHT });
   ui.track = h("div", { class: "ts-track", role: "slider", tabindex: "0",
                         "aria-label": "The moment shown, in the session's memory" }, ui.drawing);
+  // One bar that wraps: where the cursor is, then the controls in the order they are used, and a
+  // note, when there is one, on a line of its own under them.
   const element = h("section", { class: "ts", "aria-label": "Timeline" },
     h("div", { class: "ts-bar" },
-      h("div", { class: "ts-where" }, ui.status, ui.time, ui.note),
-      h("div", { class: "ts-controls" },
-        h("div", { class: "ts-group", role: "group", "aria-label": "Move through what happened" },
-          ui.previous, ui.earlier, ui.play, ui.later, ui.next),
-        ui.rates.element, ui.zooms.element, ui.live)),
+      h("div", { class: "ts-where" }, ui.status, ui.time, ui.live),
+      h("div", { class: "ts-group", role: "group", "aria-label": "Move through what happened" },
+        ui.previous, ui.earlier, ui.play, ui.later, ui.next),
+      ui.rates.element, ui.zooms.element, ui.note),
     ui.track);
 
   let rate = 1;
@@ -227,10 +231,15 @@ export function makeTimeline() {
     const heldTo = Math.min(width, xOf(held.newestNanos));
     parts.push(svg("rect", { class: "ts-held", x: heldFrom, y: top,
                              width: Math.max(0, heldTo - heldFrom), height: bottom - top, rx: 3 }));
+    let labeledTo = -Infinity; // where the last time written ends: the next is written clear of it
     for (const [nanos, label] of ticks(held)) {
       const x = xOf(nanos);
       parts.push(svg("line", { class: "ts-tick", x1: x, x2: x, y1: top - 3, y2: bottom }));
       const anchor = x > width - 30 ? "end" : x < 30 ? "start" : "middle";
+      const wide = label.length * TICK_LABEL_PIXELS;
+      const from = anchor === "end" ? x - wide : anchor === "start" ? x : x - wide / 2;
+      if (from < labeledTo + 4) continue; // it would run into the one before: the tick alone
+      labeledTo = from + wide;
       parts.push(svg("text", { class: "ts-tick-label", x, y: 10, "text-anchor": anchor }, label));
     }
     marks = grouped(shownEvents().filter((event) => event.timestampNanos >= shown.from

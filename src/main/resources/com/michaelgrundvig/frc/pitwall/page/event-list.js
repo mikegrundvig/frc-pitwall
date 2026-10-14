@@ -3,7 +3,11 @@
 // is a shot that fed before its shooter was up. It shows the events around the page's cursor
 // (cursor.js), with those of the cursor's own loop marked, and a click on one moves the cursor to
 // its loop. It can show the events about one joint only, and the problems only (the page's filter,
-// session-events.js), and it folds away.
+// session-events.js), and it folds away under its title: every list on the page folds and opens
+// together, and this browser keeps which.
+//
+// It is the right-hand column of a view's dock, beside the time strip and as tall as it, and its
+// rows scroll in the height the strip gives it (pitwall.css: .dock).
 //
 // The sentences are the robot's own (GET /api/robot/events): nothing here words anything about the
 // robot.
@@ -14,6 +18,32 @@ import { shownEvents, eventFilter, setEventFilter, onEvents } from "./session-ev
 
 /** How many events it lists each side of the cursor. */
 const EACH_SIDE = 40;
+
+/** Where this browser keeps whether the lists are open. */
+const OPEN_KEY = "pitwall.events.open";
+
+const lists = new Set(); // every list made: each a function that shows it open or folded
+let opened = readOpen();
+let ids = 0;
+
+function readOpen() {
+  try {
+    return localStorage.getItem(OPEN_KEY) !== "false";
+  } catch (error) {
+    return true; // storage is off in this browser: open, so nothing goes missing
+  }
+}
+
+/** Opens or folds every list, as someone asked, and keeps it. */
+function setOpen(now) {
+  opened = now;
+  try {
+    localStorage.setItem(OPEN_KEY, String(opened));
+  } catch (error) {
+    // Kept for this page only: storage is off in this browser.
+  }
+  for (const show of lists) show();
+}
 
 /** Makes a list of events: {element}. */
 export function makeEventList() {
@@ -26,13 +56,18 @@ export function makeEventList() {
                            onclick: () => setEventFilter({ about: "" }) });
   ui.problems = h("button", { type: "button", class: "chip", "aria-pressed": "false",
     onclick: () => setEventFilter({ problemsOnly: !eventFilter().problemsOnly }) }, "Problems only");
+  const bodyId = "events-" + ++ids;
   ui.list = h("ol", { class: "el-list" });
   ui.empty = h("p", { class: "meta el-empty" });
-  const element = h("details", { class: "el", open: true },
-    h("summary", null, h("span", { class: "el-title" }, "Events"), ui.count),
-    h("div", { class: "el-filter" }, ui.about, ui.problems,
-      h("span", { class: "meta" }, "A joint's name, on its card, shows its events only.")),
+  ui.toggle = h("button", { type: "button", class: "link el-toggle", "aria-controls": bodyId,
+                            onclick: () => setOpen(!opened) },
+    h("span", { class: "el-title" }, "Events"), ui.count);
+  ui.filter = h("div", { class: "el-filter" }, ui.about, ui.problems);
+  ui.body = h("div", { class: "el-body", id: bodyId },
+    h("p", { class: "meta el-hint" }, "A joint's name shows its events only."),
     ui.empty, ui.list);
+  const element = h("section", { class: "el", "aria-label": "Events" },
+    h("div", { class: "el-head" }, ui.toggle, ui.filter), ui.body);
 
   function draw() {
     if (frame !== null) return;
@@ -45,7 +80,7 @@ export function makeEventList() {
   function drawNow() {
     const held = span();
     element.hidden = !held;
-    if (!held || !element.open) return;
+    if (!held || !opened) return;
     const filter = eventFilter();
     const at = cursor();
     const events = shownEvents();
@@ -107,10 +142,16 @@ export function makeEventList() {
     return h("li", { class: "el-now" }, at.live ? "now" : "the moment shown, loop " + at.index);
   }
 
-  element.addEventListener("toggle", () => {
+  const show = () => {
+    element.classList.toggle("folded", !opened);
+    ui.toggle.setAttribute("aria-expanded", String(opened));
+    ui.filter.hidden = !opened;
+    ui.body.hidden = !opened;
     listed = "";
     draw();
-  });
+  };
+  lists.add(show);
+  show();
   onCursor(draw);
   onEvents(draw);
   draw();

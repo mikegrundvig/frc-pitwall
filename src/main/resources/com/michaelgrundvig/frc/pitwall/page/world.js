@@ -141,7 +141,7 @@ function mount(view) {
   view.classList.add("world");
   view.append(
     h("div", { class: "world-main" }, ui.stage, ui.details),
-    h("div", { class: "dock" }, makeEventList().element, makeTimeline().element));
+    h("div", { class: "dock" }, makeTimeline().element, makeEventList().element));
 
   let down = null;
   ui.canvas.addEventListener("pointerdown", (event) => {

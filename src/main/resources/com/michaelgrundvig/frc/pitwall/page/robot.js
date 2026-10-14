@@ -16,7 +16,7 @@
 // It draws the moment the page's cursor is on (cursor.js): the newest loop while the cursor is
 // live, and otherwise that loop's view, asked of the robot and kept (robot-moments.js). Every card
 // is drawn from one loop's view alone, the same way whichever loop it is. The time strip along its
-// bottom (timeline.js) moves the cursor, and the list of events over it (event-list.js) says what
+// bottom (timeline.js) moves the cursor, and the list of events beside it (event-list.js) says what
 // happened around the cursor, in order; a joint's name on its card shows that joint's events only.
 
 import { robot, onChange, showViews, h, replace } from "./core.js";
@@ -72,7 +72,7 @@ function mount(view) {
         h("section", { class: "card", "aria-label": "Gates" }, h("h2", null, "Gates"), ui.gates),
         h("section", { class: "card", "aria-label": "Gamepads" }, h("h2", null, "Gamepads"),
           ui.pads, h("h3", { class: "rv-sub" }, "Fired"), ui.fired))),
-    h("div", { class: "dock" }, makeEventList().element, makeTimeline().element));
+    h("div", { class: "dock" }, makeTimeline().element, makeEventList().element));
   onChange((patch, snapshot) => {
     if (!visible || !(snapshot || "robotView" in patch)) return;
     // A snapshot may be the first to say there is a Robot view: name it then, to be sent it.
