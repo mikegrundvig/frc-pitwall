@@ -513,7 +513,7 @@ something is dragged, never in a loop.
 Labels are a fixed size on screen, so zoomed out they crowd what they name. Each drawing lays them
 out on the screen (`layoutLabels`): a label in the focus's own frame (the robot's: its cameras'
 names) moves straight out from the robot's middle, just far enough to clear the robot's outline
-and any label placed before it, with a thin leader back to where it was once it has moved more
+and any label placed before it or any other label on screen, with a thin leader back to where it was once it has moved more
 than a few pixels; every other label (a tag's number) stays put and fades by how far the robot or
 one of its labels lies over it. Both are worked out from where things are on screen and nothing
 else, so a label moves with the robot and never jumps or blinks. A browser without WebGL 2 is told so, and the rest of the
@@ -575,7 +575,10 @@ Each of these is a layer the legend switches:
 - **Wheel arrows:** where each wheel is driving, as far as it will go in 0.2 s.
 - **Sensors:** each switch and rangefinder as a small block, and a rangefinder's cone.
 - **Camera names** and **Camera views,** both off at first: four of each crowd the robot. A view
-  is its edges only, out to 3 m, though a camera reads tags farther than that.
+  is out to 3 m, though a camera reads tags farther than that. From above it is one area, the
+  outline on the floor of the lens and the far corners, faintly filled (`Frustum.seenFromAbove()`;
+  the page works out the outline from the camera's frame as it stands), with the camera's name at
+  the far end of its axis; in 3D it is the pyramid's edges. A rangefinder's cone stays edges.
 - **Uncertainty (2σ):** the estimate's covariance (`Localization/Covariance`) as a dashed ellipse,
   two standard deviations across; in the color of trouble while the estimate is lost or the gyro
   is. A click says how sure, what it rests on, and how the cameras have fared.

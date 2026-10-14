@@ -257,6 +257,8 @@ export class SceneRenderer {
     // A line between two frames lives in the root, and is kept between them (place).
     const parent = built.between ? this.root : this.frames.get(def.frame) || this.root;
     parent.add(built.object);
+    // A view from above lives in the root beside it, and is put where its frame is as it draws.
+    if (built.plan) this.root.add(built.plan.group);
     built.object.visible = this.layerShown(layerId) || this.isRevealed(def.id);
     if (this.selected === def.id) restyle(built, built.style, this.kit, true);
     return built;
@@ -271,6 +273,10 @@ export class SceneRenderer {
   remove(built) {
     if (this.shapes.get(built.def.id) === built) this.shapes.delete(built.def.id);
     built.object.removeFromParent();
+    if (built.plan) {
+      built.plan.group.removeFromParent();
+      built.plan.group.traverse((object) => object.geometry && object.geometry.dispose());
+    }
     built.object.traverse((object) => {
       if (object.geometry) object.geometry.dispose();
       if (object.isSprite) {
@@ -414,9 +420,26 @@ export class SceneRenderer {
 
   render() {
     if (this.followed) this.keepFollowing();
+    this.drawPlans();
     this.sizeLabels();
     this.layoutLabels();
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Draws each frustum that has a view from above as that from above and as its edges around: the
+   * outline put where its camera's corners are on the floor now, and the pyramid's edges hidden.
+   */
+  drawPlans() {
+    this.scene.updateMatrixWorld(true);
+    const above = this.view === "top";
+    for (const built of this.shapes.values()) {
+      if (!built.plan) continue;
+      const shown = this.isShown(built);
+      built.plan.edges.visible = !above;
+      built.plan.group.visible = above && shown;
+      if (above && shown) built.plan.update(built.object.matrixWorld);
+    }
   }
 
   keepFollowing() {
@@ -571,8 +594,9 @@ export class SceneRenderer {
         : Math.min(Math.abs(dx) > 1e-6 ? needX / Math.abs(dx) : Infinity,
           Math.abs(dy) > 1e-6 ? needY / Math.abs(dy) : Infinity);
       const moved = (by) => ({ x: label.x + dx * by, y: label.y + dy * by, w: label.w, h: label.h });
-      for (let tries = 0; tries < 80
-          && obstacles.slice(1).some((other) => overlap(moved(out), other) > 0); tries++) {
+      const taken = () => [...obstacles.slice(1), ...others].some(
+        (other) => overlap(moved(out), other) > 0);
+      for (let tries = 0; tries < 80 && taken(); tries++) {
         out += 3;
       }
       const placed = moved(out);
@@ -738,6 +762,7 @@ export class SceneRenderer {
     for (const built of this.shapes.values()) {
       if (!built.def.inspect || !this.isShown(built)) continue;
       for (const line of built.lines) {
+        if (!this.isDrawn(line)) continue;
         // A line flat on the floor (a start's outline) counts a few pixels farther than one above
         // it, so a robot standing on a start is still the one clicked at its bumpers.
         const distance = this.pixelsTo(line, x, y, rect) + (this.onTheFloor(line) ? FLOOR_PENALTY : 0);
@@ -747,6 +772,7 @@ export class SceneRenderer {
         }
       }
       for (const fill of built.fills) {
+        if (!this.isDrawn(fill)) continue;
         const hit = ray.intersectObject(fill, false)[0];
         if (hit && hit.distance < solidDistance) {
           solidDistance = hit.distance;
@@ -756,6 +782,14 @@ export class SceneRenderer {
     }
     const picked = nearestLine || nearestSolid;
     return picked ? { id: picked.def.id, layer: picked.layer } : null;
+  }
+
+  /** Whether an object is drawn: it and everything it hangs from is visible. */
+  isDrawn(object) {
+    for (let each = object; each; each = each.parent) {
+      if (!each.visible) return false;
+    }
+    return true;
   }
 
   /** Whether a line lies flat on the floor: none of its points is above a centimeter. */

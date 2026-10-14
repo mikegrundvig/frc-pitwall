@@ -361,6 +361,23 @@ class WorldSceneTest {
         .isEmpty();
   }
 
+  /**
+   * A camera's view is one area seen from above, so the page draws its outline on the floor in
+   * place of the pyramid's edges, and its name stands at the far end of its axis, 3 m out.
+   */
+  @Test
+  void aCameraViewIsSeenFromAboveAsOneAreaAndNamedAtItsFarEnd() {
+    onAPage();
+    String described = JSON.toJson(scenes.descriptions());
+
+    assertThat(described)
+        .contains("\"id\":\"camera.front.view\",\"kind\":\"frustum\"")
+        .contains("\"plan\":true")
+        .contains("\"id\":\"camera.front.view.name\",\"kind\":\"label\"")
+        .contains("\"text\":\"front\"")
+        .contains("\"at\":[3,0,0]");
+  }
+
   /** On a robot, a click on a start says where it is and offers nothing to do. */
   @Test
   void onARobotAClickOnAStartOffersNoPlacing() {

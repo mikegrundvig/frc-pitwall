@@ -181,6 +181,71 @@ function solid(built, geometry, outline) {
   built.object.add(edges);
 }
 
+/**
+ * A frustum's view from above: the outline on the floor of its corners (and its lens, where the
+ * near range is zero), with a faint fill. The pyramid's edges seen from above are four lines and a
+ * rectangle on edge, and a pitched camera's four views overlap into noise; this is one shape each.
+ *
+ * <p>It lives in the scene's root, not in the camera's frame, since the floor does not turn with
+ * the camera: {@code update} takes the camera's frame as it stands and puts the outline where the
+ * corners now are.
+ *
+ * @param built the frustum, whose lines and fills the outline and fill join (to be styled and
+ *     picked with it)
+ * @param edges the pyramid's edges, which the 3D view draws and the view from above does not
+ * @param corners the frustum's corners in its own frame, as [x, y, z]
+ * @return {group, edges, update(matrix)}
+ */
+function seenFromAbove(built, edges, corners) {
+  const group = new THREE.Group();
+  group.name = built.def.id + ".plan";
+  const outline = new THREE.LineLoop(new THREE.BufferGeometry());
+  const fill = new THREE.Mesh(new THREE.BufferGeometry());
+  group.add(fill, outline);
+  built.lines.push(outline);
+  built.fills.push(fill);
+  const corner = new THREE.Vector3();
+  return {
+    group,
+    edges,
+    /** Puts the outline where the frustum's corners are on the floor under the frame's matrix. */
+    update(matrix) {
+      const floor = corners.map((c) => {
+        corner.set(c[0], c[1], c[2]).applyMatrix4(matrix);
+        return [corner.x, corner.y];
+      });
+      const hull = convexHull(floor);
+      group.visible = hull.length >= 3;
+      if (hull.length < 3) return;
+      outline.geometry.setFromPoints(hull.map(([x, y]) => new THREE.Vector3(x, y, 0)));
+      outline.geometry.computeBoundingSphere();
+      if (outline.material.isLineDashedMaterial) measureDashes(outline);
+      fill.geometry.dispose();
+      fill.geometry = new THREE.ShapeGeometry(
+        new THREE.Shape(hull.map(([x, y]) => new THREE.Vector2(x, y))));
+    },
+  };
+}
+
+/** The corners of the smallest convex shape holding some points, counterclockwise: [[x, y], ...]. */
+export function convexHull(points) {
+  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (sorted.length < 3) return sorted;
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (list) => {
+    const kept = [];
+    for (const point of list) {
+      while (kept.length >= 2 && cross(kept[kept.length - 2], kept[kept.length - 1], point) <= 0) {
+        kept.pop();
+      }
+      kept.push(point);
+    }
+    kept.pop();
+    return kept;
+  };
+  return [...half(sorted), ...half([...sorted].reverse())];
+}
+
 const BUILDERS = {
   box(def, built) {
     const [l, w, h] = def.size || [1, 1, 1];
@@ -314,6 +379,9 @@ const BUILDERS = {
     built.object.add(lines);
     // Its edges only. Its sides, filled however faintly, tinted everything four cameras' views
     // lay over, the robot first.
+    if (def.plan) {
+      built.plan = seenFromAbove(built, lines, [...nearCorners, ...farCorners]);
+    }
   },
 
   label(def, built, kit, label) {

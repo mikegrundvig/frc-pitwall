@@ -12,10 +12,10 @@ import java.util.Optional;
 import java.util.function.Function;
 
 /**
- * Each camera's view, as far as {@link #VIEW_METERS}. The layer is off until switched on, since
- * four views crowd the robot they belong to. One camera's view is also shown while that camera is
- * clicked, because {@link RobotLayer}'s camera reveals its own. The views are drawn in the cameras'
- * frames, which the robot's layer adds.
+ * Each camera's view, as far as {@link #VIEW_METERS}, with the camera's name at its far end. The
+ * layer is off until switched on, since four views crowd the robot they belong to. One camera's
+ * view is also shown while that camera is clicked, because {@link RobotLayer}'s camera reveals its
+ * own. The views are drawn in the cameras' frames, which the robot's layer adds.
  */
 final class CameraViews implements Layer {
   /**
@@ -43,6 +43,11 @@ final class CameraViews implements Layer {
     return WorldWords.cameraFrame(camera.id()) + ".view";
   }
 
+  /** The id of the label that is a camera's name at the far end of its view. */
+  private static String name(CameraConfig camera) {
+    return view(camera) + ".name";
+  }
+
   /** A view is drawn in its camera's frame, which the robot's layer moves: nothing here does. */
   @Override
   public Optional<Recorded> recorded() {
@@ -62,19 +67,29 @@ final class CameraViews implements Layer {
   @Override
   public List<Legend> legend() {
     return List.of(
-        Legend.outline(
-            Style.MUTED, "What a camera sees, drawn out to 3 m: it reads tags farther than that"));
+        Legend.fill(
+            Style.MUTED,
+            "What a camera sees, drawn out to 3 m: it reads tags farther than that. From above,"
+                + " the area on the floor it covers; in 3D, its edges"));
   }
 
   @Override
   public void describe(SceneBuilder scene) {
     for (CameraConfig camera : cameras) {
       RobotLayer.FieldOfView sees = RobotLayer.fieldOfView(camera.sensor());
+      double far = Math.min(VIEW_METERS, camera.sensor().sightRange().in(Meters));
       scene
           .frustum(view(camera), WorldWords.cameraFrame(camera.id()))
           .fov(sees.acrossRadians(), sees.upAndDownRadians())
-          .range(0, Math.min(VIEW_METERS, camera.sensor().sightRange().in(Meters)))
+          .range(0, far)
+          .seenFromAbove()
           .inspect(() -> WorldWords.camera(camera, cameraAction, simulated));
+      // At the far end of its axis, where the page keeps names clear of the robot and of each
+      // other.
+      scene
+          .label(name(camera), WorldWords.cameraFrame(camera.id()))
+          .text(camera.name())
+          .at(far, 0, 0);
     }
   }
 }

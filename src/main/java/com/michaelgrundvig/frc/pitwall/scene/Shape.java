@@ -518,13 +518,16 @@ public abstract sealed class Shape<S extends Shape<S>>
 
   /**
    * What a camera sees: a pyramid along its frame's x (WPILib's camera frame: x forward, y left, z
-   * up), as wide and tall as its field of view, from a near range out to a far one.
+   * up), as wide and tall as its field of view, from a near range out to a far one. Drawn in 3D as
+   * the pyramid's edges; {@link #seenFromAbove} has the view from above show it as the area it
+   * covers on the floor.
    */
   public static final class Frustum extends Shape<Frustum> {
     private double horizontal = Math.toRadians(70);
     private double vertical = Math.toRadians(50);
     private double near;
     private double far = 1;
+    private boolean seenFromAbove;
 
     Frustum(String id, String frame) {
       super(id, "frustum", frame);
@@ -555,8 +558,21 @@ public abstract sealed class Shape<S extends Shape<S>>
       return this;
     }
 
+    /**
+     * Has the page's view from above draw it as one area: the outline on the floor of the lens and
+     * the far corners, faintly filled, where its edges seen from above would be four lines and a
+     * rectangle on edge. The 3D view still draws the edges.
+     */
+    public Frustum seenFromAbove() {
+      seenFromAbove = true;
+      return this;
+    }
+
     @Override
     void describe(Map<String, Object> wire) {
+      if (seenFromAbove) {
+        wire.put("plan", true);
+      }
       wire.put("fov", List.of(Wire.degrees(horizontal), Wire.degrees(vertical)));
       wire.put("range", List.of(Wire.meters(near), Wire.meters(far)));
     }
