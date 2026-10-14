@@ -76,11 +76,20 @@ All of it is simulator only, and one check decides that for the whole page: `sim
 `isSimulator()`, true for a simulated robot whose state has a `simulator` section. A robot's page
 has no such section and none of the routes (they answer 404), so none of these controls is built.
 
-- **Enable and Disable in the state bar**, beside the mode, on every view (`sim-enable.js`, the
-  same control as the *Sim* view's bar, small). Enable is a button, pressed: no key enables, and
+- **Enable and Disable in the state bar**, right after the robot's name, on every view
+  (`sim-enable.js`, the same control as the *Sim* view's bar, small). Nothing that comes and goes
+  in the bar is to their left, so they never move. Enable is a button, pressed: no key enables, and
   nothing enables as a side effect. Pressed, it hands the focus to Disable, so a Space or an Enter
   meant for something else can't enable the robot again once it's disabled. On a robot the bar shows the mode and has nothing to press
   about it; the Driver Station enables a robot.
+- **The state bar is two groups** (`bar.js`): the robot's (its name, Enable and Disable, its mode,
+  the link) and this page's (the driving pill, the side dock's buttons, tuning, the theme). Each
+  moves whole. They are one line while both fit, which on the simulator's page is from about 1260
+  px; narrower, the page's group is a second line, always, so nothing moves down the page when the
+  driving pill appears. To fit a laptop, the simulator's bar under 1600 px folds tuning's switch
+  and the theme into a small menu at its end (⋯), opened and closed by its own button or a press
+  anywhere else, never by Esc; the button shows a lock while tuning is off. A robot's page has
+  the room, and shows both in the bar.
 - **The side dock** (`side-dock.js`) is a place beside every view that the page owns. A panel
   registers with `addPanel({id, title, label, offered(), mount(element), show(), hide()})` and the
   dock gives it a button in the state bar, opens and closes it, sets its width (drag its edge, or
@@ -97,8 +106,8 @@ has no such section and none of the routes (they answer 404), so none of these c
   one place, and `keepDrawn` draws it only while its place is on screen. There is one of each
   control, never a copy.
 - **Driving from any view:** keyboard driving, once switched on, drives whatever view is showing
-  (`sim-drive.js` listens on the page, not on a view). The state bar says "⌨ Keys drive the robot"
-  on every view while it does, or why it isn't driving now, with Switch off beside it.
+  (`sim-drive.js` listens on the page, not on a view). The state bar says "⌨ Keys drive" on every
+  view while it does, or why it isn't driving now, with Switch off beside it.
 - **The auto to run** (`sim-auto.js`): the robot program marks the device whose card is what
   autonomous runs (`Devices.Device.autonomous()`), and the panel shows that card's lines and its
   chooser (the one Pit's card has) over one button, *Set autonomous and enable*, which sends
@@ -109,7 +118,7 @@ has no such section and none of the routes (they answer 404), so none of these c
   those used lately (kept in this browser), eight until asked for all; both have a filter.
 - **Faults from a click:** in the World view an `Inspection` may name the simulator's parts the
   shape is (`Inspection.component(name)`), and the inspect route answers with those the simulator
-  has (`"components"`, always empty on a robot). The details panel then ends in those parts'
+  has (`"components"`, always empty on a robot). The details' card then ends in those parts'
   faults, the same rows. `WorldScene.of(..., SimulatedParts)` is how a robot's simulation says what
   it called each part: a camera, the gyro, a module (a wheel), and on the bumpers the robot itself
   with the backup IMU, which has no shape. A fault two of whose numbers are a place on the field
@@ -280,6 +289,14 @@ the page still follows the robot meanwhile, and the state bar still says how the
   keyboard driving (which drives with the arrows and L), and for Esc while a simulated robot is
   enabled or something runs, which disables or stops it ([the page's keys](#the-pages-keys)). None
   of them reaches the robot.
+- **The dock** is the two of them along a view's bottom, the same under the Robot view and the
+  World view: the strip on the left and the list of events (below) as the right-hand column, the
+  same height, so neither ever lies over the other's controls. The strip sets the height (two
+  lines of controls and the track on a laptop) and the list's rows scroll in it, five at the
+  least. The list folds to its title, which gives the strip the whole width; every list folds
+  together and the browser keeps which. On a view under 700 px wide the list is under the strip.
+  Under the World view the dock is in the page's flow, under the drawing; under the Robot view it
+  stays at the bottom of the window while the cards scroll.
 - **The list of events** (`page/event-list.js`), beside the strip: the events around the cursor in
   order, with their times, those of the cursor's loop marked; a click moves the cursor there. A
   joint's name on its card shows that joint's events only, and *Problems only* the problems. This is
@@ -416,7 +433,7 @@ described one), and its shapes of the moment: `state.shapes()` starts them over,
 added replace the last ones whole. A layer that doesn't call it keeps what it has, so call it only
 when something changed.
 
-**A click** shows the shape's `Inspection` beside the drawing: a title, labeled details, and the
+**A click** shows the shape's `Inspection` in a card over the drawing's side: a title, labeled details, and the
 names of page actions (`pitwall.actions()`) it ends in, run exactly as from Pit, gate and all. The
 supplier runs on a web server thread, so it reads only what can't change under it, such as a record
 the loop has finished with. A shape of the moment stays inspectable for two seconds after it's
@@ -459,7 +476,30 @@ which loads the first time the view is shown. One renderer, two cameras: *Top*, 
 in view. The view draws the moment the page's cursor is on: live, the robot's patches; at an
 earlier loop, that loop's state asked of the robot and kept. To hold the drawing still, stand the
 cursor on a loop, with the strip under the drawing or the Left key; there is no *Hold* button any
-more. Beside the drawing is the legend, which folds to one button. A click picks the nearest
+more.
+
+The drawing is the view: it has the view's whole width and all the height the dock under it
+leaves, and nothing takes a column from it. What else the view has lies over the drawing's corners:
+
+- **At its top left**, the cameras (*Top*, *3D*, *Follow*, *Fit*) and *Layers*. The scene's name
+  is there only when it says more than the tab does.
+- **Layers** opens the legend's panel under them: a row for each layer, which switches it, so a
+  layer is one press away while the panel is open. *What the marks mean* adds, under each shown
+  layer, a sample of each of its marks and what it means. Whether the panel is open, whether it
+  explains the marks, and which layers are switched are kept in the browser.
+- **The details of what was clicked** are a card over the drawing's right side, no taller than
+  the drawing, scrolling under its title. It stands on the left instead when what was clicked is
+  where the card would be, so the thing is never under its own details; the drawing stays in
+  sight and takes clicks beside it (*Apply where I click*). It closes with its ✕, or a click on
+  nothing.
+
+None of these closes with Esc, which is the robot's ([the page's keys](#the-pages-keys)). When the
+drawing's size changes (the side dock opening, the window, the strip growing a line) a view as
+*Fit* framed it is framed again, one moved by hand keeps its left edge, and a followed robot stays
+in the middle; the canvas is drawn at the size it is shown, never stretched. On a phone the
+drawing is a fixed share of the screen and the card is under it.
+
+A click picks the nearest
 inspectable line within 12 px, so a thin ray is easy to hit, else the solid under the pointer, and
 asks about the loop shown; the pointer over a shape shows what it reveals (a camera's name and
 view) while it is there. It draws only when a patch arrives or
