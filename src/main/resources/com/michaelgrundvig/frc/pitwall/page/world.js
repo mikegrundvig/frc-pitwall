@@ -13,9 +13,15 @@
 // events along its bottom (timeline.js, event-list.js) move the cursor, with the same keys as
 // under the Robot view. A layer the robot can draw only live says so, and is hidden meanwhile.
 //
+// The drawing has the view's width and all the height the strip leaves. What else the view has
+// lies over the drawing's corners and takes no room from it: the cameras and Layers at its top
+// left, and the details of what was clicked in a card at its right.
+//
 // A click on a shape the robot made inspectable asks the robot what it is, in the loop shown (GET
 // /api/scenes/<id>/inspect/<shape>, with ?index= when the cursor is not live), and shows the answer
-// beside the drawing, ending in what can be done about it: the page's actions, run as from Pit.
+// in a card over the drawing's side, ending in what can be done about it: the page's actions, run
+// as from Pit. The card stands on the right, or on the left when what was clicked would be under
+// it there, and closes with its own button.
 //
 // In the simulator the answer may name the simulator's parts the shape is (a camera, the gyro, a
 // wheel's module, the robot itself), and the panel then ends in their faults, applied and undone
@@ -23,9 +29,10 @@
 // the field (setting the robot down) can take the place from the next click on the drawing. On a
 // robot the answer names no parts, and there is no simulator to have any.
 //
-// The legend says what each kind of mark means, layer by layer, with a sample drawn from the very
-// style the layer draws in, and it is where a layer is switched on and off. What is switched, and
-// whether the legend is open, is kept in this browser.
+// The legend is the Layers button's panel, over the drawing: a row for each layer, which switches
+// it on and off, and, when asked (What the marks mean), under each shown layer what each kind of
+// its marks means, with a sample drawn from the very style the layer draws in. What is switched,
+// whether the panel is open and whether it explains the marks is kept in this browser.
 
 import { robot, onChange, onConnection, showViews, send, h, replace, say } from "./core.js";
 import { cursor, onCursor, span, noteTime } from "./cursor.js";
@@ -40,9 +47,15 @@ const SVG = "http://www.w3.org/2000/svg";
 /** How many loops each side of the cursor's are fetched ahead: where a step goes next. */
 const BESIDE = 3;
 
-/** Where this browser keeps which layers are switched, by scene and layer, and the legend's fold. */
+/**
+ * Where this browser keeps which layers are switched, by scene and layer, and the legend: {open,
+ * meanings}, whether its panel is open and whether it says what the marks mean.
+ */
 const LAYERS_KEY = "pitwall.world.layers";
 const LEGEND_KEY = "pitwall.world.legend";
+
+/** How near the details' card a click may be, in pixels, before the card stands the other side. */
+const CARD_CLEAR = 24;
 
 let visible = false;
 let sceneId = null; // the scene shown
@@ -54,7 +67,6 @@ let describedAs = ""; // the description the renderer was built from
 let following = false;
 let inspected = null; // {id, layer} of the shape whose details are shown
 let inspection = null; // what the robot said of it
-let clickedX = null; // where it was clicked, in CSS pixels from the canvas's left
 let wasOffered = false;
 let loops = null; // the scene's earlier loops, as the robot answered for them
 let loopsOf = ""; // the scene and the session those loops are of
@@ -65,6 +77,7 @@ let fails = null; // the faults of the simulator's parts the shape inspected is:
 let failsOf = ""; // the parts those are of
 let placing = null; // the fault's row whose place the next click on the drawing gives
 const chosen = readKept(LAYERS_KEY, {}); // "scene/layer" -> shown, as chosen in this browser
+const legend = readKept(LEGEND_KEY, {}); // {open, meanings}, as chosen in this browser
 const ui = {};
 
 function scenes() {
@@ -81,7 +94,7 @@ function offered() {
 }
 
 function mount(view) {
-  ui.title = h("h1", { class: "view-title" }, "World");
+  ui.title = h("h1", { class: "view-title sr" }, "World");
   ui.pick = h("select", { class: "world-scene", "aria-label": "Scene", hidden: true,
                           onchange: () => choose(ui.pick.value) });
   ui.top = h("button", { type: "button", class: "chip", "aria-pressed": "true",
@@ -96,28 +109,38 @@ function mount(view) {
                             "aria-label": "The scene, drawn in 3D. Drag to move, scroll to zoom." });
   ui.message = h("p", { class: "world-message", hidden: true });
   ui.liveOnly = h("p", { class: "world-live-only", role: "status", hidden: true });
+  // The legend: a button among the cameras', and its panel under them, over the drawing.
   ui.legendRows = h("ul", { class: "world-legend-rows" });
-  ui.legend = h("details", { class: "world-legend", open: readKept(LEGEND_KEY, true) },
-    h("summary", null, "Legend"), ui.legendRows);
-  ui.legend.addEventListener("toggle", () => {
-    keep(LEGEND_KEY, ui.legend.open);
-    // Folded, the legend gives its width back to the drawing, which is fitted to what it has.
-    if (renderer && visible) renderer.resize();
-  });
+  ui.meanings = h("button", { type: "button", class: "world-layer world-explain",
+                              onclick: () => showLegend(legend.open, !legend.meanings) },
+    h("span", { class: "world-check", "aria-hidden": "true" }),
+    h("span", null, "What the marks mean"));
+  ui.legend = h("section", { class: "world-legend", id: "world-legend", "aria-label": "Layers" },
+    ui.legendRows, ui.meanings);
+  ui.layers = h("button", { type: "button", class: "chip world-layers",
+                            "aria-controls": "world-legend",
+                            title: "Layers: what is drawn, and what each mark means",
+                            onclick: () => showLegend(!legend.open, legend.meanings) }, "Layers");
+  showLegend(legend.open === true, legend.meanings === true);
   // What the robot said of the shape, drawn again as it changes; and under it, in the simulator,
   // the faults of the part it is, built once for a part so a number being typed is kept.
   ui.said = h("div", { "aria-live": "polite" });
   ui.fails = h("section", { class: "world-fails", hidden: true, "aria-label": "What fails" });
-  ui.details = h("aside", { class: "world-details card", hidden: true }, ui.said, ui.fails);
-  ui.stage = h("div", { class: "world-stage" }, ui.canvas, ui.message, ui.liveOnly);
+  ui.details = h("aside", { class: "world-details card", hidden: true, "aria-label": "Details" },
+    ui.said, ui.fails);
+  // Over the drawing's top left corner, and before it for the keyboard: the view's name, the
+  // cameras and Layers, with the legend's panel under them. Only they take the pointer there.
+  ui.stage = h("div", { class: "world-stage" },
+    h("div", { class: "world-over" },
+      h("div", { class: "world-bar" }, ui.title, ui.pick,
+        h("div", { class: "world-cameras", role: "group", "aria-label": "Camera" }, ui.top,
+          ui.around),
+        ui.follow, ui.fit, ui.layers),
+      ui.legend),
+    ui.canvas, ui.message, ui.liveOnly);
   view.classList.add("world");
   view.append(
-    h("div", { class: "world-bar" }, ui.title, ui.pick,
-      h("div", { class: "world-cameras", role: "group", "aria-label": "Camera" }, ui.top,
-        ui.around),
-      ui.follow, ui.fit),
-    h("div", { class: "world-main" }, ui.stage,
-      h("div", { class: "world-side" }, ui.legend, ui.details)),
+    h("div", { class: "world-main" }, ui.stage, ui.details),
     h("div", { class: "dock" }, makeEventList().element, makeTimeline().element));
 
   let down = null;
@@ -142,7 +165,9 @@ function mount(view) {
     });
   });
   ui.canvas.addEventListener("pointerleave", () => renderer && renderer.hover(null));
-  new ResizeObserver(() => renderer && visible && renderer.resize()).observe(ui.stage);
+  // The drawing takes what the page gives it: the side dock opening beside the view, the strip
+  // growing a line under it. As Fit framed it, it is framed again in its new shape.
+  new ResizeObserver(() => renderer && visible && renderer.refit()).observe(ui.stage);
   const recolor = () => renderer && renderer.recolor();
   document.addEventListener("pitwall-theme", recolor);
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", recolor);
@@ -270,7 +295,9 @@ function redraw() {
     return;
   }
   showMessage("");
+  // The scene's name is on the drawing only when it says more than the view's tab does.
   ui.title.textContent = now.title || "World";
+  ui.title.classList.toggle("sr", ui.title.textContent === "World");
   const description = JSON.stringify({ focus: now.focus, layers: now.layers });
   if (description !== describedAs) {
     describedAs = description;
@@ -360,9 +387,26 @@ function isShown(id, layer) {
 }
 
 /**
- * The legend: a row for each layer of the scene, pressed while the layer is shown, and under a
- * shown layer what each kind of its marks means. A layer that is hidden explains nothing, so the
- * legend never describes what is not on screen.
+ * Opens or closes the legend's panel, and has it say what the marks mean or only list the layers:
+ * as chosen, and kept in this browser.
+ */
+function showLegend(open, meanings) {
+  const explained = legend.meanings !== meanings;
+  legend.open = open;
+  legend.meanings = meanings;
+  keep(LEGEND_KEY, legend);
+  ui.legend.hidden = !open;
+  ui.legend.classList.toggle("explained", meanings);
+  ui.layers.setAttribute("aria-expanded", String(open));
+  ui.meanings.setAttribute("aria-pressed", String(meanings));
+  ui.meanings.firstChild.textContent = meanings ? "✓" : "";
+  if (explained && styles && scene()) drawLegend();
+}
+
+/**
+ * The legend: a row for each layer of the scene, pressed while the layer is shown, and, when it
+ * explains the marks, under a shown layer what each kind of them means. A layer that is hidden
+ * explains nothing, so the legend never describes what is not on screen.
  */
 function drawLegend() {
   const now = scene();
@@ -377,12 +421,13 @@ function drawLegend() {
       h("span", null, layer.title || id),
       hiddenNow ? h("span", { class: "meta" }, " (live only)") : null);
     toggle.addEventListener("click", () => switchLayer(id, layer, !shown));
-    const meanings = shown && !hiddenNow ? (layer.legend || []).map((entry) =>
+    const meanings = legend.meanings && shown && !hiddenNow ? (layer.legend || []).map((entry) =>
       h("li", { class: "world-meaning" }, sample(entry), h("span", null, entry.text))) : [];
     rows.push(h("li", null, toggle,
       meanings.length ? h("ul", { class: "world-meanings" }, meanings) : null));
   }
-  ui.legend.hidden = rows.length === 0;
+  ui.layers.hidden = rows.length === 0;
+  ui.legend.hidden = rows.length === 0 || !legend.open;
   ui.legendRows.replaceChildren(...rows);
 }
 
@@ -496,7 +541,7 @@ async function clicked(x, y) {
   }
   inspected = picked;
   inspection = null;
-  clickedX = x - ui.canvas.getBoundingClientRect().left;
+  standClearOf(x);
   renderer.select(picked.id);
   showDetails("Asking the robot…");
   ask();
@@ -522,7 +567,20 @@ async function ask() {
   showDetails();
 }
 
-/** The details panel: what the robot said of the shape clicked, ending in what can be done. */
+/**
+ * Stands the details' card where it does not cover what was clicked: on the drawing's right, or on
+ * its left when the click was where the card would be.
+ *
+ * @param x where the click was, in CSS pixels from the window's left
+ */
+function standClearOf(x) {
+  const stage = ui.stage.getBoundingClientRect();
+  const card = Math.min(320, stage.width - 16);
+  ui.details.classList.toggle("left", x > stage.right - card - CARD_CLEAR
+      && x - stage.left > stage.width / 2);
+}
+
+/** The details' card: what the robot said of the shape clicked, ending in what can be done. */
 function showDetails(waiting = "") {
   if (!inspected) return;
   detailsShown(true);
@@ -629,14 +687,9 @@ function closeDetails() {
   if (renderer) renderer.select(null);
 }
 
-/**
- * Shows or hides the details beside the drawing, which takes or gives back their width: the
- * drawing is fitted to what it has then, keeping the point clicked in sight.
- */
+/** Shows or hides the details' card, over the drawing's side: the drawing keeps its size. */
 function detailsShown(shown) {
-  if (ui.details.hidden === !shown) return;
   ui.details.hidden = !shown;
-  if (renderer && visible) renderer.refit(shown ? clickedX : null);
 }
 
 export default { id: "world", title: "World", mount, show, hide, route, offered };

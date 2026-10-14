@@ -352,18 +352,16 @@ export class SceneRenderer {
   }
 
   /**
-   * Fits the drawing to the canvas after the page changed its width (the details panel opening or
-   * closing beside it), so what was clicked stays on screen. A view as Fit framed it is framed
-   * again; one moved by hand keeps its left edge, where the panel isn't, and pans just enough to
-   * keep the point clicked in sight. Following, the robot is put back in the middle.
-   *
-   * @param keepX where the point to keep was, in CSS pixels from the canvas's left; null for none
+   * Fits the drawing to the canvas after the page changed its size (a panel opening or closing
+   * beside the view, the strip under it growing a line). A view as Fit framed it is framed again;
+   * one moved by hand keeps its left edge, since what opens beside a view opens on its right.
+   * Following, the robot is put back in the middle.
    */
-  refit(keepX = null) {
-    const before = this.width;
+  refit() {
+    const before = { width: this.width, height: this.height };
     this.resize();
-    const after = this.width;
-    if (!before || !after || before === after) return;
+    if (!before.width || !this.width) return;
+    if (before.width === this.width && before.height === this.height) return;
     if (this.followed) {
       this.followedAt = null;
       this.draw();
@@ -374,11 +372,8 @@ export class SceneRenderer {
       return;
     }
     // A narrower canvas shows less on both sides alike: shifting it back by half the change keeps
-    // the left edge; then, if the point kept would land off the right, by as much more.
-    const margin = Math.min(40, after / 4);
-    let shift = (before - after) / 2;
-    if (keepX !== null && keepX > after - margin) shift -= keepX - (after - margin);
-    this.pan(shift);
+    // the left edge.
+    if (before.width !== this.width) this.pan((before.width - this.width) / 2);
   }
 
   /** Moves the view so the drawing shifts right on screen by some CSS pixels: left if negative. */
@@ -452,6 +447,7 @@ export class SceneRenderer {
     const height = this.canvas.clientHeight;
     if (!width || !height) return;
     this.width = width;
+    this.height = height;
     this.renderer.setSize(width, height, false); // false: the stylesheet sizes the canvas
     const half = this.fitTop || 5;
     const aspect = width / height;

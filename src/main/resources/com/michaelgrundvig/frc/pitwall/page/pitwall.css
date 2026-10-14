@@ -256,7 +256,7 @@ input[readonly] { background: var(--surface-2); }
 
 body.stale .views .view { opacity: .6; }
 .view { max-width: 1280px; margin: 0 auto; padding: var(--s4); }
-@media (max-width: 719px) { .view { padding: var(--s3); } }
+@media (max-width: 719px) { .view, .view.world { padding: var(--s3); } }
 .view-title { font-size: var(--title); margin-bottom: var(--s1); }
 .lede { margin: 0 0 14px; color: var(--text-2); max-width: 75ch; }
 
@@ -750,47 +750,61 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .dlg ul { padding-left: 18px; font-family: var(--mono); font-size: var(--meta); max-height: 40vh; overflow: auto; }
 .dlg-actions { display: flex; justify-content: flex-end; gap: var(--s2); margin-top: 14px; }
 
-/* ---- World: the robot's scenes in 3D. The canvas fills what the view leaves; the stylesheet sizes
-   it (the renderer writes no style). The details of a clicked shape sit beside it on a laptop and
-   under it on a phone. ---- */
+/* ---- World: the robot's scenes in 3D. The drawing is the view: it has the view's width and all
+   the height the strip leaves, and the stylesheet sizes it (the renderer writes no style). What
+   else the view has lies over the drawing's corners and takes no room from it: the cameras and
+   Layers at its top left with the legend's panel under them, and the details of a clicked shape in
+   a card at its side. On a phone the card is under the drawing. ---- */
 
-.view.world { max-width: none; height: 100%; display: flex; flex-direction: column; gap: var(--s2); }
-.world-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
-.world-bar .view-title { margin: 0 var(--s2) 0 0; }
-.world-cameras { display: flex; flex-wrap: wrap; gap: var(--s1); }
-.world-main { flex: 1 0 320px; min-height: 320px; display: grid; gap: var(--s3);
-              grid-template-columns: minmax(0, 1fr) auto; }
-.world-stage { position: relative; min-height: 320px; overflow: hidden; border-radius: 10px;
+.view.world { max-width: none; height: 100%; padding: var(--s2); display: flex; flex-direction: column;
+              gap: var(--s2); }
+.world-main { position: relative; flex: 1 1 0; min-height: 260px; display: flex; flex-direction: column; }
+.world-stage { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; border-radius: 10px;
                border: 1px solid var(--line); background: var(--surface); }
-.world-gl { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+.world-gl { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none;
+            cursor: crosshair; }
 .world-gl:focus-visible { outline-offset: -3px; }
 .world-message { position: absolute; inset: 0; margin: 0; display: flex; align-items: center;
                  justify-content: center; padding: var(--s5); text-align: center;
                  color: var(--text-2); background: var(--surface); }
-/* Beside the drawing: the legend, which says what each kind of mark means and is where a layer is
-   switched, and under it the details of what was clicked. Folded, the legend is one small button,
-   and with no details shown the column is no wider than that. */
-.world-side { display: flex; flex-direction: column; gap: var(--s2); width: 300px; min-height: 0;
-              max-height: 100%; overflow: auto; }
-.world-side:has(> .world-legend:not([open])):has(> .world-details[hidden]) { width: auto; }
-.world-legend { flex: none; border-radius: 10px; font-size: var(--meta); background: var(--surface);
-                border: 1px solid var(--line); }
-.world-legend > summary { padding: 4px 10px; min-height: 28px; font-weight: 600; cursor: pointer; }
+/* Over the drawing: only the bar and the legend's panel take the pointer, the rest is the drawing's. */
+.world-over { position: absolute; z-index: 1; inset: var(--s2); display: flex; flex-direction: column;
+              align-items: flex-start; gap: var(--s1); pointer-events: none; }
+.world-over > * { pointer-events: auto; }
+.world-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1); max-width: 100%;
+             padding: 3px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface);
+             background: color-mix(in srgb, var(--surface) 86%, transparent); }
+.world-bar .view-title { font-size: var(--body); margin: 0 var(--s1) 0 6px; }
+.world-bar .view-title.sr { margin: 0; }
+.world-bar .chip { min-height: 28px; }
+.world-cameras { display: flex; gap: var(--s1); }
+.world-scene { min-height: 28px; padding: 0 var(--s1); }
+.world-layers::after { content: "▸"; margin-left: 6px; font-size: 11px; }
+.world-layers[aria-expanded="true"]::after { content: "▾"; }
+.world-layers[aria-expanded="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
+.world-layers[aria-expanded="true"]:hover:not(:disabled) { background: var(--text); filter: brightness(1.15); }
+/* The legend's panel: the layers, each a switch, and under each, when asked, what its marks mean.
+   No taller than the drawing: it scrolls. */
+.world-legend { flex: 0 1 auto; min-height: 0; overflow: auto; width: 212px; max-width: 100%; padding: 6px;
+                border-radius: 10px; font-size: var(--meta); background: var(--surface);
+                border: 1px solid var(--line-strong); box-shadow: var(--shadow); }
+.world-legend.explained { width: 300px; }
 .world-legend-rows, .world-meanings { list-style: none; margin: 0; padding: 0; }
-.world-legend-rows { padding: 0 6px 6px; }
 .world-layer { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 26px; padding: 2px 4px;
                border: none; border-radius: 6px; background: none; color: var(--text); text-align: left;
                font: inherit; font-weight: 600; cursor: pointer; }
 .world-layer:hover:not(:disabled) { background: var(--surface-2); }
+.world-layer:focus-visible { outline-offset: -3px; }
 .world-layer[aria-pressed="false"] { color: var(--text-2); font-weight: 400; }
 .world-check { display: inline-flex; align-items: center; justify-content: center; flex: none;
                width: 14px; height: 14px; border: 1px solid var(--line-strong); border-radius: 3px;
                font-size: 11px; line-height: 1; }
 .world-layer[aria-pressed="true"] .world-check { background: var(--text); color: var(--surface); border-color: var(--text); }
+.world-explain { margin-top: var(--s1); border-top: 1px solid var(--line); border-radius: 0 0 6px 6px; }
 .world-meanings { padding: 0 0 4px 24px; }
 .world-meaning { display: flex; align-items: flex-start; gap: 6px; padding: 1px 0; color: var(--text-2); }
 .world-sample { flex: none; width: 30px; height: 14px; margin-top: 2px; }
-@media (pointer: coarse) { .world-layer { min-height: 44px; } .world-legend > summary { min-height: 44px; } }
+@media (pointer: coarse) { .world-layer, .world-bar .chip, .world-scene { min-height: 44px; } }
 .world-live-only { position: absolute; bottom: var(--s2); left: var(--s2); right: var(--s2); margin: 0;
                    width: fit-content; max-width: calc(100% - 16px); padding: 6px 10px;
                    border-radius: 8px; font-size: var(--meta); font-weight: 600; color: var(--warn);
@@ -798,20 +812,27 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 /* The strip and the list of events, under the drawing: the same dock as under the Robot view. */
 .view.world .dock { position: static; margin: 0; flex: none; }
 .view.world .dock .el-list { height: 96px; }
-.world-details { margin: 0; }
-.world-details-head { display: flex; align-items: baseline; justify-content: space-between;
-                      gap: var(--s2); margin-bottom: var(--s2); }
+/* The details of what was clicked: a card over the drawing's right side, or its left (under the
+   bar) when what was clicked is on the right. No taller than the drawing: it scrolls under its
+   title, which keeps its Close in reach. */
+.world-details { position: absolute; z-index: 2; top: var(--s2); right: var(--s2); margin: 0;
+                 width: min(320px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto;
+                 padding-top: 0; border-color: var(--line-strong); box-shadow: var(--shadow); }
+.world-details.left { right: auto; left: var(--s2); top: 52px; max-height: calc(100% - 60px); }
+.world-details-head { position: sticky; z-index: 1; top: 0; display: flex; align-items: center;
+                      justify-content: space-between; gap: var(--s2); margin-bottom: 2px;
+                      padding: var(--s2) 0 var(--s1); background: var(--surface);
+                      border-bottom: 1px solid var(--line); }
 .world-details-head h2 { font-size: var(--value); overflow-wrap: anywhere; }
-.world-close { font-size: var(--value); }
+.world-close { flex: none; font-size: var(--value); min-width: 32px; min-height: 32px; text-align: center; }
 .world-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px var(--s3);
-               margin: 0 0 var(--s3); }
+               margin: 0 0 var(--s3); font-size: 14px; }
 .world-facts dt { color: var(--text-2); }
 .world-facts dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .world-actions { display: flex; flex-direction: column; gap: var(--s2);
                  border-top: 1px solid var(--line); padding-top: var(--s3); }
 .world-action { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
 .world-action .gate { flex-basis: 100%; font-size: var(--meta); }
-.world-scene { min-height: var(--row); }
 /* In the simulator, the faults of the part clicked, under what the robot said of it. */
 .world-fails { margin-top: var(--s2); padding-top: var(--s2); border-top: 1px solid var(--line); }
 .world-fails h3 { font-size: var(--body); }
@@ -822,10 +843,16 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
                  font-size: var(--meta); font-weight: 600; background: var(--edit-tint);
                  border: 1px solid var(--edit); }
 .world-gl.placing { cursor: cell; }
-@media (pointer: coarse) { .world-fails button { min-height: 44px; } }
+@media (pointer: coarse) { .world-fails button { min-height: 44px; } .world-close { min-width: 44px; min-height: 44px; } }
+/* A phone: the view is as tall as it needs and scrolls, the drawing a fixed share of the screen,
+   and the details under it. */
 @media (max-width: 719px) {
-  .world-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(280px, 1fr) auto; }
-  .world-side { width: auto; max-height: none; }
+  .view.world { height: auto; min-height: 100%; }
+  .world-main { flex: none; min-height: 0; }
+  .world-stage { flex: none; height: min(48vh, 400px); min-height: 260px; }
+  .world-details, .world-details.left { position: static; width: auto; max-height: none; overflow: visible;
+                                        margin-top: var(--s2); box-shadow: none; }
+  .world-details-head { position: static; }
 }
 
 /* ---- Robot: the joints as the model says them, a card each, and beside them the sensors, the
