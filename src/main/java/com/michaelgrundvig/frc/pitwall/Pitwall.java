@@ -54,7 +54,9 @@ import org.wpilib.util.Alert;
  * <p>In WPILib's simulation, and not while replaying, Pitwall also has the simulator's controls
  * ({@link #simulator()}): the Driver Station, joysticks, pausing and stepping, stopping, and
  * failing the simulated robot's parts live: an API the page's Sim view drives, in the place of
- * WPILib's simulator GUI. On a robot there is no such thing.
+ * WPILib's simulator GUI. On a robot there is no such thing, nor for real motors driven from a
+ * laptop through CTRE's hardware-attached simulation, which the program says by starting Pitwall
+ * with {@link RobotKind#REAL}: the page then only shows, as on a robot.
  */
 public final class Pitwall implements AutoCloseable {
   private final Tuning tuning;
@@ -93,7 +95,8 @@ public final class Pitwall implements AutoCloseable {
   /** Whether the field system has connected since the robot program started. */
   private boolean fieldSinceStart;
 
-  private Pitwall(String name, int port, boolean advantageKit, @Nullable RobotSession session) {
+  private Pitwall(
+      String name, int port, boolean advantageKit, @Nullable RobotSession session, RobotKind kind) {
     this.advantageKit = advantageKit;
     // Status items may change at most so often, timed on the robot's clock. Named Robot/... so the
     // page groups them under one heading, with whatever else a robot program adds the same way. The
@@ -109,7 +112,8 @@ public final class Pitwall implements AutoCloseable {
     // Runs are timed on the robot's clock, which a replay reproduces.
     experiments =
         new Experiments(
-            new Experiments.Robot(name, RobotBase.isSimulation(), code != null ? code.get() : ""),
+            new Experiments.Robot(
+                name, kind == RobotKind.SIMULATED, code != null ? code.get() : ""),
             advantageKit ? AdvantageKitLog.experiments() : inputs -> {},
             RobotController::getTime,
             replaying,
@@ -129,14 +133,15 @@ public final class Pitwall implements AutoCloseable {
             this::whyLocked,
             advantageKit ? AdvantageKitLog.tunables() : inputs -> {},
             replaying);
-    // Tuning starts switched on in the simulator; on a robot, switch it on from the page. While a
-    // tuned value differs from the committed one, an alert says which.
+    // Tuning starts switched on for a simulated robot; for real motors, on a robot or driven from a
+    // laptop, switch it on from the page. While a tuned value differs from the committed one, an
+    // alert says which.
     tuning =
         new Tuning(
             name,
             tee::configs,
             tee::pathOf,
-            RobotBase.isSimulation(),
+            kind.tuningStartsOn(),
             advantageKit ? AdvantageKitLog.tuning() : inputs -> {},
             view -> {
               tuned.setText(
@@ -144,11 +149,13 @@ public final class Pitwall implements AutoCloseable {
               tuned.set(view.hasChanges());
             });
     TunableRegistry.registerBackend("", tee);
-    // In WPILib's simulation the page can drive it; on a robot, or anything not known to be the
-    // simulator, nothing can. A replay's Driver Station and hardware come from its log, so none
-    // there either.
+    // A simulated robot in WPILib's simulation the page can drive; on a robot, or anything not
+    // known
+    // to be the simulator, nothing can. Nor can it drive real motors in WPILib's simulation (CTRE's
+    // hardware-attached simulation): those enable from WPILib's GUI or a Driver Station, as a robot
+    // does. A replay's Driver Station and hardware come from its log, so none there either.
     Simulator simulated =
-        Simulator.inWpilibSimulation() && !replaying
+        kind == RobotKind.SIMULATED && Simulator.inWpilibSimulation() && !replaying
             ? simulatorControls(advantageKit, said::add)
             : null;
     simulator = simulated;
@@ -255,7 +262,20 @@ public final class Pitwall implements AutoCloseable {
    * @param port where to serve the page; 0 picks a free one
    */
   public static Pitwall start(String name, int port) {
-    return new Pitwall(name, port, advantageKitPresent(), null);
+    return start(name, port, kindAsWpilibSaysIt());
+  }
+
+  /**
+   * Starts Pitwall and its page for a robot program that says what it drives: a laptop driving real
+   * motors through CTRE's hardware-attached simulation says {@link RobotKind#REAL}, which WPILib
+   * can't tell from its simulation.
+   *
+   * @param name the robot's name, for the page and the logs
+   * @param port where to serve the page; 0 picks a free one
+   * @param kind what the program drives: a simulated robot, or real motors
+   */
+  public static Pitwall start(String name, int port, RobotKind kind) {
+    return new Pitwall(name, port, advantageKitPresent(), null, kind);
   }
 
   /**
@@ -279,7 +299,44 @@ public final class Pitwall implements AutoCloseable {
    * @param session the robot's session, which the page's Robot view is drawn from
    */
   public static Pitwall start(String name, int port, RobotSession session) {
-    return new Pitwall(name, port, advantageKitPresent(), session);
+    return start(name, port, session, kindAsWpilibSaysIt());
+  }
+
+  /**
+   * Starts Pitwall and its page with the robot's session, for a robot program that says what it
+   * drives. The page is served on {@link PitwallServer#PORT}, or on the port the {@code
+   * pitwall.port} system property names.
+   *
+   * @param name the robot's name, for the page and the logs
+   * @param session the robot's session, which the page's Robot view is drawn from
+   * @param kind what the program drives: a simulated robot, or real motors
+   */
+  public static Pitwall start(String name, RobotSession session, RobotKind kind) {
+    return start(name, Integer.getInteger("pitwall.port", PitwallServer.PORT), session, kind);
+  }
+
+  /**
+   * Starts Pitwall and its page with the robot's session, for a robot program that says what it
+   * drives.
+   *
+   * @param name the robot's name, for the page and the logs
+   * @param port where to serve the page; 0 picks a free one
+   * @param session the robot's session, which the page's Robot view is drawn from
+   * @param kind what the program drives: a simulated robot, or real motors
+   */
+  public static Pitwall start(String name, int port, RobotSession session, RobotKind kind) {
+    return new Pitwall(name, port, advantageKitPresent(), session, kind);
+  }
+
+  /**
+   * What the program drives as far as WPILib can tell, for a program that doesn't say: a simulated
+   * robot in WPILib's simulation, real motors anywhere else.
+   */
+  private static RobotKind kindAsWpilibSaysIt() {
+    if (RobotBase.isSimulation()) {
+      return RobotKind.SIMULATED;
+    }
+    return RobotKind.REAL;
   }
 
   /** Live tuning's switch, and the live configurations' state. */

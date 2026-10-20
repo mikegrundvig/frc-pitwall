@@ -75,6 +75,9 @@ from them: nobody leaves the view they are watching to enable, drive, run an aut
 All of it is simulator only, and one check decides that for the whole page: `sim-state.js`'s
 `isSimulator()`, true for a simulated robot whose state has a `simulator` section. A robot's page
 has no such section and none of the routes (they answer 404), so none of these controls is built.
+Nor has a laptop's page when the program drives real motors through CTRE's hardware-attached
+simulation, which WPILib can't tell from its simulation: the program says so by starting Pitwall
+with `RobotKind.REAL`, and its page is a robot's, showing only, with tuning off until switched on.
 
 - **Enable and Disable in the state bar**, right after the robot's name, on every view
   (`sim-enable.js`, the same control as the *Sim* view's bar, small). Nothing that comes and goes
