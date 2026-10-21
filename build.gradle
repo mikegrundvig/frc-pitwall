@@ -9,8 +9,7 @@ plugins {
     alias(libs.plugins.errorprone)
 }
 
-// What a build that includes this one asks for (settings.gradle, includeBuild): Pitwall is
-// com.michaelgrundvig.frc:frc-pitwall.
+// Published as com.michaelgrundvig.frc:frc-pitwall (gradle/publishing.gradle, at the end).
 group = "com.michaelgrundvig.frc"
 
 java {
@@ -38,13 +37,22 @@ repositories {
     }
     mavenCentral()
 }
+// And the FRC libraries' own repository, for the robot model.
+apply from: file("gradle/frc-maven.gradle")
 
 dependencies {
-    api libs.wpilib.units // measures appear in the tuner's API
+    // Measures appear in the tuner's API. WPILib's units, like the rest of WPILib below, are a robot
+    // program's own: a build that reads Pitwall compiles against them with it, and none come along.
+    compileOnlyApi libs.wpilib.units
+    testImplementation libs.wpilib.units
     api libs.jspecify
     // The robot's definition appears in its signatures: the Robot view is drawn from it, and what
-    // holds a joint is decided by the model's own rules.
-    api "com.michaelgrundvig.frc:frc-robot-model"
+    // holds a joint is decided by the model's own rules. The model, too, compiles against WPILib
+    // and brings none of it; the tests run it with the field layouts and the matrix library it
+    // reads, as a robot program would.
+    api libs.frc.robot.model
+    testRuntimeOnly libs.wpilib.fields
+    testRuntimeOnly libs.ejml.simple
     // The model's records carry the annotations their builders are generated from, which the
     // compiler reads as it reads the records.
     compileOnly libs.recordbuilder.core
@@ -176,3 +184,12 @@ def vendorThree = tasks.register("vendorThree", Sync) {
 sourceSets.main.resources.srcDir(vendorThree)
 
 apply from: file("gradle/quality.gradle")
+
+ext.published = [
+    artifactId: "frc-pitwall",
+    name: "Pitwall",
+    description: "The robot program's own web page and API: status, actions, live checked tuning of typed configuration, and the robot's joints and world drawn as its model says them.",
+    repository: "frc-pitwall",
+    license: "BSD 3-Clause License",
+]
+apply from: file("gradle/publishing.gradle")

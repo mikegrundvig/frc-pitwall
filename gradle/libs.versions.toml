@@ -2,6 +2,10 @@
 # the build's and the tests' own.
 
 [versions]
+# This release of the FRC libraries (the model, localization, Pitwall, the runtime): what this build
+# publishes as (gradle/publishing.gradle), and the robot model's version it reads. All of them share
+# it, so a release is one change, here.
+frc-libs = "2026.10.20"
 # WPILib's libraries, each at the version WPILib's own release uses: a robot program's GradleRIO
 # brings the same, and Pitwall compiles against them without bundling them.
 wpilib = "2027.0.0-alpha-7"
@@ -9,6 +13,7 @@ wpilib = "2027.0.0-alpha-7"
 advantagekit = "27.0.0-alpha-6"
 avaje-jsonb = "3.14"
 quickbuf = "1.4"
+ejml = "0.46.0"
 spotless = "8.10.4"
 # The formatters Spotless runs (gradle/quality.gradle), pinned rather than left to Spotless's
 # defaults, so a newer Spotless can't reformat the code on its own: a formatter's new version is a
@@ -30,6 +35,9 @@ three = "0.181.1"
 recordbuilder = "53"
 
 [libraries]
+frc-robot-model = { module = "com.michaelgrundvig.frc:frc-robot-model", version.ref = "frc-libs" }
+wpilib-fields = { module = "org.wpilib.fields:fields-java", version.ref = "wpilib" }
+ejml-simple = { module = "org.ejml:ejml-simple", version.ref = "ejml" }
 # WPILib's units appear in the tuner's API, so they are Pitwall's own (api); the rest the robot
 # program supplies.
 wpilib-units = { module = "org.wpilib.wpiunits:wpiunits-java", version.ref = "wpilib" }

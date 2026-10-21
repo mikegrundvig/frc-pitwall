@@ -19,44 +19,43 @@ whatever answers there, and drives it.
 
 ## Using it
 
-It isn't published anywhere. A build takes it as source, as a git submodule built as part of that
-build (a Gradle composite build), so there is no version to bump:
-
-```
-git submodule add https://github.com/mikegrundvig/frc-pitwall.git pitwall
-git submodule add https://github.com/mikegrundvig/frc-robot-model.git model
-```
+It is published to the FRC libraries' Maven repository,
+[mikegrundvig.github.io/frc-maven](https://mikegrundvig.github.io/frc-maven/), as
+`com.michaelgrundvig.frc:frc-pitwall`. Versions are dated releases (`2026.10.20`) shared by all the
+FRC libraries; they are pre-release, with no promise of compatibility from one to the next. The
+robot runtime brings it, so a robot program built on the runtime has it already. Another adds:
 
 ```groovy
-// settings.gradle
-includeBuild("pitwall")
-includeBuild("model") // Pitwall reads the robot model, and uses the build's own
-
 // build.gradle
+repositories {
+    exclusiveContent {
+        forRepository {
+            maven { url = "https://mikegrundvig.github.io/frc-maven/" }
+        }
+        filter { includeGroup "com.michaelgrundvig.frc" }
+    }
+}
 dependencies {
-    implementation "com.michaelgrundvig.frc:frc-pitwall"
+    implementation "com.michaelgrundvig.frc:frc-pitwall:2026.10.20"
 }
 ```
 
-Pitwall carries the model as a submodule of its own too (`model/`), which is built only when
-Pitwall is the build that runs: its own `./gradlew ci`. A build that includes Pitwall provides the
-model itself, since Gradle refuses two builds that provide one module.
+It reads the robot model at the same version, which comes with it.
 
 WPILib, Commands v3 and AdvantageKit are the robot program's own: Pitwall compiles against them and
-doesn't bring them, so the program that uses it must have them (a WPILib project does). AdvantageKit
-is optional at run time. A change to Pitwall is made in that folder and committed there, then the
-build that uses it commits the submodule's new commit.
+doesn't bring them, so the program that uses it must have them (a WPILib project does), at the
+versions its GradleRIO and vendordeps decide. AdvantageKit is optional at run time.
 
 ## Building it
 
 Java 25, which Gradle downloads if it's missing. The build needs no robot program and no GradleRIO:
 it declares the WPILib and AdvantageKit libraries it compiles against itself, and its tests run
-without WPILib's native libraries. It does need the robot model, its submodule: clone with
-`--recurse-submodules`, or run `git submodule update --init`.
+without WPILib's native libraries. The robot model comes from the FRC libraries' repository, at the
+version the catalog's `frc-libs` names (`gradle/libs.versions.toml`).
 
 | Command | Does |
 |---|---|
-| `./gradlew ci` | Everything CI checks: formatting (Spotless), static analysis (Error Prone, NullAway), the tests, coverage (JaCoCo, floors in `coverage-floor.properties`), the Javadoc; and the model's own `ci`. |
+| `./gradlew ci` | Everything CI checks: formatting (Spotless), static analysis (Error Prone, NullAway), the tests, coverage (JaCoCo, floors in `coverage-floor.properties`), the Javadoc. |
 | `./gradlew test --tests '*PitwallServerTest'` | Some of the tests. |
 | `./gradlew test -Pquick --continuous` | The fast edit-test loop: skips formatting, static analysis and coverage. |
 
@@ -64,6 +63,18 @@ The tests of the classes that need WPILib's native HAL or AdvantageKit's running
 `AdvantageKitLog`, `simulator/WpilibHal`) run in the robot program that uses Pitwall, not here:
 those three files are left out of the per-file coverage floor. `AdvantageKitLog`'s receiver is
 tested here all the same, on AdvantageKit's own table (`robot/AdvantageKitReceiverTest`).
+
+Two switches change where the model comes from, both off by default: `-PlocalLibs=<folder>` builds
+it from a clone in `<folder>/model`, from source, in place of the published version, to try a
+change to the model here before it's published; `-PfrcMaven=<url>` reads the published libraries
+from another copy of the repository, such as a local clone holding a release not pushed yet
+(`-PfrcMaven=file:///home/you/src/frc-maven`).
+
+`./gradlew publishToFrcMaven` runs every check, then writes this release into `../frc-maven`, a
+clone of [frc-maven](https://github.com/mikegrundvig/frc-maven) beside this one
+(`-PfrcMavenDir=<folder>` names another). The model must be published at that version first;
+frc-maven's `release.sh` publishes every library in order and commits, and its README says how a
+release goes.
 
 The tests read the configuration records' documentation as files in
 `src/test/resources/META-INF/pitwall/docs`, which `ParameterDocsTest` says how to write again.
