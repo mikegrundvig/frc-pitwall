@@ -17,7 +17,7 @@ import com.michaelgrundvig.frc.pitwall.scene.Scenes;
 import com.michaelgrundvig.frc.pitwall.scene.StillState;
 import com.michaelgrundvig.frc.world.field.Element;
 import com.michaelgrundvig.frc.world.field.FieldModel;
-import com.michaelgrundvig.frc.world.field.Place;
+import com.michaelgrundvig.frc.world.field.Start;
 import com.michaelgrundvig.frc.world.field.Symmetry;
 import com.michaelgrundvig.frc.world.field.Tag;
 import com.michaelgrundvig.frc.world.field.TagLayout;
@@ -63,7 +63,7 @@ class WorldSceneTest {
           Material.ALUMINUM);
 
   /** A start on blue's half, 3 m from the wall and 2 m across, facing the field. */
-  private static final Place START = Place.at("Left", new Pose2d(3, 2, Rotation2d.ZERO));
+  private static final Start START = Start.at("Left", new Pose2d(3, 2, Rotation2d.ZERO));
 
   /** A field with two tags on its far wall, facing back down the field, and a post on each half. */
   private static final FieldModel FIELD =

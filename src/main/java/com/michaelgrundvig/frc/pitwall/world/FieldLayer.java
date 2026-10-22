@@ -48,7 +48,7 @@ final class FieldLayer implements Layer {
   /**
    * @param active the field the robot believes it plays on, which is the selected venue's once
    *     there is one
-   * @param body the robot's size, which a start's outline is drawn at
+   * @param body the robot's, whose bumpers stand it on each start and outline it there
    * @param simulated which of the simulator's parts the robot is, for setting it down on a start
    */
   FieldLayer(Supplier<FieldModel> active, Body body, SimulatedParts simulated) {

@@ -21,7 +21,7 @@ whatever answers there, and drives it.
 
 It is published to the FRC libraries' Maven repository,
 [mikegrundvig.github.io/frc-maven](https://mikegrundvig.github.io/frc-maven/), as
-`com.michaelgrundvig.frc:frc-pitwall`. Versions are dated releases (`2026.10.20`) shared by all the
+`com.michaelgrundvig.frc:frc-pitwall`. Versions are dated releases (`2026.10.21`) shared by all the
 FRC libraries; they are pre-release, with no promise of compatibility from one to the next. The
 robot runtime brings it, so a robot program built on the runtime has it already. Another adds:
 
@@ -36,7 +36,7 @@ repositories {
     }
 }
 dependencies {
-    implementation "com.michaelgrundvig.frc:frc-pitwall:2026.10.20"
+    implementation "com.michaelgrundvig.frc:frc-pitwall:2026.10.21"
 }
 ```
 
@@ -575,8 +575,9 @@ Each of these is a layer the legend switches:
   robot's bumpers as a faint dashed outline on the floor at each start, an arrow out of its front,
   and its name with its alliance's ("Blue left") beside it. A click says its name, alliance and
   pose (x, y, heading), and in the simulator offers *Place the robot here*, which is the robot's
-  own placing with that pose. The starts depend on the robot's size, which the runtime gives the
-  field with its body, so they are described with the field and never sent again. A game that
+  own placing with that pose. A start says which point of the bumpers stands on its spot, and the
+  robot's own bumpers (its `Body`) stand it there, so they are described with the field and never
+  sent again. A game that
   defines none has an empty layer.
 - **Robot:** at the estimate (`Localization/Pose3d`), on the ground under it and tilted as its IMU
   said, as its `RobotDefinition` describes it: its frame and bumpers from `Body` with an arrow out

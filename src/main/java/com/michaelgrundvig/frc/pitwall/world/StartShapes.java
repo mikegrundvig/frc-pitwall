@@ -1,13 +1,12 @@
 package com.michaelgrundvig.frc.pitwall.world;
 
-import static org.wpilib.units.Units.Meters;
-
 import com.michaelgrundvig.frc.pitwall.scene.Inspection;
 import com.michaelgrundvig.frc.pitwall.scene.SceneBuilder;
 import com.michaelgrundvig.frc.pitwall.scene.Style;
 import com.michaelgrundvig.frc.world.field.Alliance;
 import com.michaelgrundvig.frc.world.field.FieldModel;
-import com.michaelgrundvig.frc.world.field.Place;
+import com.michaelgrundvig.frc.world.field.Start;
+import com.michaelgrundvig.frc.world.physical.Bumpers;
 import com.michaelgrundvig.frc.world.robot.Body;
 import java.util.List;
 import java.util.Locale;
@@ -38,15 +37,16 @@ final class StartShapes {
    * start.<alliance>.<index>}, with its {@code .outline}, {@code .facing} and {@code .name}.
    */
   static void describe(SceneBuilder scene, Body body, FieldModel field, SimulatedParts simulated) {
-    double halfLength = body.bumperLength().in(Meters) / 2;
-    double halfWidth = body.bumperWidth().in(Meters) / 2;
-    List<Place> starts = field.starts();
+    Bumpers bumpers = body.bumpers();
+    double halfLength = bumpers.halfLengthMeters();
+    double halfWidth = bumpers.halfWidthMeters();
+    List<Start> starts = field.starts();
     for (Alliance alliance : Alliance.values()) {
       for (int index = 0; index < starts.size(); index++) {
-        Place place = starts.get(index);
-        Pose2d pose = place.on(field, alliance);
+        Start start = starts.get(index);
+        Pose2d pose = start.on(field, alliance, bumpers);
         String frame = "start." + alliance.name().toLowerCase(Locale.ROOT) + "." + index;
-        String name = WorldWords.startName(alliance, place.name());
+        String name = WorldWords.startName(alliance, start.name());
         scene.frame(frame, SceneBuilder.ROOT, new Pose3d(pose));
         scene
             .polygon(frame + ".outline", frame)
@@ -55,7 +55,7 @@ final class StartShapes {
             .point(-halfLength, -halfWidth, 0)
             .point(halfLength, -halfWidth, 0)
             .style(Style.MUTED.dashed())
-            .inspect(() -> inspection(alliance, place.name(), name, pose, simulated));
+            .inspect(() -> inspection(alliance, start.name(), name, pose, simulated));
         // The arrow isn't clickable: a click on a start selects its outline, which then shows it.
         scene
             .arrow(frame + ".facing", frame)
@@ -87,14 +87,14 @@ final class StartShapes {
    * it faces. In the simulator it ends in setting the robot down there.
    */
   private static Inspection inspection(
-      Alliance alliance, String placeName, String name, Pose2d pose, SimulatedParts simulated) {
+      Alliance alliance, String startName, String name, Pose2d pose, SimulatedParts simulated) {
     return Inspection.of(name + " start")
-        .detail("Name", placeName)
+        .detail("Name", startName)
         .detail("Alliance", WorldWords.capitalized(alliance.name()))
         .detail("Where", String.format(Locale.ROOT, "x %.3f m, y %.3f m", pose.getX(), pose.getY()))
         .detail(
             "Heading", String.format(Locale.ROOT, "%.1f°", pose.getRotation().getDegrees() + 0.0))
-        .detail("From", "the field model: where a robot of this size starts")
+        .detail("From", "the field model's start, with this robot's bumpers on it")
         .offer(simulated.placingTheRobotAt(pose));
   }
 }
