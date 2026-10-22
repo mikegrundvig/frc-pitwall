@@ -21,7 +21,7 @@ whatever answers there, and drives it.
 
 It is published to the FRC libraries' Maven repository,
 [mikegrundvig.github.io/frc-maven](https://mikegrundvig.github.io/frc-maven/), as
-`com.michaelgrundvig.frc:frc-pitwall`. Versions are dated releases (`2026.10.21`) shared by all the
+`com.michaelgrundvig.frc:frc-pitwall`. Versions are dated releases (`2026.10.22`) shared by all the
 FRC libraries; they are pre-release, with no promise of compatibility from one to the next. The
 robot runtime brings it, so a robot program built on the runtime has it already. Another adds:
 
@@ -36,7 +36,7 @@ repositories {
     }
 }
 dependencies {
-    implementation "com.michaelgrundvig.frc:frc-pitwall:2026.10.21"
+    implementation "com.michaelgrundvig.frc:frc-pitwall:2026.10.22"
 }
 ```
 

@@ -128,7 +128,7 @@ final class WorldWords {
                 "%.3f m long, %.3f m wide, %.3f m tall",
                 body.frameLength().in(Meters),
                 body.frameWidth().in(Meters),
-                body.height().in(Meters)))
+                body.overallHeight().in(Meters)))
         .detail(
             "With bumpers",
             String.format(

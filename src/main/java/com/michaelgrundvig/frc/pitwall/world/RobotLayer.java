@@ -257,7 +257,7 @@ final class RobotLayer extends WorldLayer {
 
   /** The frame as an outline, the bumpers as a solid, and an arrow out the front. */
   private void describeBody(SceneBuilder scene) {
-    double height = body.height().in(Meters);
+    double height = body.overallHeight().in(Meters);
     double bumperLength = body.bumperLength().in(Meters);
     scene
         .box("robot.frame", FRAME)

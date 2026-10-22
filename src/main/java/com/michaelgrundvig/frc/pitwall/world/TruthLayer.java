@@ -52,7 +52,7 @@ final class TruthLayer extends WorldLayer {
   @Override
   public void describe(SceneBuilder scene) {
     double length = body.bumperLength().in(Meters);
-    double height = body.height().in(Meters);
+    double height = body.overallHeight().in(Meters);
     scene.frame(FRAME, SceneBuilder.ROOT);
     scene
         .box("truth.robot", FRAME)
