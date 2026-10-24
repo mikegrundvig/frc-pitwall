@@ -5,12 +5,12 @@
 # This release of the FRC libraries (the model, localization, Pitwall, the runtime): what this build
 # publishes as (gradle/publishing.gradle), and the robot model's version it reads. All of them share
 # it, so a release is one change, here.
-frc-libs = "2026.10.23"
+frc-libs = "2026.10.24"
 # WPILib's libraries, each at the version WPILib's own release uses: a robot program's GradleRIO
 # brings the same, and Pitwall compiles against them without bundling them.
 wpilib = "2027.0.0-alpha-7"
 # AdvantageKit, at the version a robot program's vendordeps/AdvantageKit.json pins.
-advantagekit = "27.0.0-alpha-6"
+advantagekit = "27.0.0-alpha-7"
 avaje-jsonb = "3.14"
 quickbuf = "1.4"
 ejml = "0.46.0"
