@@ -657,14 +657,16 @@ class PitwallServerTest {
 
     assertThat(statusLine("localhost:" + server.port())).endsWith(" 200 OK");
     assertThat(statusLine("robot.local:5820")).endsWith(" 200 OK");
-    assertThat(statusLine("10.26.11.2:5820")).endsWith(" 200 OK");
+    assertThat(statusLine("10.12.34.2:5820")).endsWith(" 200 OK");
     assertThat(statusLine("[::1]:5820")).endsWith(" 200 OK");
     assertThat(statusLine(machine + ":5820")).as("this computer's own name").endsWith(" 200 OK");
     assertThat(statusLine("evil.local:5820")).contains(" 403 ");
     assertThat(statusLine("localhost.example.com")).contains(" 403 ");
     assertThat(statusLine("rebinding.example.com:5820")).contains(" 403 ");
     assertThat(statusLine("[evil]:5820")).as("not an address").contains(" 403 ");
-    assertThat(statusLine(null)).as("no Host").contains(" 403 ");
+    // A request naming no address is refused: by Pitwall, or before it by Java's own server, which
+    // in newer JDKs answers a request without a Host header with 400 itself (GitHub's runners).
+    assertThat(statusLine(null)).as("no Host").matches("HTTP/1\\.1 40[03] .*");
   }
 
   /**
