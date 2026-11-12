@@ -60,27 +60,32 @@ final class WorldWords {
       CameraConfig camera,
       Function<String, Optional<String>> cameraAction,
       SimulatedParts simulated) {
-    CameraConfig.Sensor sensor = camera.sensor();
+    CameraConfig.ImageSensor sensor = camera.sensor();
     Inspection said =
         Inspection.of("Camera " + camera.name())
-            .detail("Mounted", mountedAt(camera.forward(), camera.left(), camera.up()))
+            .detail(
+                "Mounted",
+                mountedAt(
+                    camera.forward().orElseThrow(),
+                    camera.left().orElseThrow(),
+                    camera.up().orElseThrow()))
             .detail(
                 "Turned",
                 String.format(
                     Locale.ROOT,
                     "yaw %.1f°, tilted up %.1f°, roll %.1f°",
-                    camera.yaw().in(Degrees),
-                    camera.tiltUp().in(Degrees),
-                    camera.roll().in(Degrees)))
+                    camera.yaw().orElseThrow().in(Degrees),
+                    camera.tiltUp().orElseThrow().in(Degrees),
+                    camera.rollOrDefault().in(Degrees)))
             .detail(
                 "Sees",
                 String.format(
                     Locale.ROOT,
                     "%.0f° across its diagonal, %d × %d, out to %.0f m",
-                    sensor.diagonalFieldOfView().in(Degrees),
+                    camera.diagonalFieldOfView().in(Degrees),
                     sensor.widthPixels(),
                     sensor.heightPixels(),
-                    sensor.sightRange().in(Meters)))
+                    camera.sightRangeOrDefault().in(Meters)))
             .detail("From", "the robot's configuration, in Robots.java")
             .component(simulated.camera(camera.name()));
     Optional<String> calibrate = cameraAction.apply(camera.name());

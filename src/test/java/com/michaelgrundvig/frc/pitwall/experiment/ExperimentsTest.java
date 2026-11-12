@@ -7,7 +7,7 @@ import static org.wpilib.units.Units.Degrees;
 import static org.wpilib.units.Units.Seconds;
 
 import com.michaelgrundvig.frc.pitwall.Actions;
-import com.michaelgrundvig.frc.pitwall.Outcome;
+import com.michaelgrundvig.frc.pitwall.RequestOutcome;
 import com.michaelgrundvig.frc.pitwall.TunableTee;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -107,10 +107,10 @@ class ExperimentsTest {
   }
 
   /** The page asks for a start, and the next loop applies it. */
-  private Outcome start(Experiments experiments) {
-    CompletableFuture<Outcome> outcome = experiments.requestStart(STEP, PAGE);
+  private RequestOutcome start(Experiments experiments) {
+    CompletableFuture<RequestOutcome> outcome = experiments.requestStart(STEP, PAGE);
     loop(READY);
-    return outcome.getNow(new Outcome(Outcome.Result.REFUSED, "not applied"));
+    return outcome.getNow(new RequestOutcome(RequestOutcome.Result.REFUSED, "not applied"));
   }
 
   private Run run() {
@@ -135,7 +135,7 @@ class ExperimentsTest {
   void anExperimentRunsInTheRobotLoopToItsEndAndIsScored() {
     assertThat(experiments.run()).as("none yet").isNull();
 
-    assertThat(start(experiments)).isEqualTo(new Outcome(Outcome.Result.APPLIED, ""));
+    assertThat(start(experiments)).isEqualTo(new RequestOutcome(RequestOutcome.Result.APPLIED, ""));
     assertThat(run().state().phase()).isEqualTo(Run.Phase.RUNNING);
     assertThat(run().id()).isEqualTo(1);
     assertThat(run().gains()).isEqualTo(Map.of("gains.kP", 10.0, "gains.kD", 0.0));
@@ -169,7 +169,7 @@ class ExperimentsTest {
 
       assertThat(outcome.getNow(null).result())
           .as(gate.toString())
-          .isEqualTo(Outcome.Result.LOCKED);
+          .isEqualTo(RequestOutcome.Result.LOCKED);
     }
     assertThat(experiments.run()).isNull();
   }
@@ -197,7 +197,8 @@ class ExperimentsTest {
     var outcome = experiments.requestCancel(STEP, run().id(), "");
     loop(READY);
 
-    assertThat(outcome.getNow(null)).isEqualTo(new Outcome(Outcome.Result.APPLIED, ""));
+    assertThat(outcome.getNow(null))
+        .isEqualTo(new RequestOutcome(RequestOutcome.Result.APPLIED, ""));
     assertThat(run().state().detail()).isEqualTo("Canceled from the page");
   }
 
@@ -215,8 +216,9 @@ class ExperimentsTest {
 
     assertThat(second.getNow(null))
         .isEqualTo(
-            new Outcome(
-                Outcome.Result.REFUSED, STEP + " is running; one experiment runs at a time"));
+            new RequestOutcome(
+                RequestOutcome.Result.REFUSED,
+                STEP + " is running; one experiment runs at a time"));
     assertThat(run().experiment().name()).isEqualTo(STEP);
   }
 
@@ -225,7 +227,7 @@ class ExperimentsTest {
     start(experiments);
     loopsInTouch(110);
 
-    assertThat(start(experiments).result()).isEqualTo(Outcome.Result.APPLIED);
+    assertThat(start(experiments).result()).isEqualTo(RequestOutcome.Result.APPLIED);
     assertThat(run().id()).isEqualTo(2);
   }
 
@@ -433,9 +435,9 @@ class ExperimentsTest {
     var late = experiments.requestCancel(STEP, 1, "");
     loop(READY);
 
-    assertThat(started.getNow(null)).isEqualTo(Outcome.applied());
+    assertThat(started.getNow(null)).isEqualTo(RequestOutcome.applied());
     assertThat(late.getNow(null))
-        .isEqualTo(new Outcome(Outcome.Result.LOCKED, "Run 1 has ended already"));
+        .isEqualTo(new RequestOutcome(RequestOutcome.Result.LOCKED, "Run 1 has ended already"));
     assertThat(run().id()).isEqualTo(2);
     assertThat(run().state().phase()).isEqualTo(Run.Phase.RUNNING);
     assertThat(logged.get(logged.size() - 1))
@@ -452,8 +454,8 @@ class ExperimentsTest {
     loop(READY);
 
     assertThat(idle.getNow(null))
-        .isEqualTo(new Outcome(Outcome.Result.LOCKED, STEP + " isn't running"));
-    assertThat(hidden.getNow(null)).isEqualTo(Outcome.applied());
+        .isEqualTo(new RequestOutcome(RequestOutcome.Result.LOCKED, STEP + " isn't running"));
+    assertThat(hidden.getNow(null)).isEqualTo(RequestOutcome.applied());
     assertThat(run().state().detail())
         .as("its command's own cleanup doesn't change it")
         .isEqualTo("Canceled: this tab was hidden");
@@ -480,7 +482,7 @@ class ExperimentsTest {
 
     assertThat(beyondLimits.getNow(null).detail())
         .isEqualTo("/Arm/gains/kP: 60 is above its limit of 50");
-    assertThat(fine.getNow(null)).isEqualTo(new Outcome(Outcome.Result.APPLIED, ""));
+    assertThat(fine.getNow(null)).isEqualTo(new RequestOutcome(RequestOutcome.Result.APPLIED, ""));
     assertThat(run().gains()).containsEntry("gains.kP", 20.0);
 
     loopsInTouch(110);

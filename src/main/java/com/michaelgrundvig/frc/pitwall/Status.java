@@ -260,8 +260,7 @@ public final class Status {
       Object value = item.get();
       return value instanceof Boolean || value instanceof Number ? value : String.valueOf(value);
     } catch (RuntimeException e) {
-      String why = e.getMessage();
-      return "Error: " + (why != null ? why : e.toString());
+      return "Error: " + Said.of(e);
     }
   }
 

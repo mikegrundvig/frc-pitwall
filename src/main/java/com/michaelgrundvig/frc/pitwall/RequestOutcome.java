@@ -10,7 +10,7 @@ import java.util.List;
  * @param reasons for a change to tunables that was refused, each reason with the values it
  *     concerns, in {@code detail}'s order; empty otherwise
  */
-public record Outcome(Result result, String detail, List<Reason> reasons) {
+public record RequestOutcome(Result result, String detail, List<Reason> reasons) {
   /** Whether a request was applied, and if not, why not. */
   public enum Result {
     /** Applied, all of it. */
@@ -45,8 +45,8 @@ public record Outcome(Result result, String detail, List<Reason> reasons) {
    * show it beside each of them.
    *
    * @param layer which check refused it
-   * @param by who refused it: the record whose check it was ({@code DrivetrainControl.Gains});
-   *     empty for a value's own limits and type
+   * @param by who refused it: the record whose check it was ({@code
+   *     DrivetrainControl.SwerveGains}); empty for a value's own limits and type
    * @param paths the tunables it concerns, each to show it beside: the one a value's own check (its
    *     type, its limits) or a record's check names; for a record's check that names none (a check
    *     of the record as a whole), every value of the change in that record; for a tunable's own
@@ -75,23 +75,23 @@ public record Outcome(Result result, String detail, List<Reason> reasons) {
     }
   }
 
-  public Outcome {
+  public RequestOutcome {
     reasons = List.copyOf(reasons);
   }
 
   /** An outcome with no reasons tied to values: a lock, or a refusal of something else. */
-  public Outcome(Result result, String detail) {
+  public RequestOutcome(Result result, String detail) {
     this(result, detail, List.of());
   }
 
   /** A request applied, all of it. */
-  public static Outcome applied() {
-    return new Outcome(Result.APPLIED, "");
+  public static RequestOutcome applied() {
+    return new RequestOutcome(Result.APPLIED, "");
   }
 
   /** A change refused for these reasons, a line of {@link #detail} for each. */
-  static Outcome refused(List<Reason> reasons) {
-    return new Outcome(
+  static RequestOutcome refused(List<Reason> reasons) {
+    return new RequestOutcome(
         Result.REFUSED, String.join("\n", reasons.stream().map(Reason::line).toList()), reasons);
   }
 }

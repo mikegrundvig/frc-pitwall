@@ -17,9 +17,9 @@ import com.michaelgrundvig.frc.world.physical.Inertia;
 import com.michaelgrundvig.frc.world.robot.Body;
 import com.michaelgrundvig.frc.world.robot.CameraConfig;
 import com.michaelgrundvig.frc.world.robot.Driven.AbsoluteEncoder;
-import com.michaelgrundvig.frc.world.robot.DrivetrainGeometry;
+import com.michaelgrundvig.frc.world.robot.Drivetrain;
 import com.michaelgrundvig.frc.world.robot.Gearing;
-import com.michaelgrundvig.frc.world.robot.Imus;
+import com.michaelgrundvig.frc.world.robot.ImuMount;
 import com.michaelgrundvig.frc.world.robot.Joint;
 import com.michaelgrundvig.frc.world.robot.Link;
 import com.michaelgrundvig.frc.world.robot.MechanismControl;
@@ -27,10 +27,11 @@ import com.michaelgrundvig.frc.world.robot.Motor;
 import com.michaelgrundvig.frc.world.robot.Output;
 import com.michaelgrundvig.frc.world.robot.Part;
 import com.michaelgrundvig.frc.world.robot.Position;
+import com.michaelgrundvig.frc.world.robot.PrismaticJoint;
 import com.michaelgrundvig.frc.world.robot.Range;
+import com.michaelgrundvig.frc.world.robot.RevoluteJoint;
 import com.michaelgrundvig.frc.world.robot.RobotDefinition;
 import com.michaelgrundvig.frc.world.robot.Sensor;
-import java.util.List;
 import org.wpilib.math.geometry.Translation3d;
 
 /**
@@ -47,13 +48,18 @@ public final class TestRobot {
   static final Position PIVOT_OUT = Position.degrees("out", 130);
 
   /** An intake's pivot, which stands upright when it is in and swings forward and down. */
-  static final Joint.Revolute PIVOT =
-      Joint.pivot("pivot", Part.CHASSIS, new Translation3d(0.25, 0, 0.32), Joint.PITCH_DOWN)
+  static final RevoluteJoint PIVOT =
+      Joint.pivot("pivot", Part.CHASSIS, Joint.PITCH_DOWN)
+          .at(Meters.of(0.25), Meters.of(0), Meters.of(0.32))
           .range(Range.degrees(0, 135))
           .rest(PIVOT_IN)
           .carries(
               Link.box(
-                  "intake arm", new Translation3d(0, 0, 0.2), new Translation3d(0.05, 0.55, 0.36)))
+                  "intake arm",
+                  new Translation3d(0, 0, 0.2),
+                  Meters.of(0.05),
+                  Meters.of(0.55),
+                  Meters.of(0.36)))
           .positions(PIVOT_IN, PIVOT_OUT)
           .motors(Motor.KRAKEN_X60.through(Gearing.of(25)).on(TALON_FX.can(32)))
           .absoluteEncoder(CANCODER.can(34).offset(Rotations.of(0.82)))
@@ -65,8 +71,9 @@ public final class TestRobot {
   static final Output OUTTAKING = Output.volts("outtaking", -4);
 
   /** Its roller, which runs both ways, and only once the pivot is out of the frame. */
-  static final Joint.Revolute ROLLER =
-      Joint.roller("roller", PIVOT, new Translation3d(0, 0, 0.35))
+  static final RevoluteJoint ROLLER =
+      Joint.roller("roller", PIVOT)
+          .at(Meters.of(0), Meters.of(0), Meters.of(0.35))
           .outputs(INTAKING, OUTTAKING)
           .motors(Motor.KRAKEN_X60.through(Gearing.of(3)).on(TALON_FX.can(31)))
           .runsOnlyWhen(PIVOT.atLeast(Degrees.of(110)))
@@ -75,8 +82,9 @@ public final class TestRobot {
   static final Position ELEVATOR_DOWN = Position.of("down", Inches.of(0));
   static final Position ELEVATOR_CLEAR = Position.of("clear", Inches.of(32));
 
-  static final Joint.Prismatic ELEVATOR =
-      Joint.elevator("elevator", Part.CHASSIS, new Translation3d(0, 0, 0.1))
+  static final PrismaticJoint ELEVATOR =
+      Joint.elevator("elevator", Part.CHASSIS)
+          .at(Meters.of(0), Meters.of(0), Meters.of(0.1))
           .range(Range.meters(0, 1.2))
           .rest(ELEVATOR_DOWN)
           .positions(ELEVATOR_DOWN, ELEVATOR_CLEAR)
@@ -93,8 +101,9 @@ public final class TestRobot {
   static final Position ARM_SCORING = Position.degrees("scoring", 120);
 
   /** An arm on the elevator, kept out of the bumper's band while the elevator is too low. */
-  static final Joint.Revolute ARM =
-      Joint.pivot("arm", ELEVATOR, new Translation3d(0.1, 0, 0.3), Joint.PITCH_UP)
+  static final RevoluteJoint ARM =
+      Joint.pivot("arm", ELEVATOR, Joint.PITCH_UP)
+          .at(Meters.of(0.1), Meters.of(0), Meters.of(0.3))
           .range(Range.degrees(-60, 150))
           .rest(ARM_STOWED)
           .positions(ARM_STOWED, ARM_SCORING)
@@ -107,8 +116,9 @@ public final class TestRobot {
   static final Output SHOOTING = Output.rpm("shooting", 3000);
 
   /** A flywheel, which runs one way and coasts when nothing is asked of it. */
-  static final Joint.Revolute SHOOTER =
-      Joint.roller("shooter", Part.CHASSIS, new Translation3d(-0.2, 0, 0.45))
+  static final RevoluteJoint SHOOTER =
+      Joint.roller("shooter", Part.CHASSIS)
+          .at(Meters.of(-0.2), Meters.of(0), Meters.of(0.45))
           .outputs(SHOOTING)
           .motors(Motor.KRAKEN_X60.through(Gearing.of(1)).on(TALON_FX.can(52)))
           .control(MechanismControl.velocity(0.02).coasting());
@@ -121,89 +131,65 @@ public final class TestRobot {
   static final Output GRIPPING = Output.rpm("gripping", 600);
 
   /** A claw's wheels, which run only while the claw's beam sees nothing. */
-  static final Joint.Revolute CLAW =
-      Joint.roller("claw", ARM, new Translation3d(0.3, 0, 0))
+  static final RevoluteJoint CLAW =
+      Joint.roller("claw", ARM)
+          .at(Meters.of(0.3), Meters.of(0), Meters.of(0))
           .outputs(GRIPPING)
           .motors(Motor.KRAKEN_X44.through(Gearing.of(4)).on(TALON_FX.can(60)))
           .runsOnlyWhen(CLAW_BEAM.clear())
           .control(MechanismControl.velocity(0.02));
 
-  private static final CameraConfig.Sensor CAMERA =
-      CameraConfig.Sensor.builder()
-          .widthPixels(1280)
-          .heightPixels(800)
-          .fieldOfView(Degrees.of(80))
-          .fieldOfViewAcross(CameraConfig.Across.DIAGONAL)
-          .frameRate(Hertz.of(30))
+  private static final CameraConfig.ImageSensor CAMERA =
+      CameraConfig.ImageSensor.of(1280, 800, Hertz.of(30))
+          .fieldOfView(Degrees.of(80), CameraConfig.Across.DIAGONAL)
           .latency(Milliseconds.of(30))
-          .sightRange(Meters.of(7))
-          .build();
+          .sightRange(Meters.of(7));
 
   /** A camera on the chassis, facing forward and to the left, tilted up. */
   static final CameraConfig FRONT_CAMERA =
-      CameraConfig.builder()
-          .name("front")
-          .forward(Inches.of(10))
-          .left(Inches.of(8))
-          .up(Inches.of(20))
+      CameraConfig.of("front", CAMERA)
+          .at(Inches.of(10), Inches.of(8), Inches.of(20))
+          .facing(Degrees.of(10), Degrees.of(20))
           .roll(Degrees.of(0))
-          .tiltUp(Degrees.of(10))
-          .yaw(Degrees.of(20))
-          .sensor(CAMERA)
           .noiseScale(1.0)
-          .build();
+          .measured();
 
   /** A camera that rides on the arm, so it is where the elevator and the arm put it. */
   static final CameraConfig ARM_CAMERA =
-      CameraConfig.builder()
-          .name("on-arm")
-          .forward(Inches.of(4))
-          .left(Inches.of(0))
-          .up(Inches.of(2))
+      CameraConfig.of("on-arm", CAMERA)
+          .at(Inches.of(4), Inches.of(0), Inches.of(2))
+          .facing(Degrees.of(0), Degrees.of(0))
           .roll(Degrees.of(0))
-          .tiltUp(Degrees.of(0))
-          .yaw(Degrees.of(0))
-          .sensor(CAMERA)
           .noiseScale(1.0)
-          .joint(ARM)
-          .build();
+          .on(ARM)
+          .measured();
 
   /** The robot. */
   public static RobotDefinition definition() {
-    return RobotDefinition.builder()
-        .name("test")
-        .body(body())
-        .drivetrain(DrivetrainGeometry.inset(modules(), body(), Inches.of(2.625)))
-        .imus(Imus.UNCHECKED)
-        .joints(List.of(PIVOT, ROLLER, ELEVATOR, ARM, SHOOTER, CLAW))
-        .sensors(List.of(CLAW_BEAM, HOPPER))
-        .cameras(List.of(FRONT_CAMERA, ARM_CAMERA))
-        .build();
+    return RobotDefinition.of("test", body(), Drivetrain.inset(modules(), body(), Inches.of(2.625)))
+        .withBackupImu(ImuMount.UNCHECKED)
+        .withJoints(PIVOT, ROLLER, ELEVATOR, ARM, SHOOTER, CLAW)
+        .withCameras(FRONT_CAMERA, ARM_CAMERA)
+        .withSensors(CLAW_BEAM, HOPPER);
   }
 
   private static Body body() {
-    return Body.builder()
-        .frameLength(Inches.of(28))
-        .frameWidth(Inches.of(24))
-        .overallHeight(Inches.of(30))
-        .bumperThickness(Inches.of(3.5))
-        .bumperBottom(Inches.of(2.5))
-        .bumperTop(Inches.of(5.75))
+    return Body.frame(Inches.of(28), Inches.of(24), Inches.of(30))
+        .bumpers(Inches.of(3.5), Inches.of(2.5), Inches.of(5.75))
         .weight(Kilograms.of(60))
         .inertia(
             Body.Turning.tensor(
                 Inertia.builder().ixx(6).iyy(6).izz(6).ixy(0).ixz(0).iyz(0).build()))
-        .cg(new Translation3d(0, 0, 0.2))
-        .build();
+        .cg(new Translation3d(0, 0, 0.2));
   }
 
-  private static DrivetrainGeometry.ModuleType modules() {
-    return DrivetrainGeometry.ModuleType.builder()
+  private static Drivetrain.Module modules() {
+    return Drivetrain.Module.builder()
         .driveMotor(Motor.KRAKEN_X60)
         .steerMotor(Motor.KRAKEN_X44)
         .wheelRadius(Inches.of(2))
-        .driveGearing(Gearing.builder().ratio(6.75).efficiency(1.0).build())
-        .steerGearing(Gearing.builder().ratio(12.8).efficiency(1.0).build())
+        .driveGearing(Gearing.of(6.75))
+        .steerGearing(Gearing.of(12.8))
         .couplingRatio(0)
         .wheelCoefficientOfFriction(1.2)
         .driveInertia(KilogramSquareMeters.of(0.001))

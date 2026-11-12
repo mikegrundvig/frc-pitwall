@@ -18,6 +18,7 @@ import org.wpilib.tunable.TunableBase;
 import org.wpilib.tunable.TunableBoolean;
 import org.wpilib.tunable.TunableConfig;
 import org.wpilib.tunable.TunableDouble;
+import org.wpilib.tunable.TunableFloat;
 import org.wpilib.tunable.TunableInt;
 import org.wpilib.tunable.TunableLong;
 import org.wpilib.tunable.TunableRegistry;
@@ -124,7 +125,7 @@ class TunableTeeTest {
     assertThat(outcome).as("waits for the update").isNotDone();
     tee.update();
 
-    assertThat(outcome.getNow(null)).isEqualTo(Outcome.applied());
+    assertThat(outcome.getNow(null)).isEqualTo(RequestOutcome.applied());
     assertThat(kP.get()).isEqualTo(1.5);
     assertThat(intake.get()).isTrue();
     assertThat(logged).last().isEqualTo("/Shooter/kP,/Intake/enabled=1.5,true");
@@ -155,7 +156,8 @@ class TunableTeeTest {
     tee.update();
 
     assertThat(outcome.getNow(null))
-        .isEqualTo(new Outcome(Outcome.Result.LOCKED, "Tuning is locked: tuning is off"));
+        .isEqualTo(
+            new RequestOutcome(RequestOutcome.Result.LOCKED, "Tuning is locked: tuning is off"));
     assertThat(kP.get()).isEqualTo(0.5);
   }
 
@@ -169,10 +171,10 @@ class TunableTeeTest {
 
     assertThat(outcome.getNow(null))
         .isEqualTo(
-            Outcome.refused(
+            RequestOutcome.refused(
                 List.of(
-                    Outcome.Reason.of(
-                        Outcome.Layer.VALUE,
+                    RequestOutcome.Reason.of(
+                        RequestOutcome.Layer.VALUE,
                         "/Intake/enabled",
                         "",
                         "/Intake/enabled takes a boolean value",
@@ -204,7 +206,7 @@ class TunableTeeTest {
         .singleElement()
         .satisfies(
             reason -> {
-              assertThat(reason.layer()).isEqualTo(Outcome.Layer.VALUE);
+              assertThat(reason.layer()).isEqualTo(RequestOutcome.Layer.VALUE);
               assertThat(reason.paths()).containsExactly("/Shooter/kP");
             });
     assertThat(kP.get()).isEqualTo(0.5);
@@ -219,7 +221,7 @@ class TunableTeeTest {
     var page = tee.requestChanges(Map.of("Arm/count", 1e30)); // would saturate to Long.MAX_VALUE
     tee.update();
 
-    assertThat(page.getNow(null).result()).isEqualTo(Outcome.Result.REFUSED);
+    assertThat(page.getNow(null).result()).isEqualTo(RequestOutcome.Result.REFUSED);
     assertThat(count.get()).isEqualTo(3);
   }
 
@@ -249,10 +251,10 @@ class TunableTeeTest {
 
     assertThat(page.getNow(null))
         .isEqualTo(
-            Outcome.refused(
+            RequestOutcome.refused(
                 List.of(
-                    Outcome.Reason.of(
-                        Outcome.Layer.TUNABLE,
+                    RequestOutcome.Reason.of(
+                        RequestOutcome.Layer.TUNABLE,
                         "/Arm/limit",
                         "",
                         "at most 40 A",
@@ -291,7 +293,7 @@ class TunableTeeTest {
 
     assertThat(unknown.getNow(null).detail())
         .isEqualTo("There is no tunable the page can change at /Nope");
-    assertThat(fixed.getNow(null).result()).isEqualTo(Outcome.Result.REFUSED);
+    assertThat(fixed.getNow(null).result()).isEqualTo(RequestOutcome.Result.REFUSED);
     assertThat(tee.isEditable("Arm/ratio")).isFalse();
     assertThat(readOnly.get()).isEqualTo(2.0);
   }
@@ -402,10 +404,10 @@ class TunableTeeTest {
 
     assertThat(outcome.getNow(null))
         .isEqualTo(
-            Outcome.refused(
+            RequestOutcome.refused(
                 List.of(
-                    Outcome.Reason.of(
-                        Outcome.Layer.LIMIT,
+                    RequestOutcome.Reason.of(
+                        RequestOutcome.Layer.LIMIT,
                         "/Arm/count",
                         "",
                         "0 is below its limit of 1",
@@ -479,7 +481,7 @@ class TunableTeeTest {
     var outcome = tee.requestChanges(both);
     tee.update();
 
-    assertThat(outcome.getNow(null)).isEqualTo(Outcome.applied());
+    assertThat(outcome.getNow(null)).isEqualTo(RequestOutcome.applied());
     assertThat(live.get().travel()).isEqualTo(new Fixtures.Range(12, 20));
     assertThat(logged).last().isEqualTo("/Machine/travel/min,/Machine/travel/max=12.0,20.0");
   }
@@ -495,10 +497,10 @@ class TunableTeeTest {
     // the record, where it is in the configuration.
     assertThat(outcome.getNow(null))
         .isEqualTo(
-            Outcome.refused(
+            RequestOutcome.refused(
                 List.of(
-                    new Outcome.Reason(
-                        Outcome.Layer.RECORD,
+                    new RequestOutcome.Reason(
+                        RequestOutcome.Layer.RECORD,
                         "Fixtures.Range",
                         List.of("/Machine/travel/min"),
                         "machine",
@@ -524,10 +526,13 @@ class TunableTeeTest {
             "/Machine/drive/gains/kP: -1 is below its limit of 0",
             "There is no tunable the page can change at /Nowhere");
     assertThat(outcome.getNow(null).reasons())
-        .extracting(Outcome.Reason::layer, Outcome.Reason::paths, Outcome.Reason::config)
+        .extracting(
+            RequestOutcome.Reason::layer,
+            RequestOutcome.Reason::paths,
+            RequestOutcome.Reason::config)
         .containsExactly(
-            tuple(Outcome.Layer.LIMIT, List.of("/Machine/drive/gains/kP"), "machine"),
-            tuple(Outcome.Layer.VALUE, List.of("/Nowhere"), ""));
+            tuple(RequestOutcome.Layer.LIMIT, List.of("/Machine/drive/gains/kP"), "machine"),
+            tuple(RequestOutcome.Layer.VALUE, List.of("/Nowhere"), ""));
     assertThat(live.get()).isEqualTo(Fixtures.machine());
   }
 
@@ -564,5 +569,230 @@ class TunableTeeTest {
     tee.update();
 
     assertThat(tee.changedSinceStartup()).isEmpty();
+  }
+
+  // ---- Rollback, conversions and replay, as tables ----
+
+  /** Every warning the tee reports, while a test runs. */
+  private final List<String> warnings = new ArrayList<>();
+
+  @BeforeEach
+  void hearWarnings() {
+    TunableRegistry.setReportWarning(warnings::add);
+  }
+
+  @AfterEach
+  void stopHearingWarnings() {
+    TunableRegistry.setReportWarning(null);
+  }
+
+  /**
+   * A team's number whose setter refuses anything over 40, and, once it has taken a value, may
+   * refuse to be put back.
+   */
+  private static TunableDouble guarded(double[] held, boolean refusesToGoBack) {
+    int[] sets = {0};
+    return TunableDouble.createConfig(
+        () -> held[0],
+        value -> {
+          sets[0]++;
+          if (value > 40) {
+            throw new IllegalArgumentException("at most 40 A");
+          }
+          if (refusesToGoBack && sets[0] > 1) {
+            throw new IllegalStateException("the motor controller didn't answer");
+          }
+          held[0] = value;
+        },
+        new TunableConfig());
+  }
+
+  /**
+   * The page's changes are all or none: when one setter throws partway, those applied before it are
+   * put back, the refusal names the value that threw, and a value that can't be put back is
+   * reported, never thrown.
+   */
+  @Test
+  void aChangeThatFailsPartwayIsRolledBack() {
+    record Group(
+        String name,
+        boolean firstRefusesToGoBack,
+        double first,
+        double second,
+        double firstAfter,
+        List<String> warned) {}
+    List<Group> groups =
+        List.of(
+            new Group("the first goes back", false, 20, 60, 10, List.of()),
+            new Group(
+                "the first can't go back",
+                true,
+                20,
+                60,
+                20,
+                List.of(
+                    "Pitwall: couldn't put /Arm/first back: java.lang.IllegalStateException: the"
+                        + " motor controller didn't answer")));
+    for (Group group : groups) {
+      TunableRegistry.reset();
+      TunableRegistry.setReportWarning(warnings::add);
+      warnings.clear();
+      double[] first = {10};
+      double[] second = {10};
+      var each = new TunableTee(new MockTunableBackend(), () -> null, inputs -> {}, false);
+      each.publish("Arm/first", guarded(first, group.firstRefusesToGoBack()));
+      each.publish("Arm/second", guarded(second, false));
+      Map<String, Object> values = new LinkedHashMap<>();
+      values.put("Arm/first", group.first());
+      values.put("Arm/second", group.second());
+
+      var outcome = each.requestChanges(values);
+      each.update();
+
+      assertThat(outcome.getNow(null))
+          .as(group.name())
+          .isEqualTo(
+              RequestOutcome.refused(
+                  List.of(
+                      RequestOutcome.Reason.of(
+                          RequestOutcome.Layer.TUNABLE,
+                          "/Arm/second",
+                          "",
+                          "at most 40 A",
+                          "/Arm/second refused the value: at most 40 A"))));
+      assertThat(first[0]).as(group.name()).isEqualTo(group.firstAfter());
+      assertThat(second[0]).as(group.name()).isEqualTo(10);
+      assertThat(warnings).as(group.name()).isEqualTo(group.warned());
+    }
+  }
+
+  /**
+   * A page's number fits a float, an int or a long only when that type can hold it exactly: a whole
+   * number for the whole types, within each type's range. One that doesn't fit changes nothing, and
+   * says what the tunable takes.
+   */
+  @Test
+  void aNumberIsConvertedOnlyWhenItsTypeCanHoldIt() {
+    record Conversion(String type, TunableBase tunable, Number given, @Nullable Object becomes) {}
+    List<Conversion> conversions =
+        List.of(
+            new Conversion("float", TunableFloat.create(1), 0.25, 0.25f),
+            new Conversion("float", TunableFloat.create(1), -3, -3f),
+            new Conversion("float", TunableFloat.create(1), 1e39, null),
+            new Conversion("float", TunableFloat.create(1), -1e39, null),
+            new Conversion("int", TunableInt.create(1), 3.0, 3),
+            new Conversion("int", TunableInt.create(1), -2147483648.0, Integer.MIN_VALUE),
+            new Conversion("int", TunableInt.create(1), 2.5, null),
+            new Conversion("int", TunableInt.create(1), 2147483648.0, null),
+            new Conversion("int", TunableInt.create(1), -2147483649.0, null),
+            new Conversion("long", TunableLong.create(1), 3, 3L),
+            new Conversion("long", TunableLong.create(1), 0x1p53, 1L << 53),
+            new Conversion("long", TunableLong.create(1), -0x1p63, Long.MIN_VALUE),
+            new Conversion("long", TunableLong.create(1), 2.5, null),
+            new Conversion("long", TunableLong.create(1), 0x1p63, null));
+    for (Conversion conversion : conversions) {
+      String row = conversion.type() + " given " + conversion.given();
+      tee.publish("Arm/value", conversion.tunable());
+      Object before = valueOf(conversion.tunable());
+
+      var outcome = tee.requestChanges(Map.of("Arm/value", conversion.given()));
+      tee.update();
+
+      if (conversion.becomes() == null) {
+        assertThat(outcome.getNow(null).detail())
+            .as(row)
+            .isEqualTo("/Arm/value takes a " + conversion.type() + " value");
+        assertThat(valueOf(conversion.tunable())).as(row + ": unchanged").isEqualTo(before);
+      } else {
+        assertThat(outcome.getNow(null)).as(row).isEqualTo(RequestOutcome.applied());
+        assertThat(valueOf(conversion.tunable())).as(row).isEqualTo(conversion.becomes());
+      }
+      tee.remove("Arm/value");
+    }
+  }
+
+  private static Object valueOf(TunableBase tunable) {
+    return switch (tunable) {
+      case TunableFloat t -> t.get();
+      case TunableInt t -> t.get();
+      case TunableLong t -> t.get();
+      default -> throw new IllegalArgumentException(tunable.toString());
+    };
+  }
+
+  /**
+   * In a replay, a logged change that can't be made (a number that isn't one, a tunable the program
+   * no longer has, one its tunable or its configuration refuses) is reported, and the replay goes
+   * on: none throws out of the robot loop.
+   */
+  @Test
+  void aLoggedChangeThatCantBeMadeWarnsAndNeverThrows() {
+    record Replayed(String name, String path, String value, String warned) {}
+    List<Replayed> replays =
+        List.of(
+            new Replayed(
+                "a number that isn't one",
+                "/Shooter/kP",
+                "fast",
+                "Pitwall: a logged change to /Shooter/kP is unreadable"),
+            new Replayed(
+                "a fraction for a whole number",
+                "/Arm/count",
+                "2.5",
+                "Pitwall: a logged change to /Arm/count is unreadable"),
+            new Replayed(
+                "an unknown tunable",
+                "/Nowhere",
+                "1.0",
+                "Pitwall: a logged change is for an unknown tunable, /Nowhere"),
+            new Replayed(
+                "a tunable that refuses it",
+                "/Arm/limit",
+                "60.0",
+                "Pitwall: /Arm/limit refused a logged change: java.lang.IllegalArgumentException:"
+                    + " at most 40 A"),
+            new Replayed(
+                "a configuration's value that isn't a number",
+                "/Machine/travel/min",
+                "far",
+                "Pitwall: a logged change to /Machine/travel/min is unreadable"),
+            new Replayed(
+                "a configuration that refuses it",
+                "/Machine/travel/min",
+                "12.0",
+                "Pitwall: machine refused a logged change: machine: min must be below max, got"
+                    + " 12.0 and 10.0"));
+    for (Replayed replayed : replays) {
+      TunableRegistry.reset();
+      TunableRegistry.setReportWarning(warnings::add);
+      warnings.clear();
+      var replay =
+          new TunableTee(
+              new MockTunableBackend(),
+              () -> null,
+              inputs -> {
+                inputs.paths = new String[] {replayed.path()};
+                inputs.values = new String[] {replayed.value()};
+              },
+              true);
+      TunableRegistry.registerBackend("", replay);
+      var gain = TunableDouble.create(0.5);
+      replay.publish("Shooter/kP", gain);
+      replay.publish("Arm/count", TunableInt.create(3));
+      double[] limit = {10};
+      replay.publish("Arm/limit", guarded(limit, false));
+      var live =
+          LiveConfig.of("machine", Fixtures.machine())
+              .number("travel.min", Limits.NONE)
+              .number("travel.max", Limits.NONE);
+      TunableRegistry.publish("Machine", live);
+
+      replay.update();
+
+      assertThat(warnings).as(replayed.name()).containsExactly(replayed.warned());
+      assertThat(gain.get()).as(replayed.name()).isEqualTo(0.5);
+      assertThat(limit[0]).as(replayed.name()).isEqualTo(10);
+      assertThat(live.get()).as(replayed.name()).isEqualTo(Fixtures.machine());
+    }
   }
 }

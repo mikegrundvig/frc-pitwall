@@ -1,0 +1,179 @@
+// The page's JavaScript, checked on every build like the Java: every module must parse, and the
+// page's own tests (src/test/js) must pass. Node.js runs both, at build time only: nothing here is
+// in what the robot runs, and nothing is installed (no npm, no node_modules). Node's own test
+// runner, its fake timers, and a small stand-in for the browser's DOM (src/test/js/dom.mjs) are
+// enough.
+//
+// Without Node on the PATH, CI (CI=true) fails, saying how to get it; a local build warns, loudly,
+// and skips the page's checks.
+
+def pageDir = file("src/main/resources/com/michaelgrundvig/frc/pitwall/page")
+def pageTests = file("src/test/js")
+def nodeTree = layout.buildDirectory.dir("page-node")
+
+// The page's modules, its tests, and the three.js files it imports, laid out for Node: page/ is an
+// ES module package (Node reads a .js file as one only when a package.json says so), and three/
+// is where the tests find /three/... (src/test/js/hooks.mjs).
+def pageForNode = tasks.register("pageForNode", Sync) {
+    description = "Lays out the page's modules and their tests for Node."
+    from(pageDir) {
+        include "*.js"
+        into "page"
+    }
+    from(pageTests) {
+        into "test"
+    }
+    from(tasks.named("vendorThree")) {
+        include "**/*.js"
+        eachFile { it.path = "three/${it.name}" }
+    }
+    includeEmptyDirs = false
+    into nodeTree
+    def packageJson = nodeTree.map { it.file("package.json") }
+    doLast {
+        packageJson.get().asFile.text = '{ "private": true, "type": "module" }\n'
+    }
+}
+
+def pageParse = tasks.register("pageParse", PageParse) {
+    group = "verification"
+    description = "Parses every page module as the ES module a browser loads (node --check)."
+    dependsOn pageForNode
+    modules.from(fileTree(pageDir) { include "*.js" })
+    root.set(nodeTree)
+    parsed.set(layout.buildDirectory.file("page-node-checks/parsed.txt"))
+}
+
+def pageTest = tasks.register("pageTest", PageTest) {
+    group = "verification"
+    description = "Runs the page's JavaScript tests (src/test/js/*.test.mjs) with Node's test runner."
+    dependsOn pageForNode, pageParse
+    sources.from(fileTree(pageDir) { include "*.js" }, pageTests)
+    tests.from(fileTree(pageTests) { include "*.test.mjs" })
+    root.set(nodeTree)
+    report.set(layout.buildDirectory.file("page-node-checks/tested.txt"))
+}
+
+tasks.named("check") {
+    dependsOn pageParse, pageTest
+}
+
+/** What runs Node for the page's checks, and finds whether it can. */
+abstract class NodeTask extends DefaultTask {
+    /** The oldest Node that runs them: module hooks, and fake timers given which timers. */
+    static final List<Integer> LEAST = [20, 11]
+
+    @javax.inject.Inject
+    abstract ExecOperations getExec()
+
+    @Internal
+    abstract DirectoryProperty getRoot()
+
+    /** Runs node with these arguments: {exit, output}. */
+    protected Map node(List<String> arguments) {
+        def output = new ByteArrayOutputStream()
+        def result = exec.exec {
+            workingDir root.get().asFile
+            commandLine(["node"] + arguments)
+            standardOutput = output
+            errorOutput = output
+            ignoreExitValue = true
+        }
+        return [exit: result.exitValue, output: output.toString("UTF-8")]
+    }
+
+    /** Whether Node is here and new enough; in CI, it must be. */
+    protected boolean nodeIsHere() {
+        String found = null
+        try {
+            def answer = node(["--version"])
+            found = answer.exit == 0 ? answer.output.trim() : null
+        } catch (Exception notFound) {
+            found = null
+        }
+        def parts = found == null ? [] : found.replaceFirst(/^v/, "").tokenize(".").collect { it.isInteger() ? it.toInteger() : 0 }
+        def newEnough = parts.size() >= 2 && (parts[0] > LEAST[0] || (parts[0] == LEAST[0] && parts[1] >= LEAST[1]))
+        if (newEnough) {
+            return true
+        }
+        def least = LEAST.join(".")
+        def why = found == null ? "Node.js isn't on the PATH" : "Node.js ${found} is older than ${least}"
+        def how = "Install Node.js ${least} or newer (https://nodejs.org, or your package manager) so" +
+                " that node is on the PATH. GitHub's runners have it."
+        if (System.getenv("CI") == "true") {
+            throw new GradleException("${why}, and ${name} checks the page's JavaScript with it. ${how}")
+        }
+        logger.warn("""
+            |WARNING ======================================================================
+            |${why}: ${name} is skipped, so the page's JavaScript is NOT checked here.
+            |${how} CI checks it, and fails without it.
+            |==============================================================================""".stripMargin())
+        return false
+    }
+}
+
+/** Parses each page module as an ES module, as a browser does before it runs any of them. */
+abstract class PageParse extends NodeTask {
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract ConfigurableFileCollection getModules()
+
+    @OutputFile
+    abstract RegularFileProperty getParsed()
+
+    @TaskAction
+    void parse() {
+        if (!nodeIsHere()) {
+            return
+        }
+        def failures = []
+        def names = modules.files.collect { it.name }.sort()
+        names.each { module ->
+            def answer = node([
+                "--check",
+                "page/${module}".toString()
+            ])
+            if (answer.exit != 0) {
+                failures << "${module}:\n${answer.output.trim()}"
+            }
+        }
+        if (failures) {
+            throw new GradleException("These page modules don't parse:\n\n" + failures.join("\n\n"))
+        }
+        parsed.get().asFile.text = "${names.size()} modules parse: ${names.join(', ')}\n"
+    }
+}
+
+/** Runs the page's tests with Node's own test runner, the browser stood in for by setup.mjs. */
+abstract class PageTest extends NodeTask {
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract ConfigurableFileCollection getSources()
+
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract ConfigurableFileCollection getTests()
+
+    @OutputFile
+    abstract RegularFileProperty getReport()
+
+    @TaskAction
+    void test() {
+        if (!nodeIsHere()) {
+            return
+        }
+        def names = tests.files.collect { "test/${it.name}".toString() }.sort()
+        def answer = node([
+            "--import",
+            "./test/setup.mjs",
+            "--test"
+        ] + names)
+        report.get().asFile.text = answer.output
+        if (answer.exit != 0) {
+            throw new GradleException("The page's JavaScript tests failed (the whole run is in "
+            + report.get().asFile + "):\n\n" + answer.output)
+        }
+        def counts = answer.output.readLines().findAll { it ==~ /# (tests|pass|fail) \d+/ }
+        logger.lifecycle("Page tests: " + counts.collect { it.substring(2) }.join(", "))
+    }
+}

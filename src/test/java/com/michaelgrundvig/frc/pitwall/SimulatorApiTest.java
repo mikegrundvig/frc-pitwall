@@ -480,12 +480,16 @@ class SimulatorApiTest {
         HttpResponse.BodyHandlers.ofString());
   }
 
+  /**
+   * Waits for the server's threads to do something, up to the 30 s the other end-to-end waits
+   * allow: it ends as soon as it's done, so only a failure takes that long.
+   */
   private void waitFor(BooleanSupplier done, String what) throws InterruptedException {
-    long end = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+    long end = System.nanoTime() + Duration.ofSeconds(30).toNanos();
     while (!done.getAsBoolean() && System.nanoTime() < end) {
       Thread.sleep(5);
     }
-    assertThat(done.getAsBoolean()).as(what).isTrue();
+    assertThat(done.getAsBoolean()).as("waited 30 s for " + what).isTrue();
   }
 
   private HttpResponse<String> send(

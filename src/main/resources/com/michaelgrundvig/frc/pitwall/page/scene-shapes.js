@@ -217,6 +217,13 @@ function seenFromAbove(built, edges, corners) {
       const hull = convexHull(floor);
       group.visible = hull.length >= 3;
       if (hull.length < 3) return;
+      const position = outline.geometry.getAttribute("position");
+      if (position && position.count !== hull.length) {
+        // setFromPoints writes into the position the outline has, as many points as it holds, so a
+        // hull with more or fewer corners than the last needs a geometry of its own.
+        outline.geometry.dispose();
+        outline.geometry = new THREE.BufferGeometry();
+      }
       outline.geometry.setFromPoints(hull.map(([x, y]) => new THREE.Vector3(x, y, 0)));
       outline.geometry.computeBoundingSphere();
       if (outline.material.isLineDashedMaterial) measureDashes(outline);

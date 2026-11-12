@@ -152,7 +152,8 @@ public final class Actions {
     }
   }
 
-  private record Request(ActionInputs.Kind kind, String name, CompletableFuture<Outcome> outcome) {}
+  private record Request(
+      ActionInputs.Kind kind, String name, CompletableFuture<RequestOutcome> outcome) {}
 
   private final Map<String, Entry> actions = new LinkedHashMap<>();
   private final ConcurrentLinkedQueue<Request> queue = new ConcurrentLinkedQueue<>();
@@ -264,12 +265,12 @@ public final class Actions {
   }
 
   /** Asks the robot loop to start an action. Safe to call from any thread. */
-  public CompletableFuture<Outcome> requestStart(String name) {
+  public CompletableFuture<RequestOutcome> requestStart(String name) {
     return enqueue(ActionInputs.Kind.START, name);
   }
 
   /** Asks the robot loop to cancel an action, if it's running. Safe to call from any thread. */
-  public CompletableFuture<Outcome> requestCancel(String name) {
+  public CompletableFuture<RequestOutcome> requestCancel(String name) {
     return enqueue(ActionInputs.Kind.CANCEL, name);
   }
 
@@ -278,7 +279,7 @@ public final class Actions {
    * per loop, before the command scheduler runs.
    */
   public void periodic(Gate gate) {
-    List<CompletableFuture<Outcome>> outcomes = drainInto(inputs);
+    List<CompletableFuture<RequestOutcome>> outcomes = drainInto(inputs);
     logInputs.accept(inputs); // in replay, this replaces them with the logged ones
 
     for (Entry entry : actions.values()) {
@@ -289,7 +290,7 @@ public final class Actions {
           running = entry.routine.isRunning();
         } catch (RuntimeException e) {
           running = false;
-          broken = "Ended: checking whether it runs failed: " + describe(e);
+          broken = "Ended: checking whether it runs failed: " + Said.of(e);
         }
         if (!running) {
           entry.set(Phase.ENDED, broken != null ? broken : "Ended");
@@ -304,7 +305,7 @@ public final class Actions {
         entry.set(Phase.CANCELED, "Canceled: " + entry.locked + cancel(entry));
       }
     }
-    List<Outcome> results = new ArrayList<>();
+    List<RequestOutcome> results = new ArrayList<>();
     for (int i = 0; i < inputs.kinds.length; i++) {
       results.add(apply(ActionInputs.Kind.valueOf(inputs.kinds[i]), inputs.names[i]));
     }
@@ -324,39 +325,39 @@ public final class Actions {
     return when == When.ENABLED_IN_UTILITY ? "actions run" : name + " runs";
   }
 
-  private Outcome apply(ActionInputs.Kind kind, String name) {
+  private RequestOutcome apply(ActionInputs.Kind kind, String name) {
     Entry entry = actions.get(name);
     if (entry == null) {
-      return new Outcome(Outcome.Result.REFUSED, "There is no action named " + name);
+      return new RequestOutcome(RequestOutcome.Result.REFUSED, "There is no action named " + name);
     }
     if (kind == ActionInputs.Kind.CANCEL) {
       if (entry.phase == Phase.RUNNING) {
         entry.set(Phase.CANCELED, "Canceled from the page" + cancel(entry));
       }
-      return Outcome.applied();
+      return RequestOutcome.applied();
     }
     String whyNot = entry.locked;
     if (whyNot != null) {
-      return new Outcome(
-          Outcome.Result.LOCKED,
+      return new RequestOutcome(
+          RequestOutcome.Result.LOCKED,
           (entry.when == When.ENABLED_IN_UTILITY ? "Actions are locked: " : name + " is locked: ")
               + whyNot);
     }
     if (entry.phase == Phase.RUNNING) {
-      return new Outcome(Outcome.Result.REFUSED, name + " is already running");
+      return new RequestOutcome(RequestOutcome.Result.REFUSED, name + " is already running");
     }
     String failed;
     try {
       failed = entry.routine.start();
     } catch (RuntimeException e) {
-      failed = describe(e);
+      failed = Said.of(e);
     }
     if (failed != null) {
       entry.set(Phase.REFUSED, "Refused: " + failed);
-      return new Outcome(Outcome.Result.REFUSED, failed);
+      return new RequestOutcome(RequestOutcome.Result.REFUSED, failed);
     }
     entry.set(Phase.RUNNING, "Running");
-    return Outcome.applied();
+    return RequestOutcome.applied();
   }
 
   /**
@@ -369,23 +370,18 @@ public final class Actions {
       entry.routine.cancel();
       return "";
     } catch (RuntimeException e) {
-      return " (canceling it failed: " + describe(e) + ")";
+      return " (canceling it failed: " + Said.of(e) + ")";
     }
   }
 
-  private static String describe(RuntimeException e) {
-    String why = e.getMessage();
-    return why != null ? why : e.toString();
-  }
-
-  private CompletableFuture<Outcome> enqueue(ActionInputs.Kind kind, String name) {
-    CompletableFuture<Outcome> outcome = new CompletableFuture<>();
+  private CompletableFuture<RequestOutcome> enqueue(ActionInputs.Kind kind, String name) {
+    CompletableFuture<RequestOutcome> outcome = new CompletableFuture<>();
     queue.add(new Request(kind, name, outcome));
     return outcome;
   }
 
   /** Moves the queued requests into the inputs, and returns their futures in request order. */
-  private List<CompletableFuture<Outcome>> drainInto(ActionInputs inputs) {
+  private List<CompletableFuture<RequestOutcome>> drainInto(ActionInputs inputs) {
     if (queue.isEmpty()) {
       inputs.clearRequests();
       return List.of();

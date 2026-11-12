@@ -1,6 +1,7 @@
 package com.michaelgrundvig.frc.pitwall.simulator;
 
 import com.michaelgrundvig.frc.pitwall.Numbers;
+import com.michaelgrundvig.frc.pitwall.Said;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -205,7 +206,7 @@ public final class Components {
       fault.apply(values);
     } catch (RuntimeException e) {
       return new Applied(
-          Result.REFUSED, setting.component() + ": " + setting.fault() + " failed: " + describe(e));
+          Result.REFUSED, setting.component() + ": " + setting.fault() + " failed: " + Said.of(e));
     }
     if (fault.kind() == Fault.Kind.LASTING) {
       if (!fault.isOn()) {
@@ -252,7 +253,7 @@ public final class Components {
     try {
       named.undoIt();
     } catch (RuntimeException e) {
-      return component + ": undoing " + fault + " failed: " + describe(e);
+      return component + ": undoing " + fault + " failed: " + Said.of(e);
     }
     forget(component, fault);
     say.accept(component + ": " + fault + ", undone: " + named.undo());
@@ -432,10 +433,5 @@ public final class Components {
       }
     }
     return null;
-  }
-
-  private static String describe(RuntimeException e) {
-    String why = e.getMessage();
-    return why != null ? why : e.toString();
   }
 }

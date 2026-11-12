@@ -13,10 +13,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.wpilib.tunable.MockTunableBackend;
 import org.wpilib.tunable.TunableRegistry;
+import org.wpilib.units.measure.Current;
 
 class LiveConfigTest {
   private static final String KP = "drive.gains.kP";
@@ -130,6 +132,32 @@ class LiveConfigTest {
                 + "machine: travel.middle isn't tunable");
   }
 
+  /** A gain left to a seed until it's given, as a drivetrain's drive kV is. */
+  record Seeded(Optional<Double> kV, Optional<Current> limit) {}
+
+  /**
+   * A value held as an Optional is tuned as the value it holds, and a tuned one is given: one of a
+   * number, one of a measure. An empty one has nothing to tune.
+   */
+  @Test
+  void aValueHeldAsAnOptionalIsTunedAsTheValueItHolds() {
+    var live =
+        LiveConfig.of("seeded", new Seeded(Optional.of(2.5), Optional.of(Amps.of(40))))
+            .number("kV", Limits.between(0, 5))
+            .measure("limit", Amps.of(10), Amps.of(80));
+
+    assertThat(live.value("kV")).isEqualTo(2.5);
+    assertThat(live.value("limit")).isEqualTo(40);
+    assertThat(live.set(Map.of("kV", 2.7, "limit", 50.0))).isTrue();
+    assertThat(live.get()).isEqualTo(new Seeded(Optional.of(2.7), Optional.of(Amps.of(50.0))));
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () ->
+                LiveConfig.of("seeded", new Seeded(Optional.empty(), Optional.empty()))
+                    .number("kV", Limits.between(0, 5)))
+        .withMessage("seeded: kV is empty, so there's nothing to tune");
+  }
+
   /** A record that reports each value it rejects on a line, as the robot's records do. */
   record Pair(double a, double b) {
     Pair {
@@ -160,14 +188,14 @@ class LiveConfigTest {
     assertThat(problems)
         .containsExactly(
             new LiveConfig.Problem(
-                Outcome.Layer.RECORD,
+                RequestOutcome.Layer.RECORD,
                 List.of("a"),
                 "LiveConfigTest.Pair",
                 "",
                 "must be zero or more",
                 "pair: Pair.a: must be zero or more"),
             new LiveConfig.Problem(
-                Outcome.Layer.RECORD,
+                RequestOutcome.Layer.RECORD,
                 List.of("b"),
                 "LiveConfigTest.Pair",
                 "",
@@ -210,7 +238,7 @@ class LiveConfigTest {
         .singleElement()
         .isEqualTo(
             new LiveConfig.Problem(
-                Outcome.Layer.RECORD,
+                RequestOutcome.Layer.RECORD,
                 List.of("left.a"),
                 "LiveConfigTest.Named",
                 "",
@@ -220,14 +248,14 @@ class LiveConfigTest {
         .as("a check naming no value concerns the change's values in its record, and the record")
         .containsExactly(
             new LiveConfig.Problem(
-                Outcome.Layer.RECORD,
+                RequestOutcome.Layer.RECORD,
                 List.of("right.a"),
                 "LiveConfigTest.Both",
                 "",
                 "too much with left.a",
                 "both: Both.right.a: too much with left.a"),
             new LiveConfig.Problem(
-                Outcome.Layer.RECORD,
+                RequestOutcome.Layer.RECORD,
                 List.of("right.a"),
                 "LiveConfigTest.Both",
                 "",
@@ -248,8 +276,11 @@ class LiveConfigTest {
     assertThat(problems)
         .extracting(LiveConfig.Problem::layer, LiveConfig.Problem::fields, LiveConfig.Problem::text)
         .containsExactly(
-            tuple(Outcome.Layer.LIMIT, List.of(KP), "-1 is below its limit of 0"),
-            tuple(Outcome.Layer.VALUE, List.of("travel.middle"), "travel.middle isn't tunable"));
+            tuple(RequestOutcome.Layer.LIMIT, List.of(KP), "-1 is below its limit of 0"),
+            tuple(
+                RequestOutcome.Layer.VALUE,
+                List.of("travel.middle"),
+                "travel.middle isn't tunable"));
   }
 
   @Test
@@ -282,6 +313,37 @@ class LiveConfigTest {
     assertThat(live.set(Map.of(KP, 18.5, "drive.limits.current", -1.0))).isFalse();
 
     assertThat(live.get()).isEqualTo(machine());
+  }
+
+  /** A setting a camera takes as a whole number, as a camera's gain is. */
+  record Whole(int gain) {}
+
+  /**
+   * A whole number is tuned as one: a whole value is taken and committed as written, and one that
+   * isn't whole is refused, the record never built with it.
+   */
+  @Test
+  void aWholeNumberIsTunedAndCommittedWhole() {
+    record Case(String name, double value, boolean taken, String says) {}
+    List<Case> cases =
+        List.of(
+            new Case("a whole value", 64, true, ""),
+            new Case("a fraction", 40.5, false, "camera: gain takes a whole number, got 40.5"));
+    for (Case c : cases) {
+      var live = LiveConfig.of("camera", new Whole(40)).number("gain", Limits.between(0, 100));
+
+      assertThat(live.value("gain")).as(c.name()).isEqualTo(40);
+      assertThat(live.set(Map.of("gain", c.value()))).as(c.name()).isEqualTo(c.taken());
+      if (c.taken()) {
+        assertThat(live.get()).as(c.name()).isEqualTo(new Whole(64));
+        assertThat(live.changes())
+            .as(c.name())
+            .containsExactly(new LiveConfig.Change("gain", "40", "64", ".gain(64)"));
+      } else {
+        assertThat(live.get()).as(c.name()).isEqualTo(new Whole(40));
+        assertThat(live.whyNot(Map.of("gain", c.value()))).as(c.name()).isEqualTo(c.says());
+      }
+    }
   }
 
   @Test
@@ -342,10 +404,10 @@ class LiveConfigTest {
         .withMessage("machine: nothing is at drive.gains.kI");
     assertThatIllegalArgumentException()
         .isThrownBy(() -> config.number("name", Limits.NONE))
-        .withMessageContaining("isn't a number or a measure");
+        .withMessageContaining("isn't a number, a whole number or a measure");
     assertThatIllegalArgumentException()
         .isThrownBy(() -> config.number("drive.gains", Limits.NONE))
-        .withMessageContaining("isn't a number or a measure");
+        .withMessageContaining("isn't a number, a whole number or a measure");
     config.number(KP, Limits.NONE);
     assertThatIllegalArgumentException()
         .isThrownBy(() -> config.number(KP, Limits.NONE))
@@ -378,6 +440,43 @@ class LiveConfigTest {
     assertThat(dashboard.getTunable("Machine/travel/min").getConfig().getProperties())
         .as("undocumented")
         .doesNotContain("description");
+  }
+
+  /**
+   * Published without Pitwall's tee, a dashboard's write the configuration refuses is declined,
+   * never thrown inside WPILib's update, and says why as a warning; one it takes applies.
+   */
+  @Test
+  void aRefusedWriteWithoutTheTeeIsDeclinedWithAWarning() {
+    var dashboard = new MockTunableBackend();
+    TunableRegistry.registerBackend("", dashboard);
+    List<String> warnings = new ArrayList<>();
+    TunableRegistry.setReportWarning(warnings::add);
+    var live = live();
+    TunableRegistry.publish("Machine", live);
+    record Write(String path, double value, String warning) {}
+    List<Write> writes =
+        List.of(
+            new Write(
+                "Machine/drive/limits/maxSpeed",
+                5,
+                "Pitwall refused drive.limits.maxSpeed = 5.0: machine: maxSpeed is faster than"
+                    + " the motor's free speed"),
+            new Write("Machine/drive/gains/kP", 18.5, ""));
+
+    try {
+      for (Write write : writes) {
+        warnings.clear();
+        dashboard.setDouble(write.path(), write.value());
+        TunableRegistry.update();
+        assertThat(String.join("\n", warnings)).as(write.path()).isEqualTo(write.warning());
+      }
+    } finally {
+      TunableRegistry.setReportWarning(null);
+    }
+
+    assertThat(live.get().drive().limits()).as("declined").isEqualTo(machine().drive().limits());
+    assertThat(live.get().drive().gains().kP()).as("applied").isEqualTo(18.5);
   }
 
   /** The description property is JSON: what JSON escapes comes back exactly. */

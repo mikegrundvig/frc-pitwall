@@ -59,7 +59,7 @@ class TuningTest {
   }
 
   /** A change through the tee, as the page makes it, applied at the loop's end. */
-  private Outcome change(String path, double value) {
+  private RequestOutcome change(String path, double value) {
     var outcome = tee.requestChanges(Map.of(path, value));
     tee.update();
     return outcome.getNow(null);
@@ -91,7 +91,7 @@ class TuningTest {
 
   @Test
   void aChangeShowsInTheViewAndTheReport() {
-    assertThat(change(KP, 18.5).result()).isEqualTo(Outcome.Result.APPLIED);
+    assertThat(change(KP, 18.5).result()).isEqualTo(RequestOutcome.Result.APPLIED);
 
     assertThat(tuning.view().hasChanges()).isTrue();
     assertThat(tuning.view().changedPaths()).isEqualTo("machine drive.gains.kP");
@@ -118,12 +118,13 @@ class TuningTest {
     tuning = tuning(false);
 
     assertThat(change(KP, 18.5))
-        .isEqualTo(new Outcome(Outcome.Result.LOCKED, "Tuning is locked: tuning is off"));
+        .isEqualTo(
+            new RequestOutcome(RequestOutcome.Result.LOCKED, "Tuning is locked: tuning is off"));
 
     var on = tuning.requestEnabled(true);
     tuning.periodic(false);
-    assertThat(on.getNow(null).result()).isEqualTo(Outcome.Result.APPLIED);
-    assertThat(change(KP, 18.5).result()).isEqualTo(Outcome.Result.APPLIED);
+    assertThat(on.getNow(null).result()).isEqualTo(RequestOutcome.Result.APPLIED);
+    assertThat(change(KP, 18.5).result()).isEqualTo(RequestOutcome.Result.APPLIED);
   }
 
   @Test
@@ -135,8 +136,9 @@ class TuningTest {
     var on = tuning.requestEnabled(true);
     tuning.periodic(true);
     String locked = "Tuning is locked: the field system is connected";
-    assertThat(on.getNow(null)).isEqualTo(new Outcome(Outcome.Result.LOCKED, locked));
-    assertThat(change(KP, 18.5)).isEqualTo(new Outcome(Outcome.Result.LOCKED, locked));
+    assertThat(on.getNow(null)).isEqualTo(new RequestOutcome(RequestOutcome.Result.LOCKED, locked));
+    assertThat(change(KP, 18.5))
+        .isEqualTo(new RequestOutcome(RequestOutcome.Result.LOCKED, locked));
 
     tuning.periodic(false);
     assertThat(tuning.view().enabled()).isFalse();
@@ -149,7 +151,7 @@ class TuningTest {
     var reset = tuning.requestReset();
     tuning.periodic(false);
 
-    assertThat(reset.getNow(null).result()).isEqualTo(Outcome.Result.APPLIED);
+    assertThat(reset.getNow(null).result()).isEqualTo(RequestOutcome.Result.APPLIED);
     assertThat(machine.get()).isEqualTo(machine());
   }
 
@@ -161,7 +163,7 @@ class TuningTest {
 
     tuning.periodic(false);
 
-    assertThat(reset.getNow(null).result()).isEqualTo(Outcome.Result.LOCKED);
+    assertThat(reset.getNow(null).result()).isEqualTo(RequestOutcome.Result.LOCKED);
     assertThat(machine.get().drive().gains().kP()).isEqualTo(18.5);
   }
 

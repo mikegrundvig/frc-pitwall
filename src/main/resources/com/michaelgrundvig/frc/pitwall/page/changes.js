@@ -4,7 +4,7 @@
 // calls into the robot's configuration.
 
 import {
-  robot, onChange, onConnection, send, h, say, replace, confirm, go, shown,
+  robot, onChange, onConnection, send, h, say, replace, confirm, go, shown, plural,
 } from "./core.js";
 import { stageAll, whyLocked } from "./edits.js";
 import { entries, onHistory, expect, record, undid, itemsText, clock } from "./history.js";
@@ -206,7 +206,7 @@ async function returnAll() {
   const doc = robot.doc;
   const tuned = Object.keys(doc.tunables).filter((path) => path in doc.changes);
   const ok = await confirm("Return all to committed?", [
-    h("p", null, "These " + tuned.length + (tuned.length === 1 ? " value goes" : " values go")
+    h("p", null, "These " + tuned.length + plural(tuned.length, " value goes", " values go")
         + " back to committed on the robot:"),
     h("ul", null, tuned.map((path) => {
       const value = doc.tunables[path];

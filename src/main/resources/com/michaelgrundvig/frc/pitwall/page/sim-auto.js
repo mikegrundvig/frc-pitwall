@@ -7,7 +7,7 @@
 // cards is the auto's (Devices.Device.autonomous()); a program that says none has no such section.
 
 import { robot, h, replace } from "./core.js";
-import { makeChoice } from "./devices.js";
+import { makeChoice, lineItem } from "./devices.js";
 import { sim, canAct, enableInAutonomous } from "./sim-state.js";
 import { block } from "./sim-parts.js";
 
@@ -51,11 +51,7 @@ function render(ui, element) {
   element.hidden = found.length === 0;
   if (found.length === 0) return;
   const [name, device] = found[0];
-  replace(ui.lines, (device.lines || []).map((line) => h("li", null,
-    h("span", { class: "sev " + (line.level === "problem" ? "bad" : line.level === "ok" ? "ok"
-      : "none"), "aria-hidden": "true" },
-    line.level === "problem" ? "✗" : line.level === "ok" ? "✓" : "•"),
-    h("span", { class: "k" }, line.label), h("span", null, line.value))));
+  replace(ui.lines, (device.lines || []).map(lineItem));
   // The options are rebuilt only when they or what's chosen change, so a pick being made isn't
   // swept away by the next update.
   const choices = device.choices || [];

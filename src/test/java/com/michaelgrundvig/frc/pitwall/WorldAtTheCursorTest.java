@@ -14,6 +14,7 @@ import com.michaelgrundvig.frc.pitwall.world.WorldScene;
 import com.michaelgrundvig.frc.world.field.FieldModel;
 import com.michaelgrundvig.frc.world.field.Symmetry;
 import com.michaelgrundvig.frc.world.field.Tag;
+import com.michaelgrundvig.frc.world.field.TagFamily;
 import com.michaelgrundvig.frc.world.field.TagLayout;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -42,6 +43,8 @@ class WorldAtTheCursorTest {
                   "one tag",
                   16.5,
                   8,
+                  TagFamily.TAG_36H11,
+                  0.1651,
                   List.of(Tag.nominal(7, new Pose3d(16.5, 3, 1.4, new Rotation3d(0, 0, Math.PI))))),
               Symmetry.ROTATED)
           .build();

@@ -86,7 +86,7 @@ class DevicesApiTest {
                     "vision-front",
                     "Coprocessor",
                     () ->
-                        new Card(
+                        Card.of(
                             "Present", Level.OK, List.of(new Line("Version", "matches", Level.OK))))
                 .download("settings", "Download settings backup", this::settings)
                 .download("short", "A file that ends early", DevicesApiTest::endsEarly)
@@ -95,24 +95,22 @@ class DevicesApiTest {
                 .download("slow", "A file that takes a while", this::slowly))
         .add(
             Device.named(
-                "vision-back", "Coprocessor", () -> new Card("Missing", Level.PROBLEM, List.of())))
+                "vision-back", "Coprocessor", () -> Card.of("Missing", Level.PROBLEM, List.of())))
         .add(
             Device.named(
                     "venue",
                     "Field",
                     () ->
-                        new Card(
-                            "In use",
-                            Level.OK,
-                            List.of(),
-                            List.of(
-                                new Devices.Choice(
-                                    "venue",
-                                    "Venue",
-                                    List.of(
-                                        new Devices.Option("official", "Official layout"),
-                                        new Devices.Option("practice", "Practice field")),
-                                    chosenVenue))))
+                        Card.of("In use", Level.OK, List.of())
+                            .withChoices(
+                                List.of(
+                                    new Devices.Choice(
+                                        "venue",
+                                        "Venue",
+                                        List.of(
+                                            new Devices.Option("official", "Official layout"),
+                                            new Devices.Option("practice", "Practice field")),
+                                        chosenVenue))))
                 .upload("survey", "Upload venue", DevicesApiTest::survey)
                 .choose("venue", this::chooseVenue));
     server.start();
@@ -449,6 +447,47 @@ class DevicesApiTest {
                     "application/octet-stream")
                 .statusCode())
         .isEqualTo(404);
+  }
+
+  /**
+   * The page loads a card's picture only from the places the robot program named, never from any
+   * other host: its policy for images lists the robot itself and those places, and nothing more.
+   */
+  @Test
+  void thePageLoadsPicturesOnlyFromThePlacesNamed() throws Exception {
+    record Case(String name, List<String> named, String images) {}
+    List<Case> cases =
+        List.of(
+            new Case("none named", List.of(), "img-src 'self'"),
+            new Case(
+                "two boards, one named twice",
+                List.of(
+                    "http://10.12.34.11:5809",
+                    "http://10.12.34.12:5809",
+                    "http://10.12.34.11:5809"),
+                "img-src 'self' http://10.12.34.11:5809 http://10.12.34.12:5809"));
+    for (Case c : cases) {
+      Page own =
+          new Page(
+              new Status(),
+              new Actions(inputs -> {}),
+              tuning,
+              tunables,
+              new ByHand(System::nanoTime).experiments());
+      c.named().forEach(own.devices()::picturesFrom);
+      try (PitwallServer serving = new PitwallServer(own, broadcaster, 0)) {
+        serving.start(true);
+        HttpResponse<String> page =
+            client.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + serving.port() + "/"))
+                    .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(page.headers().firstValue("Content-Security-Policy"))
+            .as(c.name())
+            .hasValue("default-src 'self'; " + c.images() + "; frame-ancestors 'none'");
+      }
+    }
   }
 
   private HttpRequest.Builder request(String path) {

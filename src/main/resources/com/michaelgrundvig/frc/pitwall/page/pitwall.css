@@ -418,6 +418,19 @@ table { border-collapse: collapse; }
 .dchoices:empty { display: none; }
 .dchoice { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin-top: 10px; }
 .dchoice select { max-width: 100%; }
+/* A card with a live picture: the picture first, and its lines and values beside it once the card
+   is wide enough for both, under it until then. */
+.device.pictured { container: device / inline-size; }
+.dbody { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+@container device (min-width: 760px) {
+  .dbody { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+}
+.dpicture, .dabout { min-width: 0; }
+.dpicture-img { display: block; width: 100%; height: auto; border-radius: 6px; background: #000; }
+.dpicture-note { margin: 0; min-height: 6em; display: flex; align-items: center; padding: var(--s3);
+                 border: 1px dashed var(--line-strong); border-radius: 6px; color: var(--text-2);
+                 font-size: var(--meta); overflow-wrap: anywhere; }
+.dtune { margin-top: 10px; }
 
 /* ---- Tune: values beside what they mean ---- */
 

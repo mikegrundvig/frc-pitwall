@@ -26,9 +26,6 @@ import org.wpilib.math.geometry.Pose3d;
  * the field ({@link #elements}) and where a robot may start ({@link #starts}). Nothing here moves.
  */
 final class FieldLayer implements Layer {
-  /** The side of an AprilTag's printed square, in meters. FRC's 36h11 tags are 6.5 in. */
-  private static final double TAG_SIZE = 0.1651;
-
   /**
    * How thick each side of a tag is drawn, its face and its back: thick enough that a tag seen from
    * above, across the whole field, is still a short line and not a hair.
@@ -91,7 +88,7 @@ final class FieldLayer implements Layer {
       surface(scene, "surface." + i, surfaces.get(i));
     }
     for (Tag tag : field.tags().values()) {
-      describeTag(scene, tag.id(), tag.pose());
+      describeTag(scene, tag.id(), tag.pose(), field.tagSizeMeters());
     }
   }
 
@@ -116,22 +113,22 @@ final class FieldLayer implements Layer {
    * A tag in a frame of its own at its pose, drawn so the side it is read from shows. Its face is a
    * lit slab on the side its pose looks out of, with a tick standing out of its middle, and its
    * back is a faint slab behind. From above that is a short thick line with a tick on its readable
-   * side; from around, a bright front and a dim back.
+   * side; from around, a bright front and a dim back. Its square is the field's tags' size.
    */
-  private static void describeTag(SceneBuilder scene, int id, Pose3d pose) {
+  private static void describeTag(SceneBuilder scene, int id, Pose3d pose, double size) {
     String frame = WorldWords.tagFrame(id);
     scene.frame(frame, SceneBuilder.ROOT, pose);
     // The tag's x points out of its face, so its square stands in the y-z plane: the face's slab is
     // just in front of that plane and the back's just behind it.
     scene
         .box(frame + ".square", frame)
-        .size(TAG_SIDE_THICKNESS, TAG_SIZE, TAG_SIZE)
+        .size(TAG_SIDE_THICKNESS, size, size)
         .at(TAG_SIDE_THICKNESS / 2, 0, 0)
         .style(Style.FACE)
         .inspect(() -> tag(id, pose));
     scene
         .box(frame + ".back", frame)
-        .size(TAG_SIDE_THICKNESS, TAG_SIZE, TAG_SIZE)
+        .size(TAG_SIDE_THICKNESS, size, size)
         .at(-TAG_SIDE_THICKNESS / 2, 0, 0);
     scene
         .line(frame + ".facing", frame)
@@ -185,12 +182,13 @@ final class FieldLayer implements Layer {
         "tag-numbers",
         "Tag numbers",
         scene -> {
-          for (Tag tag : active.get().tags().values()) {
+          FieldModel field = active.get();
+          for (Tag tag : field.tags().values()) {
             String frame = WorldWords.tagFrame(tag.id());
             scene
                 .label(frame + ".id", frame)
                 .text(Integer.toString(tag.id()))
-                .at(TAG_NUMBER_OUT, 0, TAG_SIZE);
+                .at(TAG_NUMBER_OUT, 0, field.tagSizeMeters());
           }
         },
         List.of(Legend.text(Style.MUTED, "An AprilTag's number")),

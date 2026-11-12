@@ -78,7 +78,8 @@ public final class TunableTee implements TunableBackend {
       @Nullable LiveConfig<?> config,
       String field) {}
 
-  private record PageRequest(Map<String, Object> values, CompletableFuture<Outcome> outcome) {}
+  private record PageRequest(
+      Map<String, Object> values, CompletableFuture<RequestOutcome> outcome) {}
 
   /**
    * One tunable's change from the page, or one configuration's, and how to take it back if a later
@@ -210,8 +211,8 @@ public final class TunableTee implements TunableBackend {
    * @param values new values by path: a number, or a boolean for a boolean tunable
    * @return completes, in the robot loop, with what became of the request
    */
-  public CompletableFuture<Outcome> requestChanges(Map<String, Object> values) {
-    CompletableFuture<Outcome> outcome = new CompletableFuture<>();
+  public CompletableFuture<RequestOutcome> requestChanges(Map<String, Object> values) {
+    CompletableFuture<RequestOutcome> outcome = new CompletableFuture<>();
     Map<String, Object> byPath = new LinkedHashMap<>();
     values.forEach((path, value) -> byPath.put(PathUtil.normalizeName(path), value));
     queue.add(new PageRequest(byPath, outcome));
@@ -316,7 +317,7 @@ public final class TunableTee implements TunableBackend {
     for (PageRequest request = queue.poll(); request != null; request = queue.poll()) {
       requests.add(request);
     }
-    List<Outcome> outcomes = new ArrayList<>();
+    List<RequestOutcome> outcomes = new ArrayList<>();
     for (PageRequest request : requests) {
       outcomes.add(applyFromPage(request.values()));
     }
@@ -381,8 +382,7 @@ public final class TunableTee implements TunableBackend {
     try {
       apply.run();
     } catch (RuntimeException e) {
-      String why = e.getMessage();
-      refused(path, text, why != null ? why : e.toString());
+      refused(path, text, Said.of(e));
       return;
     }
     applied(path, real, text);
@@ -439,12 +439,12 @@ public final class TunableTee implements TunableBackend {
    * the values it concerns. Then each is applied, and if a tunable's own setter throws, the ones
    * already applied are put back.
    */
-  private Outcome applyFromPage(Map<String, Object> values) {
+  private RequestOutcome applyFromPage(Map<String, Object> values) {
     String why = whyLocked.get();
     if (why != null) {
-      return new Outcome(Outcome.Result.LOCKED, "Tuning is locked: " + why);
+      return new RequestOutcome(RequestOutcome.Result.LOCKED, "Tuning is locked: " + why);
     }
-    List<Outcome.Reason> problems = new ArrayList<>();
+    List<RequestOutcome.Reason> problems = new ArrayList<>();
     List<Change> changes = new ArrayList<>();
     // A configuration's values, gathered to be checked and applied together.
     Map<LiveConfig<?>, Map<String, Double>> configured = new IdentityHashMap<>();
@@ -457,7 +457,7 @@ public final class TunableTee implements TunableBackend {
       }
       if (entry == null || entry.proxy() == null || !isMutable(entry.real())) {
         String text = "There is no tunable the page can change at " + path;
-        problems.add(Outcome.Reason.of(Outcome.Layer.VALUE, path, "", text, text));
+        problems.add(RequestOutcome.Reason.of(RequestOutcome.Layer.VALUE, path, "", text, text));
         continue;
       }
       LiveConfig<?> config = entry.config();
@@ -465,15 +465,16 @@ public final class TunableTee implements TunableBackend {
       Change change = change(path, entry, value.getValue());
       if (change == null) {
         String text = path + " takes a " + entry.type() + " value";
-        problems.add(Outcome.Reason.of(Outcome.Layer.VALUE, path, configName, text, text));
+        problems.add(
+            RequestOutcome.Reason.of(RequestOutcome.Layer.VALUE, path, configName, text, text));
         continue;
       }
       if (value.getValue() instanceof Number number) {
         String outside = entry.limits().whyNot(number.doubleValue());
         if (outside != null) {
           problems.add(
-              Outcome.Reason.of(
-                  Outcome.Layer.LIMIT, path, configName, outside, path + ": " + outside));
+              RequestOutcome.Reason.of(
+                  RequestOutcome.Layer.LIMIT, path, configName, outside, path + ": " + outside));
           continue;
         }
       }
@@ -489,7 +490,7 @@ public final class TunableTee implements TunableBackend {
       changes.add(change);
     }
     if (!problems.isEmpty()) {
-      return Outcome.refused(problems);
+      return RequestOutcome.refused(problems);
     }
     for (Map.Entry<LiveConfig<?>, Map<String, Double>> group : configured.entrySet()) {
       LiveConfig<?> config = group.getKey();
@@ -498,7 +499,7 @@ public final class TunableTee implements TunableBackend {
       if (candidate == null) {
         for (LiveConfig.Problem problem : refused) {
           problems.add(
-              new Outcome.Reason(
+              new RequestOutcome.Reason(
                   problem.layer(),
                   problem.record(),
                   pathsOf(config, problem.fields()),
@@ -531,7 +532,7 @@ public final class TunableTee implements TunableBackend {
               }));
     }
     if (!problems.isEmpty()) {
-      return Outcome.refused(problems);
+      return RequestOutcome.refused(problems);
     }
     List<Change> done = new ArrayList<>();
     for (Change change : changes) {
@@ -547,11 +548,11 @@ public final class TunableTee implements TunableBackend {
                 "Pitwall: couldn't put " + applied.name() + " back: " + alsoFailed);
           }
         }
-        String reason = e.getMessage() != null ? e.getMessage() : e.toString();
-        return Outcome.refused(
+        String reason = Said.of(e);
+        return RequestOutcome.refused(
             List.of(
-                new Outcome.Reason(
-                    Outcome.Layer.TUNABLE,
+                new RequestOutcome.Reason(
+                    RequestOutcome.Layer.TUNABLE,
                     "",
                     change.paths(),
                     change.config(),
@@ -560,7 +561,7 @@ public final class TunableTee implements TunableBackend {
                     change.name() + " refused the value: " + reason)));
       }
     }
-    return Outcome.applied();
+    return RequestOutcome.applied();
   }
 
   /** Where a configuration's values are published, those that are, in the order given. */
@@ -667,7 +668,7 @@ public final class TunableTee implements TunableBackend {
             config.accept(config.candidate(values));
           } catch (IllegalArgumentException refused) {
             TunableRegistry.reportWarning(
-                "Pitwall: " + config.name() + " refused a logged change: " + refused.getMessage());
+                "Pitwall: " + config.name() + " refused a logged change: " + Said.of(refused));
           }
         });
   }

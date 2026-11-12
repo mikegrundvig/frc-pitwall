@@ -57,6 +57,20 @@ function seconds(nanos, places = 2) {
   return minutes + ":" + Math.abs(all - minutes * 60).toFixed(1).padStart(4, "0");
 }
 
+/** Where a tick's time is anchored: kept inside the strip near its two ends. */
+function tickAnchor(x, width) {
+  if (x > width - 30) return "end";
+  if (x < 30) return "start";
+  return "middle";
+}
+
+/** Where a label of some width anchored at x begins, in pixels from the strip's left. */
+function labelStart(anchor, x, wide) {
+  if (anchor === "end") return x - wide;
+  if (anchor === "start") return x;
+  return x - wide / 2;
+}
+
 /** Makes a time strip: {element}, to put along the bottom of a view. */
 export function makeTimeline() {
   const ui = {};
@@ -235,9 +249,9 @@ export function makeTimeline() {
     for (const [nanos, label] of ticks(held)) {
       const x = xOf(nanos);
       parts.push(svg("line", { class: "ts-tick", x1: x, x2: x, y1: top - 3, y2: bottom }));
-      const anchor = x > width - 30 ? "end" : x < 30 ? "start" : "middle";
+      const anchor = tickAnchor(x, width);
       const wide = label.length * TICK_LABEL_PIXELS;
-      const from = anchor === "end" ? x - wide : anchor === "start" ? x : x - wide / 2;
+      const from = labelStart(anchor, x, wide);
       if (from < labeledTo + 4) continue; // it would run into the one before: the tick alone
       labeledTo = from + wide;
       parts.push(svg("text", { class: "ts-tick-label", x, y: 10, "text-anchor": anchor }, label));

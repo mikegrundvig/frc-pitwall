@@ -332,6 +332,11 @@ export function replace(element, ...children) {
   return true;
 }
 
+/** One word or another, by how many there are: {@code plural(1, "edit", "edits")} is "edit". */
+export function plural(count, one, many) {
+  return count === 1 ? one : many;
+}
+
 /** A number with its value's unit, as the page shows it: "40 A", or "16" for a plain number. */
 export function withUnit(number, value) {
   return shown(number) + (value.unit ? " " + value.unit : "");

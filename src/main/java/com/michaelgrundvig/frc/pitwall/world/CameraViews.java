@@ -76,8 +76,8 @@ final class CameraViews implements Layer {
   @Override
   public void describe(SceneBuilder scene) {
     for (CameraConfig camera : cameras) {
-      RobotLayer.FieldOfView sees = RobotLayer.fieldOfView(camera.sensor());
-      double far = Math.min(VIEW_METERS, camera.sensor().sightRange().in(Meters));
+      RobotLayer.FieldOfView sees = RobotLayer.fieldOfView(camera);
+      double far = Math.min(VIEW_METERS, camera.sightRangeOrDefault().in(Meters));
       scene
           .frustum(view(camera), WorldWords.cameraFrame(camera.id()))
           .fov(sees.acrossRadians(), sees.upAndDownRadians())

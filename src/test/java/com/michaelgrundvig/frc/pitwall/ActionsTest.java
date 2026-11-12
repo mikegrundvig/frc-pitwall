@@ -72,7 +72,7 @@ class ActionsTest {
 
     actions.periodic(READY);
 
-    assertThat(outcome.getNow(null)).isEqualTo(Outcome.applied());
+    assertThat(outcome.getNow(null)).isEqualTo(RequestOutcome.applied());
     assertThat(state())
         .isEqualTo(
             new Actions.State(
@@ -99,7 +99,7 @@ class ActionsTest {
 
       assertThat(outcome.getNow(null).result())
           .as(gate.toString())
-          .isEqualTo(Outcome.Result.LOCKED);
+          .isEqualTo(RequestOutcome.Result.LOCKED);
     }
     assertThat(home.starts).isZero();
     assertThat(actions.requestStart("Home arm").isDone()).isFalse();
@@ -155,7 +155,7 @@ class ActionsTest {
     var outcome = actions.requestCancel("Home arm");
     actions.periodic(READY);
 
-    assertThat(outcome.getNow(null)).isEqualTo(Outcome.applied());
+    assertThat(outcome.getNow(null)).isEqualTo(RequestOutcome.applied());
     assertThat(home.running).isFalse();
     assertThat(state())
         .isEqualTo(
@@ -168,7 +168,7 @@ class ActionsTest {
 
     var again = actions.requestCancel("Home arm");
     actions.periodic(READY);
-    assertThat(again.getNow(null)).as("nothing to cancel").isEqualTo(Outcome.applied());
+    assertThat(again.getNow(null)).as("nothing to cancel").isEqualTo(RequestOutcome.applied());
     assertThat(home.cancels).isEqualTo(1);
   }
 
@@ -181,7 +181,8 @@ class ActionsTest {
     actions.periodic(READY);
 
     assertThat(again.getNow(null))
-        .isEqualTo(new Outcome(Outcome.Result.REFUSED, "Home arm is already running"));
+        .isEqualTo(
+            new RequestOutcome(RequestOutcome.Result.REFUSED, "Home arm is already running"));
     assertThat(home.starts).isEqualTo(1);
   }
 
@@ -192,7 +193,8 @@ class ActionsTest {
     var outcome = actions.requestStart("Home arm");
     actions.periodic(READY);
 
-    assertThat(outcome.getNow(null)).isEqualTo(new Outcome(Outcome.Result.REFUSED, home.refusal));
+    assertThat(outcome.getNow(null))
+        .isEqualTo(new RequestOutcome(RequestOutcome.Result.REFUSED, home.refusal));
     assertThat(state())
         .isEqualTo(
             new Actions.State(
@@ -228,7 +230,8 @@ class ActionsTest {
     var without = broken.requestStart("Silent");
     broken.periodic(READY);
 
-    assertThat(withMessage.getNow(null)).isEqualTo(new Outcome(Outcome.Result.REFUSED, "no arm"));
+    assertThat(withMessage.getNow(null))
+        .isEqualTo(new RequestOutcome(RequestOutcome.Result.REFUSED, "no arm"));
     assertThat(without.getNow(null).detail()).isEqualTo("java.lang.UnsupportedOperationException");
   }
 
@@ -238,7 +241,8 @@ class ActionsTest {
     actions.periodic(READY);
 
     assertThat(outcome.getNow(null))
-        .isEqualTo(new Outcome(Outcome.Result.REFUSED, "There is no action named Fly"));
+        .isEqualTo(
+            new RequestOutcome(RequestOutcome.Result.REFUSED, "There is no action named Fly"));
   }
 
   @Test
@@ -350,7 +354,7 @@ class ActionsTest {
         .isEqualTo("Power down is locked: Power down runs only with the robot disabled");
     assertThat(onTheField.getNow(null).detail())
         .isEqualTo("Power down is locked: the field system is connected");
-    assertThat(whileDisabled.getNow(null)).isEqualTo(Outcome.applied());
+    assertThat(whileDisabled.getNow(null)).isEqualTo(RequestOutcome.applied());
     assertThat(actions.view().get(1))
         .isEqualTo(
             new Actions.State(

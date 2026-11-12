@@ -299,9 +299,12 @@ export function makeFaults({ compact = false } = {}) {
     let showing = 0;
     if (compact) {
       const lately = recent();
+      // On now first, then by how lately each was used, then the rest.
       const rank = (row) => {
+        if (row.on) return -1;
         const at = lately.indexOf(row.key);
-        return row.on ? -1 : at === -1 ? lately.length : at;
+        if (at === -1) return lately.length;
+        return at;
       };
       const ordered = [...rows.values()].map((row, index) => ({ row, index }))
         .sort((a, b) => rank(a.row) - rank(b.row) || a.index - b.index).map(({ row }) => row);

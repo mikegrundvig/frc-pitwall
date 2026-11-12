@@ -6,7 +6,7 @@
 // redeploy) or the field connects (a match runs the committed configuration), the edits no longer
 // mean what they did: they move into the session's history, where Restore stages them again.
 
-import { robot, onChange, send, shown, say, announce, near } from "./core.js";
+import { robot, onChange, send, shown, say, announce, near, plural } from "./core.js";
 import { expect, record, recordWhenSeen } from "./history.js";
 
 /**
@@ -38,6 +38,19 @@ function changed() {
       console.error(error);
     }
   }
+}
+
+/**
+ * Says that edits can't be sent as they are, the same wherever it's said: "kP is outside its
+ * limits or not a number: fix it to run."
+ *
+ * @param subject which they are: their names, or how many
+ * @param count how many they are
+ * @param verb what fixing them lets happen: "apply", "run"
+ */
+export function outsideLimits(subject, count, verb) {
+  return subject + plural(count, " is", " are") + " outside " + plural(count, "its", "their")
+      + " limits or not a number: fix " + plural(count, "it", "them") + " to " + verb + ".";
 }
 
 /** A configuration value as the robot describes it ({config, field, unit, limits, committed}). */
@@ -121,7 +134,7 @@ export function stageAll(values) {
     count++;
   }
   changed();
-  say("Staged " + count + (count === 1 ? " value" : " values") + ": review, then apply.");
+  say("Staged " + count + plural(count, " value", " values") + ": review, then apply.");
   return count;
 }
 
@@ -288,7 +301,7 @@ export async function apply({ only = null, source = "this page" } = {}) {
       if (staged.has(path) && staged.get(path).text === text) staged.delete(path);
     }
     record(source, "apply", items);
-    say("Applied " + count + (count === 1 ? " change." : " changes."));
+    say("Applied " + count + plural(count, " change.", " changes."));
     changed();
     return true;
   }
@@ -303,7 +316,7 @@ export async function apply({ only = null, source = "this page" } = {}) {
   outcome.refusal = { status: result.status, ...result.problem };
   const reasons = (result.problem.errors || []).length;
   announce(result.status === 422
-    ? "Refused: nothing changed. " + reasons + (reasons === 1 ? " reason." : " reasons.")
+    ? "Refused: nothing changed. " + reasons + plural(reasons, " reason.", " reasons.")
     : "Nothing changed. " + (result.problem.detail || result.problem.title), result.status === 409);
   changed();
   return false;
@@ -324,8 +337,8 @@ function lose(paths, why) {
     staged.delete(path);
   }
   record("staged, not applied, " + why, "staged", items);
-  say(paths.length === 1 ? "A staged edit was set aside " + why + ": stage it again from Changes."
-    : paths.length + " staged edits were set aside " + why + ": stage them again from Changes.",
+  say(plural(paths.length, "A staged edit was set aside " + why + ": stage it again from Changes.",
+    paths.length + " staged edits were set aside " + why + ": stage them again from Changes."),
   true, true);
 }
 

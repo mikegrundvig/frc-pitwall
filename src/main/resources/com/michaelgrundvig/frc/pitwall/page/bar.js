@@ -21,7 +21,7 @@
 // shows a lock while tuning is off; everywhere else they stand in the bar itself. The stylesheet
 // decides which (pitwall.css: .bar-menu).
 
-import { robot, onChange, onConnection, send, h, byId, say, announce } from "./core.js";
+import { robot, onChange, onConnection, send, h, byId, say, announce, plural } from "./core.js";
 import { onDrive, release } from "./sim-drive.js";
 import { isSimulator, onSim, ALL } from "./sim-state.js";
 import { makeEnable } from "./sim-enable.js";
@@ -160,7 +160,7 @@ function render(patch, snapshot) {
     const count = Object.keys(doc.changes).length;
     uncommitted.hidden = count === 0;
     uncommitted.replaceChildren(h("b", null, "● " + count), "to commit");
-    uncommitted.title = count + (count === 1 ? " tuned value differs" : " tuned values differ")
+    uncommitted.title = count + plural(count, " tuned value differs", " tuned values differ")
         + " from the committed configuration: see Changes";
   }
 }

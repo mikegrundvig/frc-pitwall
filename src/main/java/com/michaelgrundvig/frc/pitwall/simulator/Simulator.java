@@ -1,6 +1,7 @@
 package com.michaelgrundvig.frc.pitwall.simulator;
 
-import com.michaelgrundvig.frc.pitwall.Outcome;
+import com.michaelgrundvig.frc.pitwall.RequestOutcome;
+import com.michaelgrundvig.frc.pitwall.Said;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -62,7 +63,8 @@ public final class Simulator {
   private record Heard(
       @Nullable JoystickInput input, @Nullable String stream, long heardNanos, long version) {}
 
-  private record Request(Supplier<Outcome> apply, CompletableFuture<Outcome> outcome) {}
+  private record Request(
+      Supplier<RequestOutcome> apply, CompletableFuture<RequestOutcome> outcome) {}
 
   private final SimulatorHal hal;
   private final LongSupplier clock;
@@ -152,7 +154,8 @@ public final class Simulator {
    * Asks the robot loop to change the Driver Station's state, such as {@code state ->
    * state.withEnabled(true)}. Safe from any thread.
    */
-  public CompletableFuture<Outcome> requestDriverStation(UnaryOperator<DriverStationState> change) {
+  public CompletableFuture<RequestOutcome> requestDriverStation(
+      UnaryOperator<DriverStationState> change) {
     return enqueue(
         () -> {
           DriverStationState now = hal.driverStation();
@@ -162,7 +165,7 @@ public final class Simulator {
             hal.announce();
             countingMatchTime = changed.matchTime() >= 0;
           }
-          return Outcome.applied();
+          return RequestOutcome.applied();
         });
   }
 
@@ -173,21 +176,22 @@ public final class Simulator {
    *
    * @return done at once when the clock is paused already: no loop would come to answer it
    */
-  public CompletableFuture<Outcome> requestPause() {
+  public CompletableFuture<RequestOutcome> requestPause() {
     synchronized (timing) {
       if (hal.isPaused()) {
-        return CompletableFuture.completedFuture(Outcome.applied());
+        return CompletableFuture.completedFuture(RequestOutcome.applied());
       }
       long asked = resumes;
       return enqueue(
           () -> {
             synchronized (timing) {
               if (asked != resumes) {
-                return new Outcome(Outcome.Result.LOCKED, "Resumed since it was asked: not paused");
+                return new RequestOutcome(
+                    RequestOutcome.Result.LOCKED, "Resumed since it was asked: not paused");
               }
             }
             pauseAsked = asked;
-            return Outcome.applied();
+            return RequestOutcome.applied();
           });
     }
   }
@@ -198,11 +202,11 @@ public final class Simulator {
    *
    * @return done once the loop has run again
    */
-  public CompletableFuture<Outcome> resume() {
+  public CompletableFuture<RequestOutcome> resume() {
     synchronized (timing) {
       resumes++;
       hal.resume();
-      return enqueue(Outcome::applied);
+      return enqueue(RequestOutcome::applied);
     }
   }
 
@@ -212,14 +216,15 @@ public final class Simulator {
    *
    * @return done once that loop has run; locked when the clock isn't paused
    */
-  public CompletableFuture<Outcome> step() {
+  public CompletableFuture<RequestOutcome> step() {
     synchronized (timing) {
       if (!hal.isPaused()) {
         return CompletableFuture.completedFuture(
-            new Outcome(
-                Outcome.Result.LOCKED, "Step runs one loop of a paused simulator: pause it"));
+            new RequestOutcome(
+                RequestOutcome.Result.LOCKED,
+                "Step runs one loop of a paused simulator: pause it"));
       }
-      CompletableFuture<Outcome> ran = enqueue(Outcome::applied);
+      CompletableFuture<RequestOutcome> ran = enqueue(RequestOutcome::applied);
       hal.step();
       return ran;
     }
@@ -249,22 +254,22 @@ public final class Simulator {
    * @return refused, saying why, when there's no such fault, a value is out of range, or the
    *     fault's own code refused
    */
-  public CompletableFuture<Outcome> requestFault(Setting setting) {
+  public CompletableFuture<RequestOutcome> requestFault(Setting setting) {
     return enqueue(() -> outcome(components.apply(setting)));
   }
 
   /** Asks the robot loop to undo a lasting fault. Safe from any thread. */
-  public CompletableFuture<Outcome> requestUndo(String component, String fault) {
+  public CompletableFuture<RequestOutcome> requestUndo(String component, String fault) {
     return enqueue(() -> outcome(components.undo(component, fault)));
   }
 
   /** Asks the robot loop to undo every lasting fault: the robot as built. Safe from any thread. */
-  public CompletableFuture<Outcome> requestUndoAll() {
+  public CompletableFuture<RequestOutcome> requestUndoAll() {
     return enqueue(() -> outcome(components.undoAll()));
   }
 
   /** Asks the robot loop to apply a scenario's faults. Safe from any thread. */
-  public CompletableFuture<Outcome> requestScenario(String name) {
+  public CompletableFuture<RequestOutcome> requestScenario(String name) {
     return enqueue(() -> outcome(components.applyScenario(name)));
   }
 
@@ -333,14 +338,14 @@ public final class Simulator {
       requests.add(request);
     }
     CompletableFuture<Map<String, Map<String, Object>>> asked = takeViewAsked();
-    List<Outcome> outcomes = new ArrayList<>();
+    List<RequestOutcome> outcomes = new ArrayList<>();
     try {
       boolean announce = joysticks(now);
       for (Request request : requests) {
         try {
           outcomes.add(request.apply().get());
         } catch (RuntimeException e) {
-          outcomes.add(new Outcome(Outcome.Result.REFUSED, String.valueOf(e.getMessage())));
+          outcomes.add(new RequestOutcome(RequestOutcome.Result.REFUSED, Said.of(e)));
         }
       }
       announce |= countMatchTime(now);
@@ -370,8 +375,9 @@ public final class Simulator {
             .complete(
                 i < outcomes.size()
                     ? outcomes.get(i)
-                    : new Outcome(
-                        Outcome.Result.REFUSED, "The simulator's loop failed before it got to it"));
+                    : new RequestOutcome(
+                        RequestOutcome.Result.REFUSED,
+                        "The simulator's loop failed before it got to it"));
       }
       if (asked != null && !asked.isDone()) {
         asked.completeExceptionally(new IllegalStateException("The simulator's loop failed"));
@@ -515,13 +521,15 @@ public final class Simulator {
     return true;
   }
 
-  private CompletableFuture<Outcome> enqueue(Supplier<Outcome> apply) {
-    CompletableFuture<Outcome> outcome = new CompletableFuture<>();
+  private CompletableFuture<RequestOutcome> enqueue(Supplier<RequestOutcome> apply) {
+    CompletableFuture<RequestOutcome> outcome = new CompletableFuture<>();
     queue.add(new Request(apply, outcome));
     return outcome;
   }
 
-  private static Outcome outcome(@Nullable String refused) {
-    return refused == null ? Outcome.applied() : new Outcome(Outcome.Result.REFUSED, refused);
+  private static RequestOutcome outcome(@Nullable String refused) {
+    return refused == null
+        ? RequestOutcome.applied()
+        : new RequestOutcome(RequestOutcome.Result.REFUSED, refused);
   }
 }

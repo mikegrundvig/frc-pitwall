@@ -25,6 +25,16 @@ const GAP = 2; // the least space between two labels
 const RADIUS = 46; // an arc's, a circle's and a speedometer's track
 
 /** An SVG element with its attributes and children. Text is always set as text. */
+/**
+ * How a label beside a round track is anchored, by where it is across the track (x from -1 at the
+ * left to 1 at the right): it reads away from the center.
+ */
+function awayFromCenter(x) {
+  if (x > 0.25) return "start";
+  if (x < -0.25) return "end";
+  return "middle";
+}
+
 function svg(tag, attributes, ...children) {
   const made = document.createElementNS(SVG, tag);
   for (const [name, value] of Object.entries(attributes || {})) {
@@ -224,7 +234,7 @@ function drawRound(joint) {
   /** A label pushed out from the track at a value, sitting away from the center. */
   const label = (value, radius, words, className, rank) => {
     const [x, y] = unit(turn.angle(value));
-    const anchor = x > 0.25 ? "start" : x < -0.25 ? "end" : "middle";
+    const anchor = awayFromCenter(x);
     return { x: center[0] + x * (radius + 3), y: center[1] + y * (radius + 8), anchor,
              at: at(value, radius - 2), lines: words, className, rank };
   };
@@ -319,13 +329,17 @@ function drawBar(joint) {
   const at = (value, off) => upright
     ? [origin[0] + off, origin[1] - share(value) * along]
     : [origin[0] + share(value) * along, origin[1] + off];
+  /** A label off the bar at a value: beside it when upright, above or below it when level. */
   const label = (value, off, words, className, rank) => {
     const [x, y] = at(value, off);
-    return upright
-      ? { x: x + 3, y, anchor: off < 0 ? "end" : "start", at: at(value, off < 0 ? -8 : 8),
-          lines: words, className, rank }
-      : { x, y: y + (off < 0 ? -LINE / 2 : LINE / 2), anchor: "middle",
-          at: at(value, off < 0 ? -8 : 8), lines: words, className, rank };
+    const before = off < 0; // left of an upright bar, above a level one
+    const pointsAt = at(value, before ? -8 : 8);
+    if (upright) {
+      return { x: x + 3, y, anchor: before ? "end" : "start", at: pointsAt, lines: words,
+               className, rank };
+    }
+    return { x, y: y + (before ? -LINE / 2 : LINE / 2), anchor: "middle", at: pointsAt,
+             lines: words, className, rank };
   };
   const parts = [line(at(scale.lower, 0), at(scale.upper, 0), "rv-track")];
   const labels = [];

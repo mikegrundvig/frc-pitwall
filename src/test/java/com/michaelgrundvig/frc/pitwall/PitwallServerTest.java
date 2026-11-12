@@ -232,6 +232,8 @@ class PitwallServerTest {
         .contains(
             "core.js",
             "pit.js",
+            "devices.js",
+            "picture.js",
             "tune.js",
             "experiment.js",
             "changes.js",
@@ -723,6 +725,9 @@ class PitwallServerTest {
             policy ->
                 assertThat(policy)
                     .contains("frame-ancestors 'none'")
+                    .as("scripts, styles and images only from the robot: no device is named")
+                    .contains("default-src 'self'", "img-src 'self';")
+                    .doesNotContain("http:", "https:")
                     .as("no inline script or style runs")
                     .doesNotContain("unsafe-inline"));
     assertThat(page.headers().firstValue("X-Content-Type-Options")).hasValue("nosniff");

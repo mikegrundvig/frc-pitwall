@@ -12,7 +12,7 @@
 // The sentences are the robot's own (GET /api/robot/events): nothing here words anything about the
 // robot.
 
-import { h } from "./core.js";
+import { h, plural } from "./core.js";
 import { cursor, onCursor, seek, pause, span } from "./cursor.js";
 import { shownEvents, eventFilter, setEventFilter, onEvents } from "./session-events.js";
 
@@ -93,7 +93,7 @@ export function makeEventList() {
     ui.about.textContent = "About " + filter.about + " ✕";
     ui.about.setAttribute("aria-label", "About " + filter.about + ": show every event");
     ui.problems.setAttribute("aria-pressed", String(filter.problemsOnly));
-    ui.count.textContent = events.length === 1 ? "1 event" : events.length + " events";
+    ui.count.textContent = events.length + plural(events.length, " event", " events");
     ui.empty.hidden = events.length > 0;
     ui.empty.textContent = filter.about || filter.problemsOnly
       ? "No such event in the session's memory." : "Nothing has happened yet.";

@@ -184,6 +184,7 @@ def vendorThree = tasks.register("vendorThree", Sync) {
 sourceSets.main.resources.srcDir(vendorThree)
 
 apply from: file("gradle/quality.gradle")
+apply from: file("gradle/page.gradle")
 
 ext.published = [
     artifactId: "frc-pitwall",
@@ -193,3 +194,4 @@ ext.published = [
     license: "BSD 3-Clause License",
 ]
 apply from: file("gradle/publishing.gradle")
+apply from: file("gradle/built-with.gradle")

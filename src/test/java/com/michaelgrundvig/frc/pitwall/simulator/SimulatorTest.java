@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.michaelgrundvig.frc.pitwall.Limits;
-import com.michaelgrundvig.frc.pitwall.Outcome;
+import com.michaelgrundvig.frc.pitwall.RequestOutcome;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -71,7 +71,7 @@ class SimulatorTest {
 
   @Test
   void aChangeWaitsForTheLoopWhichAppliesItAllAtOnceAndAnnouncesIt() {
-    CompletableFuture<Outcome> enabled =
+    CompletableFuture<RequestOutcome> enabled =
         simulator.requestDriverStation(
             state ->
                 state
@@ -83,7 +83,7 @@ class SimulatorTest {
     assertThat(hal.driverStation().enabled()).isFalse();
     loop();
 
-    assertThat(enabled).isCompletedWithValue(Outcome.applied());
+    assertThat(enabled).isCompletedWithValue(RequestOutcome.applied());
     DriverStationState state = hal.driverStation();
     assertThat(state.enabled()).isTrue();
     assertThat(state.dsAttached()).as("enabling attaches the Driver Station").isTrue();
@@ -240,13 +240,13 @@ class SimulatorTest {
   /** The loop pauses the clock, so its own last view says it's paused. */
   @Test
   void theLoopPausesTheClockOnceItHasAppliedTheRest() {
-    CompletableFuture<Outcome> enabled =
+    CompletableFuture<RequestOutcome> enabled =
         simulator.requestDriverStation(state -> state.withEnabled(true));
-    CompletableFuture<Outcome> paused = simulator.requestPause();
+    CompletableFuture<RequestOutcome> paused = simulator.requestPause();
     loop();
 
     assertThat(enabled).isCompleted();
-    assertThat(paused).isCompletedWithValue(Outcome.applied());
+    assertThat(paused).isCompletedWithValue(RequestOutcome.applied());
     assertThat(hal.isPaused()).isTrue();
     assertThat(simulator.lastView().get("simulator"))
         .containsEntry("paused", true)
@@ -259,24 +259,25 @@ class SimulatorTest {
     assertThat(simulator.step())
         .as("not paused")
         .isCompletedWithValue(
-            new Outcome(
-                Outcome.Result.LOCKED, "Step runs one loop of a paused simulator: pause it"));
+            new RequestOutcome(
+                RequestOutcome.Result.LOCKED,
+                "Step runs one loop of a paused simulator: pause it"));
     simulator.requestPause();
     loop();
-    CompletableFuture<Outcome> enabled =
+    CompletableFuture<RequestOutcome> enabled =
         simulator.requestDriverStation(state -> state.withEnabled(true));
     loops(10);
     assertThat(enabled).as("paused: no loop comes").isNotDone();
 
-    CompletableFuture<Outcome> stepped = simulator.step();
+    CompletableFuture<RequestOutcome> stepped = simulator.step();
     assertThat(hal.steps()).isEqualTo(1);
     assertThat(stepped).as("done once the loop has run").isNotDone();
     loops(10);
-    assertThat(stepped).isCompletedWithValue(Outcome.applied());
+    assertThat(stepped).isCompletedWithValue(RequestOutcome.applied());
     assertThat(enabled).as("asked while paused, applied by the step").isCompleted();
     assertThat(hal.isPaused()).as("one loop, then paused still").isTrue();
 
-    CompletableFuture<Outcome> resumed = simulator.resume();
+    CompletableFuture<RequestOutcome> resumed = simulator.resume();
     assertThat(hal.isPaused()).isFalse();
     loop();
     assertThat(resumed).isCompleted();
@@ -292,26 +293,28 @@ class SimulatorTest {
     loop();
     assertThat(hal.isPaused()).isTrue();
 
-    CompletableFuture<Outcome> again = simulator.requestPause(); // a second page, a double click
-    CompletableFuture<Outcome> resumed = simulator.resume();
+    CompletableFuture<RequestOutcome> again =
+        simulator.requestPause(); // a second page, a double click
+    CompletableFuture<RequestOutcome> resumed = simulator.resume();
     loops(3);
 
-    assertThat(again).isCompletedWithValue(Outcome.applied());
-    assertThat(resumed).isCompletedWithValue(Outcome.applied());
+    assertThat(again).isCompletedWithValue(RequestOutcome.applied());
+    assertThat(resumed).isCompletedWithValue(RequestOutcome.applied());
     assertThat(hal.isPaused()).as("the resume holds").isFalse();
   }
 
   /** A resume drops a pause asked before it that the loop hasn't got to yet. */
   @Test
   void aResumeDropsAPauseAskedBeforeIt() {
-    CompletableFuture<Outcome> paused = simulator.requestPause();
+    CompletableFuture<RequestOutcome> paused = simulator.requestPause();
     simulator.resume();
     loops(3);
 
     assertThat(hal.isPaused()).isFalse();
     assertThat(paused)
         .isCompletedWithValue(
-            new Outcome(Outcome.Result.LOCKED, "Resumed since it was asked: not paused"));
+            new RequestOutcome(
+                RequestOutcome.Result.LOCKED, "Resumed since it was asked: not paused"));
   }
 
   /**
@@ -355,13 +358,13 @@ class SimulatorTest {
                 .apply(values -> {})
                 .undo("Nothing.", () -> {})
                 .build()));
-    CompletableFuture<Outcome> enabled =
+    CompletableFuture<RequestOutcome> enabled =
         simulator.requestDriverStation(state -> state.withEnabled(true));
     CompletableFuture<Map<String, Map<String, Object>>> view = simulator.requestView();
 
     assertThatThrownBy(this::loop).hasMessage("broken");
 
-    assertThat(enabled).isCompletedWithValue(Outcome.applied());
+    assertThat(enabled).isCompletedWithValue(RequestOutcome.applied());
     assertThat(view).isCompletedExceptionally();
   }
 
@@ -380,15 +383,15 @@ class SimulatorTest {
 
   @Test
   void faultsAreAppliedByTheLoopAndLoggedWhenTheyChange() {
-    CompletableFuture<Outcome> out = simulator.requestFault(Setting.of("Lamp", "Out"));
-    CompletableFuture<Outcome> wrong =
+    CompletableFuture<RequestOutcome> out = simulator.requestFault(Setting.of("Lamp", "Out"));
+    CompletableFuture<RequestOutcome> wrong =
         simulator.requestFault(Setting.of("Lamp", "Dim", Map.of("Level", 3.0)));
     loop();
 
-    assertThat(out).isCompletedWithValue(Outcome.applied());
+    assertThat(out).isCompletedWithValue(RequestOutcome.applied());
     assertThat(wrong)
         .isCompletedWithValue(
-            new Outcome(Outcome.Result.REFUSED, "Level: 3 is above its limit of 1"));
+            new RequestOutcome(RequestOutcome.Result.REFUSED, "Level: 3 is above its limit of 1"));
     assertThat(lampOut).isTrue();
     assertThat(logged).containsExactly(List.of("Lamp: Out"));
 

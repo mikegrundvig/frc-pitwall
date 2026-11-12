@@ -2,6 +2,7 @@ package com.michaelgrundvig.frc.pitwall.experiment;
 
 import com.michaelgrundvig.frc.pitwall.LiveConfig;
 import com.michaelgrundvig.frc.pitwall.Numbers;
+import com.michaelgrundvig.frc.pitwall.Said;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -221,8 +222,7 @@ public final class Rig {
           read.sampler().sample(nowNanos, trace.series(read.signal().name()));
         } catch (RuntimeException e) {
           if (failed == null) {
-            String why = e.getMessage();
-            failed = "reading " + read.signal().name() + " failed: " + (why != null ? why : e);
+            failed = "reading " + read.signal().name() + " failed: " + Said.of(e);
           }
         }
       }

@@ -362,7 +362,7 @@ public final class Page {
    * Each configuration's documentation, by name: what its root record's Javadoc says, then each
    * record its values are in, with what the record holding it says it is: {@code {"record", "doc":
    * {"summary", "text"}, "groups": [{"path", "record", "doc", "meaning"}]}}. Each {@code record} is
-   * a display name ({@code DrivetrainControl.Gains}). It was read when the configuration was
+   * a display name ({@code DrivetrainControl.SwerveGains}). It was read when the configuration was
    * published.
    */
   static Map<String, Object> configs(List<LiveConfig<?>> configs) {

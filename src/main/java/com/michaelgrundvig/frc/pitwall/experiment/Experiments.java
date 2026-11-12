@@ -1,7 +1,8 @@
 package com.michaelgrundvig.frc.pitwall.experiment;
 
 import com.michaelgrundvig.frc.pitwall.Actions;
-import com.michaelgrundvig.frc.pitwall.Outcome;
+import com.michaelgrundvig.frc.pitwall.RequestOutcome;
+import com.michaelgrundvig.frc.pitwall.Said;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -71,7 +72,7 @@ public final class Experiments {
       long run,
       String why,
       @Nullable String stream,
-      CompletableFuture<Outcome> outcome) {}
+      CompletableFuture<RequestOutcome> outcome) {}
 
   /**
    * Whom the run in progress answers to, as one value so it changes whole: the page's stream, when
@@ -229,7 +230,7 @@ public final class Experiments {
    * @param stream the event stream of the page asking, whose silence the deadman watches; null for
    *     none, when requests naming no stream keep the run going
    */
-  public CompletableFuture<Outcome> requestStart(String name, @Nullable String stream) {
+  public CompletableFuture<RequestOutcome> requestStart(String name, @Nullable String stream) {
     return enqueue(ExperimentInputs.Kind.START, name, 0, "", stream);
   }
 
@@ -241,7 +242,7 @@ public final class Experiments {
    * @param why why, as the run's detail will say, such as {@code "this tab was hidden"}; empty for
    *     "from the page"
    */
-  public CompletableFuture<Outcome> requestCancel(String name, long run, String why) {
+  public CompletableFuture<RequestOutcome> requestCancel(String name, long run, String why) {
     return enqueue(ExperimentInputs.Kind.CANCEL, name, run, why, null);
   }
 
@@ -293,7 +294,7 @@ public final class Experiments {
     if (current != null && isRunning(current) && locked != null) {
       stop(current, "Canceled: " + locked);
     }
-    List<Outcome> outcomes = new ArrayList<>();
+    List<RequestOutcome> outcomes = new ArrayList<>();
     for (int i = 0; i < inputs.kinds.length; i++) {
       // In a replay the requests come from the log, which keeps what was asked, not why.
       Request request = i < requests.size() ? requests.get(i) : null;
@@ -314,7 +315,7 @@ public final class Experiments {
     }
   }
 
-  private Outcome apply(
+  private RequestOutcome apply(
       ExperimentInputs.Kind kind,
       String name,
       long runId,
@@ -323,26 +324,28 @@ public final class Experiments {
       @Nullable String locked) {
     Experiment experiment = experiments.get(name);
     if (experiment == null) {
-      return new Outcome(Outcome.Result.REFUSED, "There is no experiment named " + name);
+      return new RequestOutcome(
+          RequestOutcome.Result.REFUSED, "There is no experiment named " + name);
     }
     Run current = run;
     boolean busy = current != null && isRunning(current);
     if (kind == ExperimentInputs.Kind.CANCEL) {
       if (current == null || !busy || !current.experiment().name().equals(name)) {
-        return new Outcome(Outcome.Result.LOCKED, name + " isn't running");
+        return new RequestOutcome(RequestOutcome.Result.LOCKED, name + " isn't running");
       }
       if (runId != 0 && current.id() != runId) {
-        return new Outcome(Outcome.Result.LOCKED, "Run " + runId + " has ended already");
+        return new RequestOutcome(
+            RequestOutcome.Result.LOCKED, "Run " + runId + " has ended already");
       }
       stop(current, why.isEmpty() ? "Canceled from the page" : "Canceled: " + why);
-      return Outcome.applied();
+      return RequestOutcome.applied();
     }
     if (locked != null) {
-      return new Outcome(Outcome.Result.LOCKED, "Experiments are locked: " + locked);
+      return new RequestOutcome(RequestOutcome.Result.LOCKED, "Experiments are locked: " + locked);
     }
     if (current != null && busy) {
-      return new Outcome(
-          Outcome.Result.REFUSED,
+      return new RequestOutcome(
+          RequestOutcome.Result.REFUSED,
           current.experiment().name() + " is running; one experiment runs at a time");
     }
     Run next = new Run(runsStarted + 1, experiment, stream);
@@ -351,17 +354,17 @@ public final class Experiments {
     try {
       refused = launched.start();
     } catch (RuntimeException e) {
-      refused = String.valueOf(e.getMessage());
+      refused = Said.of(e);
     }
     if (refused != null) {
-      return new Outcome(Outcome.Result.REFUSED, refused);
+      return new RequestOutcome(RequestOutcome.Result.REFUSED, refused);
     }
     runsStarted++;
     driving = launched;
     controller.set(new Controller(stream, clock.getAsLong(), false));
     deadmanAsked = false;
     run = next;
-    return Outcome.applied();
+    return RequestOutcome.applied();
   }
 
   /**
@@ -412,9 +415,9 @@ public final class Experiments {
     return null;
   }
 
-  private CompletableFuture<Outcome> enqueue(
+  private CompletableFuture<RequestOutcome> enqueue(
       ExperimentInputs.Kind kind, String name, long run, String why, @Nullable String stream) {
-    CompletableFuture<Outcome> outcome = new CompletableFuture<>();
+    CompletableFuture<RequestOutcome> outcome = new CompletableFuture<>();
     queue.add(new Request(kind, name, run, why, stream, outcome));
     return outcome;
   }

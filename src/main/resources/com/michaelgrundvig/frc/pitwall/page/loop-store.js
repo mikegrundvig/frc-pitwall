@@ -23,12 +23,16 @@ export function makeLoopStore(addressOf) {
   let asked = null; // {index, then}: the loop wanted now, and who wants it
   let beside = []; // loops to fetch when nothing is wanted
   let fetching = false;
+  // Which session the store is on: forgetting starts another, and an answer asked of an earlier one
+  // is that session's loop, so it is neither kept nor given.
+  let session = 0;
 
   async function pump() {
     if (fetching) return;
     const wanted = asked;
     const index = wanted ? wanted.index : beside.shift();
     if (index === undefined) return;
+    const askedOf = session;
     fetching = true;
     let answer = null;
     try {
@@ -38,6 +42,10 @@ export function makeLoopStore(addressOf) {
       answer = null; // not answering: the cursor asks again when it next moves
     }
     fetching = false;
+    if (askedOf !== session) {
+      pump();
+      return;
+    }
     if (answer) {
       kept.set(index, answer);
       while (kept.size > KEPT) kept.delete(kept.keys().next().value);
@@ -78,6 +86,7 @@ export function makeLoopStore(addressOf) {
 
     /** Forgets every loop: the session is another robot program's now. */
     forget() {
+      session++;
       kept.clear();
       asked = null;
       beside = [];

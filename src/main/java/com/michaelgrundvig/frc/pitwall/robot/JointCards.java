@@ -16,7 +16,7 @@ import com.michaelgrundvig.frc.pitwall.robot.RobotView.Scale;
 import com.michaelgrundvig.frc.pitwall.robot.RobotView.Tick;
 import com.michaelgrundvig.frc.pitwall.robot.RobotView.Turning;
 import com.michaelgrundvig.frc.world.config.Rules;
-import com.michaelgrundvig.frc.world.physical.Shape;
+import com.michaelgrundvig.frc.world.physical.Solid;
 import com.michaelgrundvig.frc.world.physical.Vector3;
 import com.michaelgrundvig.frc.world.record.Holder;
 import com.michaelgrundvig.frc.world.record.JointOwner;
@@ -31,8 +31,11 @@ import com.michaelgrundvig.frc.world.robot.JointAsk;
 import com.michaelgrundvig.frc.world.robot.MechanismControl;
 import com.michaelgrundvig.frc.world.robot.Output;
 import com.michaelgrundvig.frc.world.robot.Position;
+import com.michaelgrundvig.frc.world.robot.PrismaticJoint;
 import com.michaelgrundvig.frc.world.robot.Range;
+import com.michaelgrundvig.frc.world.robot.RevoluteJoint;
 import com.michaelgrundvig.frc.world.robot.RobotDefinition;
+import com.michaelgrundvig.frc.world.robot.RobotMath;
 import com.michaelgrundvig.frc.world.robot.Sensor;
 import java.util.ArrayList;
 import java.util.List;
@@ -77,10 +80,10 @@ final class JointCards {
 
   /** How a joint is drawn, by its kind. */
   static Drawn drawn(Joint joint) {
-    if (!joint.holdsPositions()) {
+    if (!RobotMath.holdsPositions(joint)) {
       return Drawn.DIAL;
     }
-    if (joint instanceof Joint.Prismatic) {
+    if (joint instanceof PrismaticJoint) {
       return Drawn.BAR;
     }
     boolean turnsRightRound = joint.range().isEmpty() || joint.range().get().width() >= TURN - 1e-9;
@@ -93,7 +96,7 @@ final class JointCards {
    */
   private record Display(Joint joint, boolean speeds, boolean turns) {
     static Display of(Joint joint, Drawn drawn) {
-      return new Display(joint, drawn == Drawn.DIAL, joint instanceof Joint.Revolute);
+      return new Display(joint, drawn == Drawn.DIAL, joint instanceof RevoluteJoint);
     }
 
     /** A value of the joint's, in its units, as a number on its card. */
@@ -106,7 +109,7 @@ final class JointCards {
 
     /** The same value as text. */
     String text(double value) {
-      return speeds ? speedText(joint, value) : joint.shown(value);
+      return speeds ? speedText(joint, value) : Position.Kind.of(joint).shown(value);
     }
 
     String unit() {
@@ -122,11 +125,11 @@ final class JointCards {
    * robot then reads as how fast the joint runs and not as its sensor's noise.
    */
   private static String speedText(Joint joint, double speed) {
-    if (joint instanceof Joint.Revolute) {
+    if (joint instanceof RevoluteJoint) {
       double wholeRpm = Math.rint(speed * 60 / TURN);
-      return joint.shownSpeed(wholeRpm * TURN / 60);
+      return Position.Kind.of(joint).shownSpeed(wholeRpm * TURN / 60);
     }
-    return joint.shownSpeed(Math.rint(speed * 100) / 100);
+    return Position.Kind.of(joint).shownSpeed(Math.rint(speed * 100) / 100);
   }
 
   // ---- What the drawing spans ----
@@ -207,13 +210,13 @@ final class JointCards {
    * joint that slides, this is the way it slides ({@link #slidesToward}).
    */
   private static double zeroAt(Joint joint) {
-    if (joint instanceof Joint.Prismatic) {
+    if (joint instanceof PrismaticJoint) {
       return slidesToward(joint.axis());
     }
     if (!pitches(joint)) {
       return 90;
     }
-    for (Shape shape : joint.link().shapes()) {
+    for (Solid shape : joint.link().shapes()) {
       double forward = shape.pose().getX();
       double up = shape.pose().getZ();
       if (Math.hypot(forward, up) > LINK_POINTS_FROM) {
@@ -251,7 +254,7 @@ final class JointCards {
   /** Whether a joint turns about the robot's side-to-side axis, either way. */
   private static boolean pitches(Joint joint) {
     Vector3 axis = joint.axis();
-    return joint instanceof Joint.Revolute && Math.abs(axis.y()) > 0.9;
+    return joint instanceof RevoluteJoint && Math.abs(axis.y()) > 0.9;
   }
 
   // ---- Its named places and outputs ----
@@ -266,7 +269,7 @@ final class JointCards {
             new Tick(
                 position.name(),
                 display.number(position.value()),
-                joint.shown(position.value()),
+                Position.Kind.of(joint).shown(position.value()),
                 asked(position.name(), goalName)));
       }
       return ticks;
@@ -522,7 +525,7 @@ final class JointCards {
     if (isOnlyAPlace) {
       return inWords;
     }
-    return joint.shown(now.position()) + ", " + inWords;
+    return Position.Kind.of(joint).shown(now.position()) + ", " + inWords;
   }
 
   /** Where a joint was told to go, or what it was told to run at. */
@@ -539,13 +542,13 @@ final class JointCards {
     if (!Double.isFinite(now.goal())) {
       return "nothing";
     }
-    String headedFor = joint.shown(now.goal());
+    String headedFor = Position.Kind.of(joint).shown(now.goal());
     Position named = placeNamed(joint, now.goalName());
     if (named == null) {
       return asked ? headedFor : "hold at " + headedFor;
     }
-    String place = named.name() + ", " + joint.shown(named.value());
-    boolean headedThere = joint.shown(named.value()).equals(headedFor);
+    String place = named.name() + ", " + Position.Kind.of(joint).shown(named.value());
+    boolean headedThere = Position.Kind.of(joint).shown(named.value()).equals(headedFor);
     return headedThere ? place : place + ", headed for " + headedFor;
   }
 
@@ -562,7 +565,7 @@ final class JointCards {
     if (moment.enabled() == Moment.Enabled.DISABLED) {
       return owner + ", robot disabled";
     }
-    if (joint.holdsPositions()) {
+    if (RobotMath.holdsPositions(joint)) {
       return owner + ", holding";
     }
     boolean coasts =

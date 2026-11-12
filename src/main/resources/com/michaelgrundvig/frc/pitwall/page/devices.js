@@ -1,9 +1,14 @@
 // Pit's devices: a card for each device the robot reports on (the venue it plays on, say), saying
 // whether it's there and how it is, and ending in what can be done about it: a file to download
 // from it or send to it, or a choice to make. The robot program asks the device; this page asks
-// only the robot (/api/devices/...), never a device itself.
+// only the robot (/api/devices/...), but for a card's live picture, which it loads from the device
+// itself (picture.js). A card may show a live configuration's values too, tuned there as in Tune:
+// a camera's exposure and gain beside its picture.
 
-import { robot, onChange, api, h, replace, say } from "./core.js";
+import { robot, onChange, onConnection, api, go, h, replace, say } from "./core.js";
+import { onEdits } from "./edits.js";
+import { makeRow, updateRow } from "./rows.js";
+import { makePicture, dropPicture, updatePicture } from "./picture.js";
 
 const MARKS = { ok: ["✓", "ok"], note: ["•", "none"], warning: ["▲", "warn"], problem: ["✗", "bad"] };
 
@@ -18,12 +23,16 @@ export function mountDevices(parent) {
   section = h("section", { class: "devices-section", hidden: true, "aria-label": "Devices" },
     h("h2", { class: "devices-title" }, "Devices"),
     h("p", { class: "meta" }, "Each device the robot program asks after, as of its last answer. "
-        + "The robot fetches downloads from the device; this page never reaches it."),
+        + "The robot fetches downloads from the device; this page reaches a device only for a "
+        + "card's live picture."),
     grid);
   parent.append(section);
   onChange((patch, snapshot) => {
-    if (snapshot || "devices" in patch) render(snapshot);
+    if (snapshot || "devices" in patch || "tunables" in patch) render(snapshot);
+    else if ("values" in patch || "tuning" in patch || "changes" in patch) updateTunes();
   });
+  onEdits(updateTunes);
+  onConnection(updateTunes);
 }
 
 function render(snapshot) {
@@ -33,13 +42,26 @@ function render(snapshot) {
   // Rebuilt only when the devices or what can be done from them change; updated in place after.
   const key = names.map((name) => name + ":" + JSON.stringify([devices[name].kind,
     devices[name].downloads, devices[name].uploads,
-    (devices[name].choices || []).map((choice) => choice.id)])).join("\n");
+    (devices[name].choices || []).map((choice) => choice.id), "picture" in devices[name],
+    tunedPaths(devices[name].tuning)])).join("\n");
   if (snapshot || key !== built) {
     built = key;
+    for (const parts of cards.values()) if (parts.picture) dropPicture(parts.picture);
     cards.clear();
     grid.replaceChildren(...names.map((name) => makeCard(name, devices[name])));
   }
   for (const [name, device] of Object.entries(devices)) update(cards.get(name), device);
+}
+
+/** The values of the live configuration a card tunes, by its name, in the robot's order. */
+function tunedPaths(config) {
+  if (!config || !robot.doc) return [];
+  return Object.keys(robot.doc.tunables).filter((path) => robot.doc.tunables[path].config === config);
+}
+
+/** Every card's values as they are now: on the robot, staged, and committed. */
+function updateTunes() {
+  for (const parts of cards.values()) parts.rows.forEach(updateRow);
 }
 
 function makeCard(name, device) {
@@ -66,12 +88,29 @@ function makeCard(name, device) {
     });
     actions.push(button, input);
   }
-  parts.el = h("section", { class: "card device", "aria-label": name },
+  // The values it tunes, each a row as in Tune, its edits applied from the bar as there.
+  // What a value means is in Tune, where its name leads.
+  const explain = (row, how) => {
+    const value = robot.doc.tunables[row.path];
+    if (how !== "focus" && value) go("#tune/" + value.config + "/" + value.field);
+  };
+  parts.rows = tunedPaths(device.tuning).map((path) => makeRow(path, "pit", { select: explain }));
+  parts.rows.forEach(updateRow);
+  const tune = parts.rows.length > 0
+    && h("div", { class: "rowlist dtune", "aria-label": name + ": tune" },
+      parts.rows.map((row) => row.el));
+  const about = [parts.lines, tune, parts.choices, h("div", { class: "acts" }, actions)];
+  // A card with a picture has it first, its lines and values beside it where there's room.
+  let body = about;
+  if ("picture" in device) {
+    parts.picture = makePicture(name);
+    body = h("div", { class: "dbody" }, parts.picture.el, h("div", { class: "dabout" }, about));
+  }
+  parts.el = h("section", { class: "card device" + (parts.picture ? " pictured" : ""),
+                            "aria-label": name },
     h("h3", { class: "dhead" }, h("span", { class: "mono" }, name),
       h("span", { class: "tag plain" }, device.kind), parts.state),
-    parts.lines,
-    parts.choices,
-    h("div", { class: "acts" }, actions));
+    body);
   parts.name = name;
   cards.set(name, parts);
   return parts.el;
@@ -79,15 +118,12 @@ function makeCard(name, device) {
 
 function update(parts, device) {
   if (!parts) return;
+  if (parts.picture) updatePicture(parts.picture, device.picture);
   const [mark, tone] = MARKS[device.level] || MARKS.note;
   replace(parts.state, h("span", { class: "sev " + tone, "aria-hidden": "true" }, mark),
     " " + device.state);
   parts.el.classList.toggle("problem", device.level === "problem");
-  replace(parts.lines, (device.lines || []).map((line) => {
-    const [lineMark, lineTone] = MARKS[line.level] || MARKS.note;
-    return h("li", null, h("span", { class: "sev " + lineTone, "aria-hidden": "true" }, lineMark),
-      h("span", { class: "k" }, line.label), h("span", null, line.value));
-  }));
+  replace(parts.lines, (device.lines || []).map(lineItem));
   // A choice's options are rebuilt only when they or what's chosen change, so a pick being made
   // isn't swept away by the next update.
   const choices = device.choices || [];
@@ -96,6 +132,17 @@ function update(parts, device) {
     parts.shownChoices = shown;
     replace(parts.choices, choices.map((choice) => makeChoice(parts.name, choice)));
   }
+}
+
+/**
+ * One line of a card as the page draws it, wherever it is drawn: its level's mark (never its color
+ * alone), its label and what it says. The Sim panel's auto card draws its lines with this too, so
+ * a warning looks the same there as on Pit.
+ */
+export function lineItem(line) {
+  const [mark, tone] = MARKS[line.level] || MARKS.note;
+  return h("li", null, h("span", { class: "sev " + tone, "aria-hidden": "true" }, mark),
+    h("span", { class: "k" }, line.label), h("span", null, line.value));
 }
 
 /**

@@ -5,7 +5,7 @@
 // views is another thing: its Loop buttons look back over loops that already ran, and never reach
 // the robot. So this section is named for the simulator, and its button says "new".
 
-import { robot, send, h, confirm, announce, stopping } from "./core.js";
+import { robot, send, h, confirm, announce, stopping, plural } from "./core.js";
 import { sim, canAct, patch, answered, uid } from "./sim-state.js";
 import { release } from "./sim-drive.js";
 import { tunedList } from "./sim-station.js";
@@ -75,12 +75,12 @@ async function stop(message) {
         + "log keeps its last loops. Start it again with ./gradlew run; this page reconnects by "
         + "itself."),
     tuned.length > 0 && [
-      h("p", { class: "message bad" }, "● " + (tuned.length === 1 ? "This tuned value isn't"
-        : "These " + tuned.length + " tuned values aren't") + " committed, and "
-          + (tuned.length === 1 ? "ends" : "end") + " with the program:"),
+      h("p", { class: "message bad" }, "● " + plural(tuned.length, "This tuned value isn't",
+        "These " + tuned.length + " tuned values aren't") + " committed, and "
+          + plural(tuned.length, "ends", "end") + " with the program:"),
       tunedList(doc, tuned),
       h("p", { class: "meta" }, "Changes has the lines that commit "
-          + (tuned.length === 1 ? "it." : "them.")),
+          + plural(tuned.length, "it.", "them.")),
     ],
   ], "Stop the simulator");
   if (!yes) return;

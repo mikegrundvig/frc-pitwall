@@ -67,7 +67,7 @@ public final class Tuning {
    * @param committed its committed value
    * @param current its value now
    * @param record the display name of the record that declares it, such as {@code
-   *     DrivetrainControl.Gains}
+   *     DrivetrainControl.SwerveGains}
    * @param group the path of that record in the configuration, such as {@code gains}; empty at the
    *     root
    * @param meaning what it means, its {@code @param} there; empty when there's none
@@ -84,7 +84,7 @@ public final class Tuning {
       String meaning) {}
 
   /** A request from the page, waiting for the robot loop. */
-  private record Request(TuningInputs.Kind kind, CompletableFuture<Outcome> outcome) {}
+  private record Request(TuningInputs.Kind kind, CompletableFuture<RequestOutcome> outcome) {}
 
   private final String name;
   private final Supplier<List<LiveConfig<?>>> configs;
@@ -170,12 +170,12 @@ public final class Tuning {
   }
 
   /** Asks the robot loop to return every configuration value to its committed one. */
-  public CompletableFuture<Outcome> requestReset() {
+  public CompletableFuture<RequestOutcome> requestReset() {
     return enqueue(TuningInputs.Kind.RESET);
   }
 
   /** Asks the robot loop to switch tuning on or off. */
-  public CompletableFuture<Outcome> requestEnabled(boolean on) {
+  public CompletableFuture<RequestOutcome> requestEnabled(boolean on) {
     return enqueue(on ? TuningInputs.Kind.ENABLE : TuningInputs.Kind.DISABLE);
   }
 
@@ -187,7 +187,7 @@ public final class Tuning {
    */
   public void periodic(boolean fieldConnected) {
     inputs.enabled = enabled;
-    List<CompletableFuture<Outcome>> outcomes = drainInto(inputs);
+    List<CompletableFuture<RequestOutcome>> outcomes = drainInto(inputs);
     logInputs.accept(inputs); // in replay, this replaces them with the logged ones
 
     enabled = inputs.enabled && !fieldConnected;
@@ -197,7 +197,7 @@ public final class Tuning {
       configs.get().forEach(LiveConfig::revert);
     }
     this.fieldConnected = fieldConnected;
-    List<Outcome> results = new ArrayList<>();
+    List<RequestOutcome> results = new ArrayList<>();
     for (String kind : inputs.kinds) {
       results.add(apply(TuningInputs.Kind.valueOf(kind)));
     }
@@ -228,14 +228,14 @@ public final class Tuning {
     return lines;
   }
 
-  private CompletableFuture<Outcome> enqueue(TuningInputs.Kind kind) {
-    CompletableFuture<Outcome> outcome = new CompletableFuture<>();
+  private CompletableFuture<RequestOutcome> enqueue(TuningInputs.Kind kind) {
+    CompletableFuture<RequestOutcome> outcome = new CompletableFuture<>();
     queue.add(new Request(kind, outcome));
     return outcome;
   }
 
   /** Moves the queued requests into the inputs, and returns their futures in request order. */
-  private List<CompletableFuture<Outcome>> drainInto(TuningInputs inputs) {
+  private List<CompletableFuture<RequestOutcome>> drainInto(TuningInputs inputs) {
     if (queue.isEmpty()) {
       inputs.clearRequests();
       return List.of();
@@ -248,18 +248,18 @@ public final class Tuning {
     return requests.stream().map(Request::outcome).toList();
   }
 
-  private Outcome apply(TuningInputs.Kind kind) {
+  private RequestOutcome apply(TuningInputs.Kind kind) {
     return switch (kind) {
       case ENABLE -> {
         if (fieldConnected) {
           yield locked("the field system is connected");
         }
         enabled = true;
-        yield Outcome.applied();
+        yield RequestOutcome.applied();
       }
       case DISABLE -> {
         enabled = false;
-        yield Outcome.applied();
+        yield RequestOutcome.applied();
       }
       case RESET -> {
         if (fieldConnected) {
@@ -269,7 +269,7 @@ public final class Tuning {
           yield locked("tuning is off");
         }
         configs.get().forEach(LiveConfig::revert);
-        yield Outcome.applied();
+        yield RequestOutcome.applied();
       }
     };
   }
@@ -286,8 +286,8 @@ public final class Tuning {
     return true;
   }
 
-  private static Outcome locked(String why) {
-    return new Outcome(Outcome.Result.LOCKED, "Tuning is locked: " + why);
+  private static RequestOutcome locked(String why) {
+    return new RequestOutcome(RequestOutcome.Result.LOCKED, "Tuning is locked: " + why);
   }
 
   private View snapshot() {

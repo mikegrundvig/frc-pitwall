@@ -6,7 +6,7 @@
 // tapped. The address names the value (#tune/drivetrain/gains.steerKp), so a reload comes back to
 // it and a link can be sent.
 
-import { robot, onChange, onConnection, h, replace, typing } from "./core.js";
+import { robot, onChange, onConnection, h, replace, typing, plural } from "./core.js";
 import { tuningOffBanner } from "./bar.js";
 import { onEdits } from "./edits.js";
 import { makeRow, updateRow, changedElsewhere } from "./rows.js";
@@ -344,7 +344,7 @@ function updateCounts() {
   for (const [config, count] of counts) {
     const paths = Object.keys(doc.tunables).filter((path) => doc.tunables[path].config === config);
     const tuned = paths.filter((path) => path in doc.changes).length;
-    replace(count, paths.length + (paths.length === 1 ? " value" : " values")
+    replace(count, paths.length + plural(paths.length, " value", " values")
         + (tuned ? " · " + tuned + " tuned" : ""));
     const mark = marks.get(config);
     if (mark) replace(mark, tuned > 0 && "● " + tuned);

@@ -1,10 +1,12 @@
 // Pit: is the robot ready, and the checks to run before a match. The status items, the actions,
 // and the switches: every other WPILib tunable in the robot program, which acts at once. Beside
-// the switches, a card for each device the robot reports on (devices.js). Each card folds away.
+// the switches, a card for each device the robot reports on (devices.js). Each card folds away. A
+// card's live picture is open only while this view shows (picture.js).
 
-import { robot, onChange, onConnection, send, shown, h, say } from "./core.js";
+import { robot, onChange, onConnection, send, shown, h, say, plural } from "./core.js";
 import { tuningOffBanner } from "./bar.js";
 import { mountDevices } from "./devices.js";
+import { showPictures } from "./picture.js";
 import { folds } from "./fold.js";
 
 let statusSummary;
@@ -144,7 +146,7 @@ function renderStatusSummary(passing, total, failing) {
   statusSummary.hidden = false;
   if (failing.length === 0) {
     statusSummary.className = "status-summary ok";
-    statusSummary.replaceChildren("✓ All " + total + (total === 1 ? " check" : " checks")
+    statusSummary.replaceChildren("✓ All " + total + plural(total, " check", " checks")
       + " pass.");
   } else {
     statusSummary.className = "status-summary bad";
@@ -170,10 +172,7 @@ function renderActions(snapshot) {
         h("div", null, h("div", { class: "aname" }, name), parts.detail), parts.button);
     }));
   }
-  // Why Run is off, beside it: the gate's own reason, and the mode now.
-  const why = !robot.connected ? "Not connected to the robot." : doc.robot.actionsLocked
-    ? capital(doc.robot.actionsLocked) + (doc.robot.mode ? ". Now: " + doc.robot.mode : "") + "."
-    : null;
+  const why = whyActionsLocked(doc);
   gate.className = "gate " + (why ? "locked" : "ok");
   gate.textContent = why ? "🔒 " + why
     : "✓ Ready" + (doc.robot.mode ? ": " + doc.robot.mode : "") + ". They stop when the robot "
@@ -186,10 +185,8 @@ function renderActions(snapshot) {
     // An action with times of its own (one that runs only while disabled) says its own lock.
     const own = when !== undefined && when !== "ENABLED_IN_UTILITY";
     const ownWhy = own && locked ? capital(locked) + "." : null;
-    parts.detail.className = "adetail" + (running ? " running"
-        : phase === "REFUSED" || phase === "CANCELED" ? " refused" : ownWhy ? " locked" : "");
-    parts.detail.textContent = running ? "Running · " + elapsed(name)
-        : ownWhy && !detail ? "🔒 " + ownWhy : detail || "Ready";
+    parts.detail.className = "adetail" + actionDetailClass(phase, ownWhy);
+    parts.detail.textContent = actionDetailText(name, phase, ownWhy, detail);
     parts.button.className = running ? "big danger" : "big primary";
     parts.button.textContent = running ? "■ Stop" : "▶ Run";
     parts.button.setAttribute("aria-label", (running ? "Stop " : "Run ") + name);
@@ -197,6 +194,32 @@ function renderActions(snapshot) {
     parts.button.disabled = !running && (!robot.connected || (own ? Boolean(locked) : Boolean(why)));
     parts.button.setAttribute("aria-describedby", "pit-gate");
   }
+}
+
+/**
+ * Why Run is off, said beside it: not connected, or the gate's own reason with the mode now. Null
+ * while the actions may run.
+ */
+function whyActionsLocked(doc) {
+  if (!robot.connected) return "Not connected to the robot.";
+  if (!doc.robot.actionsLocked) return null;
+  return capital(doc.robot.actionsLocked) + (doc.robot.mode ? ". Now: " + doc.robot.mode : "")
+    + ".";
+}
+
+/** How an action's detail is styled: running, refused, locked by its own times, or plain. */
+function actionDetailClass(phase, ownWhy) {
+  if (phase === "RUNNING") return " running";
+  if (phase === "REFUSED" || phase === "CANCELED") return " refused";
+  if (ownWhy) return " locked";
+  return "";
+}
+
+/** What an action's detail says: how long it has run, its own lock, or what it last said. */
+function actionDetailText(name, phase, ownWhy, detail) {
+  if (phase === "RUNNING") return "Running · " + elapsed(name);
+  if (ownWhy && !detail) return "🔒 " + ownWhy;
+  return detail || "Ready";
 }
 
 function capital(text) {
@@ -298,4 +321,12 @@ function makeSwitch(path, { type, editable, limits }) {
     control || h("span"));
 }
 
-export default { id: "pit", title: "Pit", mount };
+function show() {
+  showPictures(true);
+}
+
+function hide() {
+  showPictures(false);
+}
+
+export default { id: "pit", title: "Pit", mount, show, hide };

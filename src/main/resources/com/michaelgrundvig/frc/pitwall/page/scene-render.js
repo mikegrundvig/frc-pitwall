@@ -190,8 +190,9 @@ export class SceneRenderer {
 
   /**
    * Applies the robot's state: {"frames", "values", "styles", "shapes"}. With {@code changed}, only
-   * what changed (a patch); without, all of it, as when the page starts showing the scene or Hold
-   * lets go: then whatever the state doesn't say is as described.
+   * what changed (a patch); without, all of it, as when the page starts showing the scene, the
+   * cursor comes back to the newest loop, or an earlier loop is drawn: then whatever the state
+   * doesn't say is as described.
    */
   apply(state, changed) {
     const whole = !changed;

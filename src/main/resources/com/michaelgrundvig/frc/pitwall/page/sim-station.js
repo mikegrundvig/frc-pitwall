@@ -2,7 +2,7 @@
 // watching, then whether a Driver Station and the field system are attached, and the match time.
 // A section of the simulator's controls, mounted in the Sim view and, compact, in the Sim panel.
 
-import { robot, h, confirm, shown } from "./core.js";
+import { robot, h, confirm, shown, plural } from "./core.js";
 import { sim, canAct, patch, MODES, STATIONS, clock } from "./sim-state.js";
 import { note } from "./sim-outcome.js";
 import { segmented, toggle, setToggle, block } from "./sim-parts.js";
@@ -90,7 +90,7 @@ async function setField(on, ask) {
   if (tuned.length > 0) {
     const yes = await confirm("Attach the field system?", [
       h("p", null, "As at an event, tuning, actions, and experiments lock, and "
-          + (tuned.length === 1 ? "this tuned value goes" : "these " + tuned.length
+          + plural(tuned.length, "this tuned value goes", "these " + tuned.length
             + " tuned values go") + " back to committed:"),
       tunedList(doc, tuned),
       h("p", { class: "meta" }, "What was tuned is printed to the log, and this session's history "
@@ -108,6 +108,14 @@ export function tunedList(doc, paths) {
     return h("li", null, value ? value.config + " " + value.field + ": " + shown(doc.values[path])
         + " → " + shown(value.committed) : path);
   }));
+}
+
+/** How the match time stands: none set, run out, counting down, or waiting to be enabled. */
+function matchTimeSaid(now) {
+  if (now.matchTime < 0) return "set one to count it down while enabled";
+  if (now.matchTime === 0) return "run out";
+  if (now.enabled) return "counting down";
+  return "counts down while enabled";
 }
 
 function render(ui) {
@@ -129,9 +137,7 @@ function render(ui) {
     part.el.disabled = !act;
   }
   ui.matchNow.textContent = now.matchTime >= 0 ? clock(now.matchTime) : "none";
-  ui.matchHow.textContent = now.matchTime < 0 ? "set one to count it down while enabled"
-    : now.matchTime === 0 ? "run out" : now.enabled ? "counting down"
-    : "counts down while enabled";
+  ui.matchHow.textContent = matchTimeSaid(now);
   ui.matchSet.disabled = !act;
   ui.matchClear.disabled = !act || now.matchTime < 0;
   // Folded away, what isn't as a robot on a bench has it still shows beside the fold.

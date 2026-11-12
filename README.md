@@ -21,7 +21,7 @@ whatever answers there, and drives it.
 
 It is published to the FRC libraries' Maven repository,
 [mikegrundvig.github.io/frc-maven](https://mikegrundvig.github.io/frc-maven/), as
-`com.michaelgrundvig.frc:frc-pitwall`. Versions are dated releases (`2026.11.11`) shared by all the
+`com.michaelgrundvig.frc:frc-pitwall`. Versions are dated releases (`2026.11.13`) shared by all the
 FRC libraries; they are pre-release, with no promise of compatibility from one to the next. The
 robot runtime brings it, so a robot program built on the runtime has it already. Another adds:
 
@@ -36,7 +36,7 @@ repositories {
     }
 }
 dependencies {
-    implementation "com.michaelgrundvig.frc:frc-pitwall:2026.11.11"
+    implementation "com.michaelgrundvig.frc:frc-pitwall:2026.11.13"
 }
 ```
 
@@ -55,14 +55,22 @@ version the catalog's `frc-libs` names (`gradle/libs.versions.toml`).
 
 | Command | Does |
 |---|---|
-| `./gradlew ci` | Everything CI checks: formatting (Spotless), static analysis (Error Prone, NullAway), the tests, coverage (JaCoCo, floors in `coverage-floor.properties`), the Javadoc. |
+| `./gradlew ci` | Everything CI checks: formatting (Spotless), static analysis (Error Prone, NullAway), the tests, coverage (JaCoCo, floors in `coverage-floor.properties`), the Javadoc, and the page's JavaScript. |
 | `./gradlew test --tests '*PitwallServerTest'` | Some of the tests. |
 | `./gradlew test -Pquick --continuous` | The fast edit-test loop: skips formatting, static analysis and coverage. |
+| `./gradlew pageTest` | The page's JavaScript: every module parsed as a browser loads it (`pageParse`), then its tests. |
+
+The page's JavaScript is checked with Node.js (20.11 or newer, on the PATH), at build time only:
+`pageParse` parses every module under `page/` as an ES module (`node --check`), and `pageTest` runs
+the tests in `src/test/js` with Node's own test runner and fake timers, on a small stand-in for the
+browser's DOM (`dom.mjs`). Nothing is installed: no npm, no `node_modules`. Without Node, CI fails
+and says how to get it; a local build warns and skips those two checks.
 
 The tests of the classes that need WPILib's native HAL or AdvantageKit's running logger (`Pitwall`,
 `AdvantageKitLog`, `simulator/WpilibHal`) run in the robot program that uses Pitwall, not here:
 those three files are left out of the per-file coverage floor. `AdvantageKitLog`'s receiver is
-tested here all the same, on AdvantageKit's own table (`robot/AdvantageKitReceiverTest`).
+tested here all the same, on AdvantageKit's own table (`robot/AdvantageKitReceiverTest`), and among
+the log's other receivers as AdvantageKit runs them (`AdvantageKitLogTest`).
 
 Two switches change where the model comes from, both off by default: `-PlocalLibs=<folder>` builds
 it from a clone in `<folder>/model`, from source, in place of the published version, to try a
@@ -78,6 +86,23 @@ release goes.
 
 The tests read the configuration records' documentation as files in
 `src/test/resources/META-INF/pitwall/docs`, which `ParameterDocsTest` says how to write again.
+
+## The server
+
+`PitwallServer`'s Javadoc lists every route. They are one table, in `Api`: each row a method, a
+path or a pattern, and its handler. The handlers are small types by area (`SimulatorRoutes`,
+`DeviceRoutes`, `ExperimentRoutes`, `TuningRoutes`, `ActionRoutes`, `SessionRoutes`, `SceneRoutes`,
+`StreamRoutes`, `PageRoutes`), which read a request through `Requests` and answer through
+`Responses`. `Api` itself only dispatches and checks that a request is addressed to the robot. A
+path the table has with another method is 405, with the methods it has in `Allow`. A new route is
+a row in the table and a row in `RouteTableTest`, which fails by name when the two lists differ.
+
+The page loads nothing from anywhere but the robot, with one exception: a card's picture
+(`Devices.Picture`), which the browser loads straight from its device. Its Content-Security-Policy
+names those places and no others, as the robot program declares them:
+`pitwall.devices().picturesFrom("http://10.12.34.11:5809")`, an origin and nothing after it. The
+runtime names Visor's stream on each coprocessor its configuration lists. A picture whose address is
+anywhere else is refused by the browser, and its card says it can't reach it.
 
 ## The simulator's controls, on every view
 
@@ -165,7 +190,8 @@ Esc is the one key several things want, and one of them is safety, so its rule i
 A safety action wins over a view's action, so on an enabled simulated robot Esc disables from any
 view, and only a disabled robot's Esc means anything else. The driving keys and the strip's arrows
 and L never meet: the strip stands aside for as long as keyboard driving is on. No key enables.
-The page has no JavaScript test harness, so these rules are checked in a browser.
+The time strip's keys are tested in Node (`src/test/js/timeline.test.mjs`); the rest of these
+rules are checked in a browser.
 
 ## The Robot view
 
@@ -229,6 +255,11 @@ lost sensor, reads as unknown, and restricts).
   of each loop, on a thread of its own. `AdvantageKitLog.receiver(session)` is one. The only class
   that names AdvantageKit is still `AdvantageKitLog`; the session reads a `LoopRecord`, which a
   test fills by hand.
+- **A loop that can't be read.** AdvantageKit calls its receivers one after another on that one
+  thread and catches nothing, so a throw from one would end the thread, and the log's file and its
+  stream with it, for the rest of the session. Pitwall's receiver never throws: the first loop it
+  can't read stops it, the Robot view ends at the loop before, and a robot alert says so once
+  ("Pitwall stopped reading the log"), with the stack in the console. The log goes on.
 - **The keys** are the runtime's, and `robot/LogKeys` is the one place they are written: the
   contract between the two, which the runtime's `RobotViewKeysEndToEndTest` holds a real session's
   log to. What the robot did is logged as facts, the model's records
@@ -452,11 +483,11 @@ added replace the last ones whole. A layer that doesn't call it keeps what it ha
 when something changed.
 
 **A click** shows the shape's `Inspection` in a card over the drawing's side: a title, labeled details, and the
-names of page actions (`pitwall.actions()`) it ends in, run exactly as from Pit, gate and all. The
+names of page actions (`pitwall.actions()`) it ends in, run exactly as from Pit, under the same gate
+(by default, the robot enabled in utility mode and the field system not connected). The
 supplier runs on a web server thread, so it reads only what can't change under it, such as a record
 the loop has finished with. A shape of the moment stays inspectable for two seconds after it's
-gone, so with the page's *Hold* (which freezes the drawing) a sight line that came and went can
-still be clicked. While its details are open, the shape clicked and the shapes it `reveal`s are
+gone, so a sight line that came and went can still be clicked. While its details are open, the shape clicked and the shapes it `reveal`s are
 drawn whatever their layers: a camera reveals its full view, kept in a layer that starts off. What
 it reveals must be in the scene's description, or of the same moment.
 
@@ -553,7 +584,7 @@ no further.
 
 The robot's world is Pitwall's own scene, drawn from the robot's record: `WorldScene.of(definition,
 field, truth, words, cameraAction).scene(session)`, which the runtime adds in
-`RobotContainer.addTo`, and `./gradlew run` shows at http://localhost:5820/#world. What moves is a
+`RobotPitwall.addTo`, and `./gradlew run` shows at http://localhost:5820/#world. What moves is a
 function of the robot's definition, the field and one loop's moment (`WorldScene.draw(moment)`), as
 the Robot view is of the definition and a moment. So it is one implementation at any loop: live, a
 layer draws the session's newest moment in the robot loop, and at the cursor the same function

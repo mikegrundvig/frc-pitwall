@@ -5,7 +5,7 @@
 //
 // Missing text is a prompt, not a gap: the page says where to write it.
 
-import { robot, shown, h, go, withUnit } from "./core.js";
+import { robot, shown, h, go, withUnit, plural } from "./core.js";
 import { described, edit } from "./edits.js";
 
 /** Text as the documentation lays it out: paragraphs, "- " list items, and `code` spans. */
@@ -163,7 +163,7 @@ export function groupDocs(config, group) {
     h("h2", null, h("span", { class: "mono" }, group || config),
       about && about.record && h("span", { class: "tag plain mono" }, about.record)),
     h("p", { class: "crumb" }, config + " · " + paths.length
-        + (paths.length === 1 ? " tunable value" : " tunable values")),
+        + plural(paths.length, " tunable value", " tunable values")),
   ];
   if (about && about.meaning) parts.push(h("p", { class: "meaning-lg" }, inline(sentence(about.meaning))));
   if (about && about.doc && about.doc.text) parts.push(prose(about.doc.text));

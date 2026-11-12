@@ -87,10 +87,17 @@ function renderButtons(ui) {
   }
 }
 
+/** How the state's word is styled: stopped by this page, enabled, or neither. */
+function stateClass(stopped, now) {
+  if (stopped) return " stopped";
+  if (now && now.enabled) return " enabled";
+  return "";
+}
+
 function renderState(ui) {
   const now = sim();
   const stopped = robot.stopped && robot.connected !== true;
-  ui.state.className = "dsstate" + (stopped ? " stopped" : now && now.enabled ? " enabled" : "");
+  ui.state.className = "dsstate" + stateClass(stopped, now);
   if (stopped) {
     ui.word.textContent = "■ STOPPED";
     ui.sub.textContent = "This page stopped the simulator. Start it again (./gradlew run), and "

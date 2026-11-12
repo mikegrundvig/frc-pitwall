@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
  * template's venue card does:
  *
  * {@snippet :
- * return Devices.Device.named("venue", "Field", pit::card)
+ * return Devices.Device.named(NAME, "Field", pit::card)
  *     .upload("survey", "Upload venue", pit::upload)
  *     .choose("venue", pit::choose)
  *     .download("file", "Download venue file", pit::download);
@@ -31,8 +31,14 @@ import java.util.regex.Pattern;
  * <p>A card is read in the robot loop, like a status item: only while a page watches, and at most
  * once an interval, so keep it cheap (what the loop already read). Downloads, uploads and choices
  * are made on the page's own request, on Pitwall's server threads and never in the robot loop, so
- * they may wait on the network or the disk; the page never talks to a device itself. None of them
- * changes the robot loop's state, so nothing is logged for replay.
+ * they may wait on the network or the disk; the page talks to a device itself for one thing only, a
+ * card's {@link Picture}, which the browser fetches straight from the device, so video never passes
+ * through the robot program, and only from the places named with {@link #picturesFrom}. None of
+ * them changes the robot loop's state, so nothing is logged for replay.
+ *
+ * <p>A card can also show a live configuration's values ({@link Device#tuning}), tuned from the
+ * card as from the Tune view: a camera's exposure and gain beside its picture, so everything about
+ * one camera is on one card.
  */
 public final class Devices {
   /**
@@ -40,6 +46,13 @@ public final class Devices {
    * the page's addresses ({@code /api/devices/vision-front/downloads/settings}).
    */
   public static final Pattern NAME = Pattern.compile("[a-z0-9][a-z0-9-]{0,62}");
+
+  /**
+   * A place a card's picture comes from, as an address's origin: {@code http} or {@code https}, a
+   * host as letters, digits, dots and hyphens (an IPv4 address or a name), and a port if it has
+   * one. Nothing else, as the page's Content-Security-Policy names it.
+   */
+  private static final Pattern ORIGIN = Pattern.compile("https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?");
 
   /** The most often a card is read: once a second, as the status lines that follow sensors. */
   public static final Duration INTERVAL = Duration.ofSeconds(1);
@@ -53,7 +66,30 @@ public final class Devices {
     /** Worth a look before a match: ▲. */
     WARNING,
     /** Wrong: ✗. */
-    PROBLEM
+    PROBLEM;
+
+    /**
+     * A card's level from its lines: its worst line's, a problem before a warning. A note reads as
+     * OK, since it's neither good nor bad, so a card of notes and OKs is OK.
+     */
+    public static Level of(List<Line> lines) {
+      Level worst = OK;
+      for (Line line : lines) {
+        if (line.level() == NOTE) {
+          continue;
+        }
+        worst = worst.worse(line.level());
+      }
+      return worst;
+    }
+
+    /** The worse of this and another: a problem is worse than a warning, a warning than OK. */
+    public Level worse(Level other) {
+      if (other.ordinal() > ordinal()) {
+        return other;
+      }
+      return this;
+    }
   }
 
   /**
@@ -66,23 +102,90 @@ public final class Devices {
   public record Line(String label, String value, Level level) {}
 
   /**
-   * A device's card as of the last read.
+   * A device's card as of the last read. Made with {@link #of}, then {@link #withChoices} and
+   * {@link #withPicture} for a card that has them:
+   *
+   * {@snippet :
+   * Card.of("Sending", Level.OK, lines)
+   *     .withPicture(Devices.Picture.at("http://10.12.34.11:5809/stream/front"))
+   * }
    *
    * @param state a word or two for whether it's there: "Present", "Missing", "Two answer"
-   * @param level how the device stands as a whole
+   * @param level how the device stands as a whole: {@link Level#of} its lines, or worse for a
+   *     device whose state alone is wrong
    * @param lines what the card says, in order
    * @param choices what the card offers to choose among, as of now, each answered by the device's
    *     {@link Device#choose} of the same id
+   * @param picture a live picture to show on the card, beside its lines; none for a device that has
+   *     none
    */
-  public record Card(String state, Level level, List<Line> lines, List<Choice> choices) {
+  public record Card(
+      String state,
+      Level level,
+      List<Line> lines,
+      List<Choice> choices,
+      Optional<Picture> picture) {
     public Card {
       lines = List.copyOf(lines);
       choices = List.copyOf(choices);
     }
 
-    /** A card with nothing to choose. */
-    public Card(String state, Level level, List<Line> lines) {
-      this(state, level, lines, List.of());
+    /** A card with nothing to choose and no picture. */
+    public static Card of(String state, Level level, List<Line> lines) {
+      return new Card(state, level, lines, List.of(), Optional.empty());
+    }
+
+    /** This card, offering these choices. */
+    public Card withChoices(List<Choice> choices) {
+      return new Card(state, level, lines, choices, picture);
+    }
+
+    /** This card, showing this picture. */
+    public Card withPicture(Picture picture) {
+      return new Card(state, level, lines, choices, Optional.of(picture));
+    }
+  }
+
+  /**
+   * A live picture on a card, which the page's browser loads straight from the device, not through
+   * the robot program: a camera's video, as an image that updates as it comes (an MJPEG stream).
+   * The robot only names where it is ({@link Live}), or why there's none ({@link None}). The page
+   * shows the reason in the picture's place, plainly, rather than a broken image, and does the same
+   * when the browser can't reach the address, trying it again every few seconds. The browser loads
+   * a picture only from a place the robot program named with {@link Devices#picturesFrom}.
+   */
+  public sealed interface Picture {
+    /**
+     * A picture the browser loads from an address.
+     *
+     * @param address where the browser loads it from: an {@code http} or {@code https} address
+     */
+    record Live(String address) implements Picture {
+      private static final Pattern WEB = Pattern.compile("https?://[^\\s\"'<>]+");
+
+      public Live {
+        if (!WEB.matcher(address).matches()) {
+          throw new IllegalArgumentException(
+              "a picture's address is an http or https address: " + address);
+        }
+      }
+    }
+
+    /**
+     * No picture, and why, shown in its place.
+     *
+     * @param why "No live view: the camera is on PhotonVision"
+     */
+    record None(String why) implements Picture {}
+
+    /** A picture the browser loads from this address. */
+    static Picture at(String address) {
+      return new Live(address);
+    }
+
+    /** No picture, and why. */
+    static Picture none(String why) {
+      return new None(why);
     }
   }
 
@@ -250,6 +353,7 @@ public final class Devices {
     private final List<Upload> uploads = new ArrayList<>();
     private final Map<String, Choose> choosers = new LinkedHashMap<>();
     private boolean autonomous;
+    private Optional<String> tuning = Optional.empty();
     private boolean added;
 
     private Device(String name, String kind, Supplier<Card> card) {
@@ -322,6 +426,21 @@ public final class Devices {
       return this;
     }
 
+    /**
+     * Shows a live configuration's values on its card, to tune from the card as from the Tune view,
+     * by the name the configuration was published under ({@link LiveConfig#of}): a camera's
+     * exposure and gain, beside its picture. Edits wait to be applied, as in Tune. The card shows
+     * nothing of it while no configuration of that name is published.
+     */
+    public Device tuning(String config) {
+      unchanged();
+      if (config.isBlank()) {
+        throw new IllegalArgumentException(name + "'s tuning is named by its configuration");
+      }
+      tuning = Optional.of(config);
+      return this;
+    }
+
     /** Refuses a change once it's on the page, where the server's threads read it. */
     private void unchanged() {
       if (added) {
@@ -352,12 +471,22 @@ public final class Devices {
     public Optional<Choose> chooser(String id) {
       return Optional.ofNullable(choosers.get(id));
     }
+
+    /** The live configuration its card shows, by name, if it shows one. */
+    public Optional<String> tuning() {
+      return tuning;
+    }
   }
 
   private final LongSupplier clock;
   private final long intervalNanos;
   private volatile List<Device> devices = List.of();
   private volatile Map<String, Object> section = Map.of();
+  private volatile List<String> pictureOrigins = List.of();
+
+  /** The names the devices added have, by Pitwall's rule for them. */
+  private final CardNames names = new CardNames();
+
   private long readNanos;
   private boolean everRead;
 
@@ -377,11 +506,14 @@ public final class Devices {
    * Adds a device, shown in the order added.
    *
    * @return this, to add the next
-   * @throws IllegalArgumentException if another device has its name
+   * @throws IllegalArgumentException if another device has its name ({@link CardNames})
    */
   public synchronized Devices add(Device device) {
-    if (named(device.name()).isPresent()) {
-      throw new IllegalArgumentException("two devices are named " + device.name());
+    String whose = "the " + device.kind() + " card";
+    Optional<String> other = names.take(device.name(), whose);
+    if (other.isPresent()) {
+      throw new IllegalArgumentException(
+          "two devices are named " + device.name() + ": " + other.get() + " and " + whose);
     }
     device.added = true;
     List<Device> more = new ArrayList<>(devices);
@@ -390,6 +522,36 @@ public final class Devices {
     section = Map.of(); // read the new one at the next chance
     everRead = false;
     return this;
+  }
+
+  /**
+   * Lets the page load the cards' pictures from a place, named by its origin: {@code
+   * http://10.12.34.11:5809}. The page loads images from the robot itself and from the places named
+   * here, and from nowhere else (its Content-Security-Policy), so a picture whose address is
+   * anywhere else isn't shown: name each device a picture comes from, such as each of the robot's
+   * coprocessors, as the robot program is configured with them. A place named twice is kept once.
+   *
+   * @param origin {@code http} or {@code https}, a host, and its port: nothing after it
+   * @return this, to name the next
+   * @throws IllegalArgumentException if it isn't such an origin
+   */
+  public synchronized Devices picturesFrom(String origin) {
+    if (!ORIGIN.matcher(origin).matches()) {
+      throw new IllegalArgumentException(
+          "a picture's place is http or https, a host and its port, and nothing after: " + origin);
+    }
+    if (pictureOrigins.contains(origin)) {
+      return this;
+    }
+    List<String> more = new ArrayList<>(pictureOrigins);
+    more.add(origin);
+    pictureOrigins = List.copyOf(more);
+    return this;
+  }
+
+  /** The places the cards' pictures may come from, in the order named. Safe from any thread. */
+  public List<String> pictureOrigins() {
+    return pictureOrigins;
   }
 
   /** The device with this name, if there is one. Safe from any thread. */
@@ -427,7 +589,10 @@ public final class Devices {
    * The devices as of the last read, for the event stream: {@code {name: {"kind", "state", "level",
    * "lines": [{"label", "value", "level"}], "downloads": [{"id", "label"}], "uploads": [{"id",
    * "label"}], "choices": [{"id", "label", "options": [{"value", "label"}], "current"}]}}}, levels
-   * in lowercase; and {@code "autonomous": true} for the device that says what autonomous runs.
+   * in lowercase; {@code "autonomous": true} for the device that says what autonomous runs; {@code
+   * "picture": {"url"}} or {@code "picture": {"unavailable"}} for a card with a picture: where it
+   * is, or why there's none; and {@code "tuning": name} for a card that shows a live
+   * configuration's values.
    */
   Map<String, Object> view() {
     return section;
@@ -438,11 +603,10 @@ public final class Devices {
     try {
       return device.card.get();
     } catch (RuntimeException e) {
-      String why = e.getMessage();
-      return new Card(
+      return Card.of(
           "Unknown",
           Level.WARNING,
-          List.of(new Line("Card", "Error: " + (why != null ? why : e.toString()), Level.WARNING)));
+          List.of(new Line("Card", "Error: " + Said.of(e), Level.WARNING)));
     }
   }
 
@@ -452,6 +616,8 @@ public final class Devices {
     if (device.autonomous) {
       shown.put("autonomous", true);
     }
+    device.tuning.ifPresent(config -> shown.put("tuning", config));
+    card.picture().ifPresent(picture -> shown.put("picture", shown(picture)));
     shown.put("state", card.state());
     shown.put("level", level(card.level()));
     List<Object> lines = new ArrayList<>();
@@ -500,6 +666,14 @@ public final class Devices {
     }
     shown.put("choices", choices);
     return shown;
+  }
+
+  /** A picture as the page takes it: {@code {"url"}} for a live one, {@code {"unavailable"}}. */
+  private static Map<String, Object> shown(Picture picture) {
+    return switch (picture) {
+      case Picture.Live live -> Map.of("url", live.address());
+      case Picture.None none -> Map.of("unavailable", none.why());
+    };
   }
 
   private static String level(Level level) {

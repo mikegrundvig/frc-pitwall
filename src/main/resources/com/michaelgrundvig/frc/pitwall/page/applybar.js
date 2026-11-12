@@ -1,4 +1,4 @@
-// The apply bar, at the bottom of Tune and Experiment while anything is staged: how many edits,
+// The apply bar, at the bottom of Tune, Experiment and Pit (a card's values) while anything is staged: how many edits,
 // and Apply and Discard (Enter and Esc). Applying sends them all at once, and the robot applies
 // all or none. Edits outside their limits are caught here first. When it refuses, every reason is
 // listed here, grouped by the check that gave it, each a way to its value; the same reasons show
@@ -10,12 +10,14 @@
 // the edit is staged, not sprung at the press, and a second press would only teach people to press
 // twice.
 
-import { robot, onChange, onConnection, h, byId, go, replace, shown } from "./core.js";
-import { onEdits, pending, apply, discard, closeRefusal, outcome, whyLocked } from "./edits.js";
+import { robot, onChange, onConnection, h, byId, go, replace, shown, plural } from "./core.js";
+import {
+  onEdits, pending, apply, discard, closeRefusal, outcome, whyLocked, outsideLimits,
+} from "./edits.js";
 import { setTuning } from "./bar.js";
 
-/** The views it shows in: those with values to stage. */
-const VIEWS = new Set(["tune", "experiment"]);
+/** The views it shows in: those with values to stage, Pit's on its devices' cards. */
+const VIEWS = new Set(["tune", "experiment", "pit"]);
 
 /** The checks, in the order the robot runs them, as the refusal list names them. */
 const LAYERS = {
@@ -73,19 +75,18 @@ function render() {
   // Why nothing can be applied now, said where the edits wait, with the way out when there's one.
   const lock = whyLocked();
   const blocked = invalid.length + outside.length;
-  replace(what, h("b", null, count + (count === 1 ? " edit" : " edits")),
+  replace(what, h("b", null, count + plural(count, " edit", " edits")),
     " staged, applied together or not at all.",
     lock && h("span", { class: "lockword" }, " 🔒 " + lock),
-    !lock && blocked > 0 && h("span", { class: "bad" }, " ✗ " + blocked
-        + (blocked === 1 ? " is" : " are") + " outside " + (blocked === 1 ? "its" : "their")
-        + " limits or not a number: fix " + (blocked === 1 ? "it" : "them") + " to apply."),
+    !lock && blocked > 0 && h("span", { class: "bad" },
+      " ✗ " + outsideLimits(String(blocked), blocked, "apply")),
     !lock && blocked === 0 && h("span", { class: "keys" }, " Enter applies all · Esc drops the "
         + "focused edit"));
   // The big steps, named, the bar in a warning style while there are any.
   bar.classList.toggle("big", big.length > 0 && !lock);
   bigSteps.hidden = big.length === 0 || Boolean(lock);
   replace(bigSteps, big.length === 0 ? [] : [
-    h("b", null, "▲ " + (big.length === 1 ? "A big step" : big.length + " big steps") + ": "),
+    h("b", null, "▲ " + plural(big.length, "A big step", big.length + " big steps") + ": "),
     big.map((step, index) => {
       const value = robot.doc.tunables[step.path];
       return [index > 0 ? "; " : "", h("span", { class: "mono" }, value.config + " " + value.field),
@@ -97,8 +98,8 @@ function render() {
   applyButton.hidden = !switchOn.hidden;
   applyButton.disabled = Boolean(lock) || blocked > 0 || outcome.applying;
   applyButton.textContent = outcome.applying ? "Applying…" : "Apply " + ready
-      + (big.length > 0 ? ", including " + big.length + (big.length === 1 ? " big step"
-        : " big steps") : "");
+      + (big.length > 0
+        ? ", including " + big.length + plural(big.length, " big step", " big steps") : "");
 }
 
 /**
@@ -116,7 +117,7 @@ function refused(refusal) {
   const sorted = errors.slice().sort((a, b) => order.indexOf(a.layer) - order.indexOf(b.layer));
   return [
     h("h2", null, "✗ Refused: nothing changed. " + errors.length
-        + (errors.length === 1 ? " reason:" : " reasons:")),
+        + plural(errors.length, " reason:", " reasons:")),
     h("ol", null, sorted.map((error) => h("li", null,
       h("span", { class: "layer" }, (LAYERS[error.layer] || error.layer)
           + (error.by ? " (" + error.by + ")" : "") + ": "),

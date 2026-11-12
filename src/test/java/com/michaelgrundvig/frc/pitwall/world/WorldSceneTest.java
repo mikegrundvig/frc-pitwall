@@ -20,6 +20,7 @@ import com.michaelgrundvig.frc.world.field.FieldModel;
 import com.michaelgrundvig.frc.world.field.Start;
 import com.michaelgrundvig.frc.world.field.Symmetry;
 import com.michaelgrundvig.frc.world.field.Tag;
+import com.michaelgrundvig.frc.world.field.TagFamily;
 import com.michaelgrundvig.frc.world.field.TagLayout;
 import com.michaelgrundvig.frc.world.physical.Material;
 import com.michaelgrundvig.frc.world.physical.Polygon2d;
@@ -35,7 +36,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.wpilib.math.geometry.Pose2d;
 import org.wpilib.math.geometry.Pose3d;
 import org.wpilib.math.geometry.Rotation2d;
@@ -65,20 +69,29 @@ class WorldSceneTest {
   /** A start on blue's half, 3 m from the wall and 2 m across, facing the field. */
   private static final Start START = Start.at("Left", new Pose2d(3, 2, Rotation2d.ZERO));
 
+  /** FRC's tags since 2024: 6.5 in on a side. */
+  private static final double SIX_AND_A_HALF_INCHES = 0.1651;
+
   /** A field with two tags on its far wall, facing back down the field, and a post on each half. */
-  private static final FieldModel FIELD =
-      FieldModel.builder(
-              new TagLayout(
-                  "two tags",
-                  16.5,
-                  8,
-                  List.of(
-                      Tag.nominal(7, new Pose3d(16.5, 3, 1.4, new Rotation3d(0, 0, Math.PI))),
-                      Tag.nominal(8, new Pose3d(16.5, 5, 1.4, new Rotation3d(0, 0, Math.PI))))),
-              Symmetry.ROTATED)
-          .elements(List.of(POST))
-          .starts(List.of(START))
-          .build();
+  private static final FieldModel FIELD = field(SIX_AND_A_HALF_INCHES);
+
+  /** The field above, its tags this size. */
+  private static FieldModel field(double tagSizeMeters) {
+    return FieldModel.builder(
+            new TagLayout(
+                "two tags",
+                16.5,
+                8,
+                TagFamily.TAG_36H11,
+                tagSizeMeters,
+                List.of(
+                    Tag.nominal(7, new Pose3d(16.5, 3, 1.4, new Rotation3d(0, 0, Math.PI))),
+                    Tag.nominal(8, new Pose3d(16.5, 5, 1.4, new Rotation3d(0, 0, Math.PI))))),
+            Symmetry.ROTATED)
+        .elements(List.of(POST))
+        .starts(List.of(START))
+        .build();
+  }
 
   /** The robot program's words: verdict 0 is accepted and 1 the gate, solver 1 a single tag. */
   private static final SightingWords WORDS =
@@ -171,6 +184,31 @@ class WorldSceneTest {
                 + "\"style\":\"bad dashed\"")
         .contains("\"mark\":\"outline\",\"style\":\"truth dashed\"");
     assertThat(said).isEmpty();
+  }
+
+  /**
+   * Each tag is drawn at the field's tag size, its number standing that high in front of it: FRC's
+   * 6.5 in, or a game's other size. The page gets millimeters.
+   */
+  @ParameterizedTest
+  @CsvSource({"0.1651, 0.165", "0.2032, 0.203"})
+  void eachTagIsDrawnAtTheFieldsTagSize(double tagSizeMeters, String drawn) {
+    WorldScene onThisField =
+        WorldScene.of(
+            ROBOT,
+            () -> field(tagSizeMeters),
+            WorldScene.Truth.IN_THE_RECORD,
+            WORDS,
+            camera -> Optional.empty());
+    scenes.add(onThisField.scene(session));
+    String described = JSON.toJson(scenes.descriptions());
+    String size = Pattern.quote("\"size\":[0.03," + drawn + "," + drawn + "]");
+
+    assertThat(described)
+        .containsPattern("\"id\":\"tag\\.7\\.square\"[^}]*" + size)
+        .containsPattern("\"id\":\"tag\\.7\\.back\"[^}]*" + size)
+        .containsPattern(
+            "\"id\":\"tag\\.7\\.id\"[^}]*" + Pattern.quote("\"at\":[0.25,0," + drawn + ","));
   }
 
   /**

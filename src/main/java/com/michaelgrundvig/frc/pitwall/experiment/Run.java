@@ -1,5 +1,6 @@
 package com.michaelgrundvig.frc.pitwall.experiment;
 
+import com.michaelgrundvig.frc.pitwall.Said;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -162,8 +163,7 @@ public final class Run {
     try {
       rig.command(setpoint);
     } catch (RuntimeException e) {
-      String why = e.getMessage();
-      cancel("Canceled: commanding the setpoint failed: " + (why != null ? why : e));
+      cancel("Canceled: commanding the setpoint failed: " + Said.of(e));
       return true;
     }
     trace.series(Rig.SETPOINT).add(nowNanos, rig.measurementUnit().fromBaseUnits(setpoint));

@@ -213,8 +213,8 @@ final class EventFinder {
 
   /**
    * Whether a move ended on a joint in a loop, and this joint is the first of the joints it ended
-   * on. A move of several joints, a configuration's, ends on each of them in one loop with one
-   * outcome, and is one event, which is about all of them.
+   * on. A move of several joints, a preset's, ends on each of them in one loop with one outcome,
+   * and is one event, which is about all of them.
    */
   private static boolean aMoveEndedFirstOn(
       SessionMemory memory, long before, long loop, int joint) {

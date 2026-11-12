@@ -17,7 +17,7 @@ import org.jspecify.annotations.Nullable;
  * per record, so the page needs no source on the robot:
  *
  * {@snippet :
- * ParameterDocs gains = ParameterDocs.of(DrivetrainControl.Gains.class);
+ * ParameterDocs gains = ParameterDocs.of(DrivetrainControl.SwerveGains.class);
  * gains.summary() // its Javadoc's first sentence
  * gains.params().get("steerKp") // "volts per radian of error"
  * }
@@ -68,8 +68,8 @@ public record ParameterDocs(String summary, String text, Map<String, String> par
 
   /**
    * A record's display name: as code in its package writes it, nested records with their outer ones
-   * ({@code DrivetrainControl.Gains}), and a record declared in a method with its class ({@code
-   * Robot.Setup}). The page names records so, to say whose Javadoc to write.
+   * ({@code DrivetrainControl.SwerveGains}), and a record declared in a method with its class
+   * ({@code Robot.Setup}). The page names records so, to say whose Javadoc to write.
    */
   public static String nameOf(Class<?> record) {
     Class<?> outer = record.getEnclosingClass();

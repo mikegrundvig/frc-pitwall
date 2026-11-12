@@ -15,7 +15,9 @@ import com.michaelgrundvig.frc.world.record.MoveResult;
 import com.michaelgrundvig.frc.world.record.MoveTarget;
 import com.michaelgrundvig.frc.world.record.MoveTask;
 import com.michaelgrundvig.frc.world.robot.Joint;
+import com.michaelgrundvig.frc.world.robot.RevoluteJoint;
 import com.michaelgrundvig.frc.world.robot.RobotDefinition;
+import com.michaelgrundvig.frc.world.robot.RobotMath;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -131,7 +133,7 @@ final class Moments {
     joint.owner = JointOwner.COMMAND;
     joint.command = command;
     joint.goalName = goalName;
-    boolean runs = !jointNamed(label).holdsPositions();
+    boolean runs = !RobotMath.holdsPositions(jointNamed(label));
     joint.goal = runs ? goal * 2 * Math.PI / 60 : Math.toRadians(goal);
     return this;
   }
@@ -288,7 +290,7 @@ final class Moments {
    * place; unknown while it does not know; and for a joint that only runs, what it runs at.
    */
   private static JointPlace placeOf(Joint joint, OfJoint now) {
-    if (!joint.holdsPositions()) {
+    if (!RobotMath.holdsPositions(joint)) {
       for (int output = 0; output < joint.outputs().size(); output++) {
         if (joint.outputs().get(output).name().equals(now.goalName)) {
           return JointPlace.running(output);
@@ -299,7 +301,7 @@ final class Moments {
     if (now.state.standing() != JointState.Standing.READY) {
       return JointPlace.UNKNOWN;
     }
-    double band = joint instanceof Joint.Revolute ? Math.toRadians(2) : 0.01;
+    double band = joint instanceof RevoluteJoint ? Math.toRadians(2) : 0.01;
     return new JointPlaces(joint, band).at(now.position);
   }
 

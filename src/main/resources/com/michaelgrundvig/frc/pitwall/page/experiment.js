@@ -4,10 +4,12 @@
 
 import {
   robot, onChange, onConnection, onSamples, api, send, lastRequestAt, shown, h, say, announce,
-  replace,
+  replace, plural,
 } from "./core.js";
 import { tuningOffBanner } from "./bar.js";
-import { onEdits, stageAll, pending, apply, edited, whyLocked } from "./edits.js";
+import {
+  onEdits, stageAll, pending, apply, edited, whyLocked, outsideLimits,
+} from "./edits.js";
 import { load, trySave, cannotKeep } from "./history.js";
 import { makeRow, updateRow } from "./rows.js";
 import { valueDocs } from "./docs.js";
@@ -389,6 +391,26 @@ function openDocs(row, how) {
   row.el.append(row.docs);
 }
 
+/** What the rig's one button says: Stop while it runs, Apply the staged gains and run, or Run. */
+function runButtonText(name, running, own) {
+  if (running) return "■ Stop  (Esc)" + countdown(name);
+  if (own.count === 0) return "▶ Run";
+  const big = own.big.length;
+  const including = big > 0 ? ", including " + big + plural(big, " big step,", " big steps,") : "";
+  return "Apply " + own.count + including + " and run";
+}
+
+/**
+ * Why Run is off, said beside it: not connected, or the gate's own reason with the mode now. Null
+ * while experiments may run.
+ */
+function whyExperimentsLocked(doc) {
+  if (!robot.connected) return "Not connected to the robot.";
+  if (!doc.robot.experimentsLocked) return null;
+  return capital(doc.robot.experimentsLocked) + (doc.robot.mode ? ". Now: " + doc.robot.mode : "")
+    + ".";
+}
+
 function updateRig(name, view) {
   const doc = robot.doc;
   // While its run runs, its gains stay put here: a run is scored for the gains it started with.
@@ -403,29 +425,23 @@ function updateRig(name, view) {
   const lock = own.count > 0 ? whyLocked() : null;
   const bad = [...own.invalid, ...own.outside];
   view.runButton.className = "big " + (running ? "danger pinned" : "primary");
-  view.runButton.textContent = running ? "■ Stop  (Esc)" + countdown(name)
-    : own.count > 0 ? "Apply " + own.count + (own.big.length > 0 ? ", including "
-      + own.big.length + (own.big.length === 1 ? " big step," : " big steps,") : "") + " and run"
-    : "▶ Run";
-  // Run is off beside the gate's own reason, and the mode now. Stop is never locked.
-  const why = !robot.connected ? "Not connected to the robot." : doc.robot.experimentsLocked
-    ? capital(doc.robot.experimentsLocked) + (doc.robot.mode ? ". Now: " + doc.robot.mode : "") + "."
-    : null;
+  view.runButton.textContent = runButtonText(name, running, own);
+  // Stop is never locked.
+  const why = whyExperimentsLocked(doc);
   view.gate.hidden = running || !why;
   view.gate.textContent = why ? "🔒 " + why : "";
   view.runButton.disabled = !running && (Boolean(why) || bad.length > 0 || Boolean(lock));
   replace(view.staged, running ? [] : [
-    bad.length > 0 && h("p", { class: "why" }, "✗ " + bad.map(nameOf).join(", ")
-        + (bad.length === 1 ? " is" : " are") + " outside " + (bad.length === 1 ? "its" : "their")
-        + " limits or not a number: fix " + (bad.length === 1 ? "it" : "them") + " to run."),
+    bad.length > 0 && h("p", { class: "why" },
+      "✗ " + outsideLimits(bad.map(nameOf).join(", "), bad.length, "run")),
     !why && lock && h("p", { class: "gatemsg" }, "🔒 " + lock),
     own.big.length > 0 && h("p", { class: "big" }, "▲ " + own.big.map((step) =>
       nameOf(step.path) + " " + shown(step.from) + " → " + shown(step.to) + ": "
         + Math.round(step.share * 100) + "% of its range").join("; ")),
     others.length > 0 && h("p", { class: "meta" }, others.length
-        + (others.length === 1 ? " other edit is" : " other edits are") + " staged in Tune ("
+        + plural(others.length, " other edit is", " other edits are") + " staged in Tune ("
         + others.map(fullName).join(", ") + "): Run leaves "
-        + (others.length === 1 ? "it" : "them") + " staged."),
+        + plural(others.length, "it", "them") + " staged."),
   ]);
   view.runButton.setAttribute("aria-describedby", view.gate.id + " " + view.staged.id);
   const described = doc.experiments[view.choice.value];
@@ -456,16 +472,17 @@ function updateRig(name, view) {
 /**
  * A run's scores, the worst of every jump: rise, overshoot, settling, and steady-state error (by
  * its size), and each peak. A jump that never got there, or never settled, is worse than any that
- * did. With {@code only}, a measurement's own jumps and signals (those named after it, such as
+ * did, and so is a score that isn't a finite number (the robot sends "NaN" for one it couldn't
+ * have). With {@code only}, a measurement's own jumps and signals (those named after it, such as
  * "Front left voltage" for "Front left"); without it, the worst measurement in each column.
  */
-function summary(run, only) {
+export function summary(run, only) {
   if (!run.scores) return null;
   const jumps = Object.entries(run.scores.steps)
     .filter(([measurement]) => only === undefined || measurement === only)
     .flatMap(([, steps]) => steps);
   const worst = (key, size = (x) => x) => jumps.length === 0 ? NaN
-      : Math.max(...jumps.map((jump) => typeof jump[key] === "number" ? size(jump[key]) : Infinity));
+      : Math.max(...jumps.map((jump) => Number.isFinite(jump[key]) ? size(jump[key]) : Infinity));
   const peaks = {};
   for (const signal of run.signals || []) {
     if (only !== undefined && !signal.name.startsWith(only + " ")) continue;
@@ -648,6 +665,20 @@ function destroyPlots(view) {
   view.signalsKey = "";
 }
 
+/** A plot line's color: the setpoint's, the latest run's, or another run's. */
+function lineColor(line) {
+  if (line.setpoint) return color("--text-2");
+  if (line.latest) return color("--accent");
+  return color("--run-other");
+}
+
+/** A plot line's width: the latest run's widest, then the setpoint's. */
+function lineWidth(line) {
+  if (line.latest) return 2.5;
+  if (line.setpoint) return 1.5;
+  return 1;
+}
+
 /** A plot, styled as the page is: every one of a rig's shares its cursor, and dragging zooms all. */
 function makePlot(name, element, lines, unit, height) {
   const stepped = uPlot.paths && uPlot.paths.stepped ? uPlot.paths.stepped({ align: 1 }) : undefined;
@@ -661,8 +692,8 @@ function makePlot(name, element, lines, unit, height) {
     cursor: { drag: { x: true, y: false }, sync: { key: "exp-" + name, scales: ["x", null] } },
     series: [{ label: "t" }, ...lines.map((line) => ({
       label: line.label,
-      stroke: line.setpoint ? color("--text-2") : line.latest ? color("--accent") : color("--run-other"),
-      width: line.latest ? 2.5 : line.setpoint ? 1.5 : 1,
+      stroke: lineColor(line),
+      width: lineWidth(line),
       dash: line.setpoint ? [6, 4] : undefined,
       paths: line.setpoint ? stepped : undefined,
       spanGaps: true,

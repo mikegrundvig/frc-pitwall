@@ -14,6 +14,7 @@ import org.littletonrobotics.junction.LogDataReceiver;
 import org.littletonrobotics.junction.LogTable;
 import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.inputs.LoggableInputs;
+import org.wpilib.util.Alert;
 
 /**
  * Everything of Pitwall's that names AdvantageKit, so that a robot program without AdvantageKit
@@ -39,7 +40,22 @@ public final class AdvantageKitLog {
    * and makes nothing new.
    */
   public static LogDataReceiver receiver(RobotSession session) {
-    return new SessionReceiver(session);
+    return receiver(session::take, AdvantageKitLog::alert);
+  }
+
+  /**
+   * A receiver that hands each loop's record to {@code taking}, and stops taking any after the
+   * first that throws, saying so once through {@code stopped}.
+   */
+  static LogDataReceiver receiver(Consumer<LoopRecord> taking, Consumer<String> stopped) {
+    return new SessionReceiver(taking, stopped);
+  }
+
+  /** Raises a robot alert that stays up for the rest of the session. */
+  private static void alert(String text) {
+    // Never closed: the alert stays up until the program ends, as the session stays stopped.
+    Alert alert = new Alert("Pitwall", text, Alert.Level.HIGH);
+    alert.set(true);
   }
 
   /**
@@ -52,6 +68,12 @@ public final class AdvantageKitLog {
    * readers that take none make an empty array to answer with, every time.
    */
   private static final class SessionReceiver implements LogDataReceiver, LoopRecord {
+    /** Whether it takes the loops, or stopped after one that threw. */
+    private enum Taking {
+      TAKING,
+      STOPPED
+    }
+
     private static final double[] NO_DOUBLES = new double[0];
     private static final byte[] NO_BYTES = new byte[0];
 
@@ -89,7 +111,9 @@ public final class AdvantageKitLog {
       }
     }
 
-    private final RobotSession session;
+    private final Consumer<LoopRecord> taking;
+    private final Consumer<String> stopped;
+    private Taking state = Taking.TAKING;
     private long timestampNanos;
     private LogTable table = new LogTable(0);
     private Map<String, LogTable.LogValue> values = Map.of();
@@ -101,16 +125,46 @@ public final class AdvantageKitLog {
      */
     private final Map<String, Read> facts = new HashMap<>();
 
-    SessionReceiver(RobotSession session) {
-      this.session = session;
+    SessionReceiver(Consumer<LoopRecord> taking, Consumer<String> stopped) {
+      this.taking = taking;
+      this.stopped = stopped;
     }
 
+    /**
+     * Takes one loop's record, and never throws. AdvantageKit calls every receiver in turn on one
+     * thread and catches nothing: a throw here would end that thread, and with it the log's file
+     * and its stream for the rest of the session. So a bug in Pitwall's reading costs only
+     * Pitwall's Robot view, which stops at the loop before, and says so once.
+     */
     @Override
     public void putTable(LogTable table) {
-      timestampNanos = table.getTimestamp();
-      this.table = table;
-      values = table.getAll(false);
-      session.take(this);
+      if (state == Taking.STOPPED) {
+        return;
+      }
+      try {
+        timestampNanos = table.getTimestamp();
+        this.table = table;
+        values = table.getAll(false);
+        taking.accept(this);
+      } catch (RuntimeException thrown) {
+        stop(thrown);
+      }
+    }
+
+    private void stop(RuntimeException thrown) {
+      state = Taking.STOPPED;
+      String text =
+          "Pitwall stopped reading the log: its Robot view ends here, and the log itself goes on. "
+              + Said.of(thrown);
+      // The stack, for whoever reads the console: the alert has room for one line.
+      System.err.println(text);
+      thrown.printStackTrace();
+      try {
+        stopped.accept(text);
+      } catch (RuntimeException alsoThrown) {
+        // Saying so failed too: the log still goes on.
+        alsoThrown.printStackTrace();
+      }
     }
 
     @Override

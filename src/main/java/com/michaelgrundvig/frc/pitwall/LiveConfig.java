@@ -16,12 +16,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.wpilib.tunable.ComplexTunable;
 import org.wpilib.tunable.TunableBase;
 import org.wpilib.tunable.TunableConfig;
 import org.wpilib.tunable.TunableDouble;
+import org.wpilib.tunable.TunableRegistry;
 import org.wpilib.tunable.TunableTable;
 import org.wpilib.units.Measure;
 import org.wpilib.units.Unit;
@@ -36,9 +38,11 @@ import org.wpilib.units.Units;
  * {@snippet :
  * return LiveConfig.of("drivetrain", committed)
  *     ...
- *     .number("gains.steerKp", Limits.between(0, 100))
+ *     .number("gains.steerKp", Limits.between(0, 100), ".withSteerKp(Volts.per(Radian).of(%s))")
  *     ...
- *     .measure("limits.driveStatorCurrent", Amps.of(10), Amps.of(120)) // a measure, in its unit
+ *     // A measure, in its unit.
+ *     .measure(
+ *         "limits.driveStatorCurrent", Amps.of(10), Amps.of(120), ".withDriveStatorLimit(%s)")
  *     ...
  * }
  *
@@ -51,7 +55,8 @@ import org.wpilib.units.Units;
  * including checks across values, such as a range's ends). Several values change at once, all or
  * none, so values valid only together can move together. Pitwall's tee builds the {@link
  * #candidate} before applying anything, and gives every reason on the page; without Pitwall, a
- * refused value is quietly declined, and the dashboard shows the value in effect again.
+ * refused value is declined with a warning saying why, and the dashboard shows the value in effect
+ * again.
  *
  * <p>A record refuses a value by throwing from its constructor, with a message the page can tie to
  * the value: one line for each value it rejects, {@code "where: what"}, where names the value from
@@ -112,7 +117,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
      * A record the tunable values are in, below the root.
      *
      * @param path where it is, such as {@code gains}
-     * @param record its display name, such as {@code DrivetrainControl.Gains}
+     * @param record its display name, such as {@code DrivetrainControl.SwerveGains}
      * @param doc its own Javadoc
      * @param meaning what it is to the record that holds it: that record's {@code @param} for it,
      *     such as {@code "control gains"}; empty when there's none
@@ -123,7 +128,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
      * A tunable value.
      *
      * @param record the display name of the record that declares it, such as {@code
-     *     DrivetrainControl.Gains}
+     *     DrivetrainControl.SwerveGains}
      * @param group the path of that record, the group it's in, such as {@code gains}; empty at the
      *     root
      * @param meaning what it means, its {@code @param} there, such as {@code "volts per radian of
@@ -154,7 +159,12 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
       List<RecordComponent> route,
       RecordComponent component,
       @Nullable Unit unit,
-      String commit) {}
+      String commit) {
+    /** Whether it's a whole number, an {@code int}, tuned and committed as one. */
+    boolean whole() {
+      return component.getType() == int.class;
+    }
+  }
 
   /**
    * Where a tuned value goes in the call that commits it ({@link #number(String, Limits, String)}).
@@ -172,7 +182,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
    * @param fields the values it concerns, by path: the one it names; for a record's check that
    *     names none, the change's values in that record
    * @param record for a record's check, the record that refused it ({@code
-   *     DrivetrainControl.Gains}); empty otherwise
+   *     DrivetrainControl.SwerveGains}); empty otherwise
    * @param group for a record's check that names no value, where that record is in this
    *     configuration ({@code travel}, empty for the root); empty otherwise
    * @param text why, as the check said it
@@ -180,7 +190,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
    *     Gains.steerKd: 40 must be at most steerKp (16)"}
    */
   record Problem(
-      Outcome.Layer layer,
+      RequestOutcome.Layer layer,
       List<String> fields,
       String record,
       String group,
@@ -230,12 +240,14 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
   }
 
   /**
-   * Makes a value tunable, within limits. Choose them all before publishing.
+   * Makes a value tunable, within limits. Choose them all before publishing. A value held as an
+   * {@code Optional} is tuned as the value it holds, and must hold one.
    *
    * @param path the value's path from the root, such as {@code gains.steerKp}
    * @return this, to choose the next
-   * @throws IllegalArgumentException if nothing is at the path, if it isn't a number or a measure,
-   *     if it was chosen already, or if its committed value is outside the limits
+   * @throws IllegalArgumentException if nothing is at the path, if it isn't a number (a whole one,
+   *     an {@code int}, included) or a measure, or an empty {@code Optional}, if it was chosen
+   *     already, or if its committed value is outside the limits
    */
   public LiveConfig<T> number(String path, Limits limits) {
     return chosen(path, limits, null);
@@ -279,12 +291,22 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
         node = child;
         continue;
       }
+      if (value instanceof Optional<?> held) {
+        if (held.isEmpty()) {
+          throw new IllegalArgumentException(
+              name + ": " + path + " is empty, so there's nothing to tune");
+        }
+        value = held.get();
+      }
       Unit unit = null;
       if (value instanceof Measure<?> measure) {
         unit = measure.unit();
-      } else if (!(value instanceof Double)) {
+      } else if (!(value instanceof Double) && !(value instanceof Integer)) {
         throw new IllegalArgumentException(
-            name + ": " + path + " isn't a number or a measure, so it can't be tuned");
+            name
+                + ": "
+                + path
+                + " isn't a number, a whole number or a measure, so it can't be tuned");
       }
       Slot slot =
           new Slot(
@@ -387,7 +409,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
 
   /**
    * The record that declares a tunable value, as the configuration holds it: {@code
-   * DrivetrainControl.Gains} for {@code gains.steerKp}.
+   * DrivetrainControl.SwerveGains} for {@code gains.steerKp}.
    *
    * @throws IllegalArgumentException if no tunable value has this path
    */
@@ -571,12 +593,26 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
       // published, can tell.
       TunableDouble tunable =
           TunableDouble.createConfig(
-              () -> value(path),
-              v -> set(Map.of(path, v)), // quietly declined when refused: it must not throw
-              slot.knob().limits().on(config));
+              () -> value(path), v -> setPublished(path, v), slot.knob().limits().on(config));
       children.put(tunable, path);
       table.publish(path.replace('.', '/'), tunable);
     }
+  }
+
+  /**
+   * A published value's write from a backend. A refused one is declined, never thrown, since WPILib
+   * calls this inside its update, and is reported as a warning with every reason. Pitwall's tee
+   * checks a write before it gets here and says why itself; this says it for a backend without one.
+   */
+  private void setPublished(String path, double value) {
+    List<Problem> problems = new ArrayList<>();
+    T candidate = check(Map.of(path, value), problems);
+    if (candidate == null) {
+      TunableRegistry.reportWarning(
+          "Pitwall refused " + path + " = " + value + ": " + String.join("; ", lines(problems)));
+      return;
+    }
+    current = candidate;
   }
 
   /** Which tunable value a published tunable is, or null if it isn't one of these. */
@@ -645,15 +681,19 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
       Slot slot = slots.get(path);
       if (slot == null) {
         String why = path + " isn't tunable";
-        problems.add(value(Outcome.Layer.VALUE, path, why, name + ": " + why));
+        problems.add(value(RequestOutcome.Layer.VALUE, path, why, name + ": " + why));
       } else if (!Double.isFinite(value)) {
         String why = path + " takes a number, got " + value;
-        problems.add(value(Outcome.Layer.VALUE, path, why, name + ": " + why));
+        problems.add(value(RequestOutcome.Layer.VALUE, path, why, name + ": " + why));
+      } else if (slot.whole() && value != Math.rint(value)) {
+        String why = path + " takes a whole number, got " + value;
+        problems.add(value(RequestOutcome.Layer.VALUE, path, why, name + ": " + why));
       } else {
         String outside = slot.knob().limits().whyNot(value, slot.knob().unit());
         if (outside != null) {
           problems.add(
-              value(Outcome.Layer.LIMIT, path, outside, name + ": " + path + ": " + outside));
+              value(
+                  RequestOutcome.Layer.LIMIT, path, outside, name + ": " + path + ": " + outside));
         }
       }
     }
@@ -671,15 +711,14 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
               ? known
               : new Rejected(committed.getClass(), "", refused);
       Throwable cause = Objects.requireNonNull(rejected.getCause());
-      String why = cause.getMessage();
-      for (String line : (why != null ? why : cause.toString()).split("\n")) {
+      for (String line : Said.of(cause).split("\n")) {
         problems.add(refusedBy(rejected, line, values.keySet()));
       }
       return null;
     }
   }
 
-  private static Problem value(Outcome.Layer layer, String path, String why, String line) {
+  private static Problem value(RequestOutcome.Layer layer, String path, String why, String line) {
     return new Problem(layer, List.of(path), "", "", why, line);
   }
 
@@ -704,13 +743,14 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
     }
     if (!field.isEmpty()) {
       return new Problem(
-          Outcome.Layer.RECORD, List.of(field), record, "", what, name + ": " + line);
+          RequestOutcome.Layer.RECORD, List.of(field), record, "", what, name + ": " + line);
     }
     List<String> within =
         changed.stream().filter(path -> path.startsWith(rejected.prefix)).sorted().toList();
     String group =
         rejected.prefix.isEmpty() ? "" : rejected.prefix.substring(0, rejected.prefix.length() - 1);
-    return new Problem(Outcome.Layer.RECORD, within, record, group, line, name + ": " + line);
+    return new Problem(
+        RequestOutcome.Layer.RECORD, within, record, group, line, name + ": " + line);
   }
 
   /**
@@ -738,11 +778,26 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
   private T rebuilt(Map<String, Double> values) {
     Map<String, Object> replacements = new HashMap<>();
     for (Map.Entry<String, Double> entry : values.entrySet()) {
-      Unit unit = slot(entry.getKey()).unit();
+      Slot slot = slot(entry.getKey());
       double value = entry.getValue();
-      replacements.put(entry.getKey(), unit == null ? value : unit.of(value));
+      Object replacement = replacement(slot, value);
+      // A value held as an Optional, tuned, is one that's given.
+      boolean optional = slot.component().getType() == Optional.class;
+      replacements.put(entry.getKey(), optional ? Optional.of(replacement) : replacement);
     }
     return sameType(rebuild(current, "", replacements));
+  }
+
+  /** A tuned value as its record holds it: a measure in its slot's unit, or a number. */
+  private static Object replacement(Slot slot, double value) {
+    Unit unit = slot.unit();
+    if (unit != null) {
+      return unit.of(value);
+    }
+    if (slot.whole()) {
+      return (int) value;
+    }
+    return value;
   }
 
   private RecordComponent component(Record record, String step, String path) {
@@ -761,7 +816,13 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
       node = (Record) read(node, step);
     }
     Object value = read(node, slot.component());
+    if (value instanceof Optional<?> held) {
+      value = held.orElseThrow();
+    }
     Unit unit = slot.unit();
+    if (value instanceof Integer whole) {
+      return whole;
+    }
     return unit == null
         ? (Double) value
         : unit.fromBaseUnits(((Measure<?>) value).baseUnitMagnitude());
@@ -838,14 +899,22 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
 
   private static String shown(Slot slot, double value) {
     Unit unit = slot.unit();
-    return unit == null ? Double.toString(value) : value + " " + unit.symbol();
+    return unit == null ? plain(slot, value) : value + " " + unit.symbol();
   }
 
   private static String builderCall(Slot slot, double value) {
     Unit unit = slot.unit();
     String argument =
-        unit == null ? Double.toString(value) : unitsConstant(unit) + ".of(" + value + ")";
+        unit == null ? plain(slot, value) : unitsConstant(unit) + ".of(" + value + ")";
     return slot.commit().replace(VALUE, argument);
+  }
+
+  /** A number as its record holds it: a whole one without a decimal point. */
+  private static String plain(Slot slot, double value) {
+    if (slot.whole()) {
+      return Long.toString(Math.round(value));
+    }
+    return Double.toString(value);
   }
 
   /**
