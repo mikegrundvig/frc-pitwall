@@ -230,15 +230,14 @@ public final class Status {
 
   private Map<String, Object> makeUnits() {
     Map<String, Object> units = new LinkedHashMap<>();
-    items.forEach(
-        (name, source) -> {
-          if (source.resolution() > 0) {
-            Map<String, Object> unit = new LinkedHashMap<>();
-            unit.put("unit", source.unit());
-            unit.put("resolution", source.resolution());
-            units.put(name, unit);
-          }
-        });
+    items.forEach((name, source) -> {
+      if (source.resolution() > 0) {
+        Map<String, Object> unit = new LinkedHashMap<>();
+        unit.put("unit", source.unit());
+        unit.put("resolution", source.resolution());
+        units.put(name, unit);
+      }
+    });
     return units;
   }
 

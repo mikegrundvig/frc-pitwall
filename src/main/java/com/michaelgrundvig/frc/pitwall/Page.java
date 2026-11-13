@@ -598,14 +598,13 @@ public final class Page {
     Map<String, Object> steps = new LinkedHashMap<>();
     scores
         .steps()
-        .forEach(
-            (measurement, jumps) -> {
-              List<Object> shown = new ArrayList<>();
-              for (Optional<StepResponse> jump : jumps) {
-                shown.add(step(jump));
-              }
-              steps.put(measurement, shown);
-            });
+        .forEach((measurement, jumps) -> {
+          List<Object> shown = new ArrayList<>();
+          for (Optional<StepResponse> jump : jumps) {
+            shown.add(step(jump));
+          }
+          steps.put(measurement, shown);
+        });
     Map<String, Object> peaks = new LinkedHashMap<>();
     scores.peaks().forEach((signal, peak) -> peaks.put(signal, orNaN(peak)));
     return pair("steps", steps, "peaks", peaks);

@@ -91,7 +91,9 @@ abstract class NodeTask extends DefaultTask {
         } catch (Exception notFound) {
             found = null
         }
-        def parts = found == null ? [] : found.replaceFirst(/^v/, "").tokenize(".").collect { it.isInteger() ? it.toInteger() : 0 }
+        def parts = found == null ? [] : found.replaceFirst(/^v/, "").tokenize(".").collect {
+            it.isInteger() ? it.toInteger() : 0
+        }
         def newEnough = parts.size() >= 2 && (parts[0] > LEAST[0] || (parts[0] == LEAST[0] && parts[1] >= LEAST[1]))
         if (newEnough) {
             return true
@@ -173,7 +175,11 @@ abstract class PageTest extends NodeTask {
             throw new GradleException("The page's JavaScript tests failed (the whole run is in "
             + report.get().asFile + "):\n\n" + answer.output)
         }
-        def counts = answer.output.readLines().findAll { it ==~ /# (tests|pass|fail) \d+/ }
-        logger.lifecycle("Page tests: " + counts.collect { it.substring(2) }.join(", "))
+        def counts = answer.output.readLines().findAll {
+            it ==~ /# (tests|pass|fail) \d+/
+        }
+        logger.lifecycle("Page tests: " + counts.collect {
+            it.substring(2)
+        }.join(", "))
     }
 }

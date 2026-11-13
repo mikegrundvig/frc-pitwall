@@ -310,15 +310,14 @@ class BroadcasterTest {
     CountDownLatch freed = new CountDownLatch(1);
     Thread stuck =
         Thread.ofVirtual()
-            .start(
-                () -> {
-                  stream.writtenBy(Thread.currentThread());
-                  try {
-                    Thread.sleep(Duration.ofMinutes(1)); // stands in for a write that never ends
-                  } catch (InterruptedException interrupted) {
-                    freed.countDown();
-                  }
-                });
+            .start(() -> {
+              stream.writtenBy(Thread.currentThread());
+              try {
+                Thread.sleep(Duration.ofMinutes(1)); // stands in for a write that never ends
+              } catch (InterruptedException interrupted) {
+                freed.countDown();
+              }
+            });
     for (int i = 0; i < 6; i++) {
       Objects.requireNonNull(state.get("values")).put("kP", 16.0 + i);
       loop(null);

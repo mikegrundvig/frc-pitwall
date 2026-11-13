@@ -124,17 +124,16 @@ class RobotViewTest {
       assertThat(view.joint("pivot").marks())
           .as(scenario.what() + ": the mark on the pivot's card")
           .singleElement()
-          .satisfies(
-              mark -> {
-                assertThat(mark.from()).isCloseTo(110, within(1e-9));
-                assertThat(mark.to()).isNaN();
-                assertThat(mark.rule()).isEqualTo(RobotView.Rule.RUNS_ONLY_WHEN);
-                assertThat(mark.forJoint()).isEqualTo("roller");
-                assertThat(mark.label()).isEqualTo("roller runs only when at least 110°");
-                assertThat(mark.sentence()).isEqualTo(ROLLER_RULE);
-                assertThat(mark.emphasis()).isEqualTo(scenario.emphasis());
-                assertThat(mark.reading()).isEqualTo(scenario.reading());
-              });
+          .satisfies(mark -> {
+            assertThat(mark.from()).isCloseTo(110, within(1e-9));
+            assertThat(mark.to()).isNaN();
+            assertThat(mark.rule()).isEqualTo(RobotView.Rule.RUNS_ONLY_WHEN);
+            assertThat(mark.forJoint()).isEqualTo("roller");
+            assertThat(mark.label()).isEqualTo("roller runs only when at least 110°");
+            assertThat(mark.sentence()).isEqualTo(ROLLER_RULE);
+            assertThat(mark.emphasis()).isEqualTo(scenario.emphasis());
+            assertThat(mark.reading()).isEqualTo(scenario.reading());
+          });
       assertThat(view.joint("roller").marks()).as("the roller's own card has no mark").isEmpty();
     }
   }
@@ -196,26 +195,24 @@ class RobotViewTest {
       assertThat(view.joint("arm").bands())
           .as(scenario.what() + ": the band on the arm's card")
           .singleElement()
-          .satisfies(
-              band -> {
-                assertThat(band.lower()).isCloseTo(-10, within(1e-9));
-                assertThat(band.upper()).isCloseTo(30, within(1e-9));
-                assertThat(band.shown()).isEqualTo("-10° to 30°");
-                assertThat(band.dependsOn()).isEqualTo("elevator");
-                assertThat(band.rule()).isEqualTo(ARM_RULE);
-                assertThat(band.emphasis()).isEqualTo(scenario.emphasis());
-              });
+          .satisfies(band -> {
+            assertThat(band.lower()).isCloseTo(-10, within(1e-9));
+            assertThat(band.upper()).isCloseTo(30, within(1e-9));
+            assertThat(band.shown()).isEqualTo("-10° to 30°");
+            assertThat(band.dependsOn()).isEqualTo("elevator");
+            assertThat(band.rule()).isEqualTo(ARM_RULE);
+            assertThat(band.emphasis()).isEqualTo(scenario.emphasis());
+          });
       assertThat(view.joint("elevator").marks())
           .as(scenario.what() + ": the mark on the elevator's card")
           .singleElement()
-          .satisfies(
-              mark -> {
-                assertThat(mark.from()).isNaN();
-                assertThat(mark.to()).isCloseTo(0.8128, within(1e-9));
-                assertThat(mark.rule()).isEqualTo(RobotView.Rule.KEEPS_OUT);
-                assertThat(mark.label()).isEqualTo("arm keeps out while at most 0.8128 m");
-                assertThat(mark.emphasis()).isEqualTo(scenario.emphasis());
-              });
+          .satisfies(mark -> {
+            assertThat(mark.from()).isNaN();
+            assertThat(mark.to()).isCloseTo(0.8128, within(1e-9));
+            assertThat(mark.rule()).isEqualTo(RobotView.Rule.KEEPS_OUT);
+            assertThat(mark.label()).isEqualTo("arm keeps out while at most 0.8128 m");
+            assertThat(mark.emphasis()).isEqualTo(scenario.emphasis());
+          });
     }
   }
 
@@ -303,13 +300,12 @@ class RobotViewTest {
       assertThat(beam.marks())
           .as(scenario.what() + ": the mark on the beam's row")
           .singleElement()
-          .satisfies(
-              mark -> {
-                assertThat(mark.forJoint()).isEqualTo("claw");
-                assertThat(mark.label()).isEqualTo("claw runs only when clear");
-                assertThat(mark.emphasis()).isEqualTo(scenario.emphasis());
-                assertThat(mark.reading()).isEqualTo(scenario.condition());
-              });
+          .satisfies(mark -> {
+            assertThat(mark.forJoint()).isEqualTo("claw");
+            assertThat(mark.label()).isEqualTo("claw runs only when clear");
+            assertThat(mark.emphasis()).isEqualTo(scenario.emphasis());
+            assertThat(mark.reading()).isEqualTo(scenario.condition());
+          });
       assertThat(view.joint("claw").facts().heldBy())
           .as(scenario.what() + ": held by")
           .isEqualTo(scenario.heldBy());

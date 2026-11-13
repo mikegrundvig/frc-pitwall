@@ -204,11 +204,10 @@ class TunableTeeTest {
     assertThat(page.getNow(null).detail()).isEqualTo("/Shooter/kP takes a double value");
     assertThat(page.getNow(null).reasons())
         .singleElement()
-        .satisfies(
-            reason -> {
-              assertThat(reason.layer()).isEqualTo(RequestOutcome.Layer.VALUE);
-              assertThat(reason.paths()).containsExactly("/Shooter/kP");
-            });
+        .satisfies(reason -> {
+          assertThat(reason.layer()).isEqualTo(RequestOutcome.Layer.VALUE);
+          assertThat(reason.paths()).containsExactly("/Shooter/kP");
+        });
     assertThat(kP.get()).isEqualTo(0.5);
     assertThat(dashboard.getDouble("Shooter/kP")).as("snaps back").isEqualTo(0.5);
   }
@@ -269,10 +268,9 @@ class TunableTeeTest {
         TunableDouble.createConfig(
             1.0,
             new TunableConfig()
-                .withOnTune(
-                    () -> {
-                      throw new IllegalStateException("the mechanism rejected it");
-                    }));
+                .withOnTune(() -> {
+                  throw new IllegalStateException("the mechanism rejected it");
+                }));
     tee.publish("Arm/kP", gain);
 
     dashboard.setDouble("Arm/kP", 2.0);

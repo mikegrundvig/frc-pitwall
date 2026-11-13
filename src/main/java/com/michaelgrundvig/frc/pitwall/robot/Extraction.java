@@ -408,31 +408,29 @@ final class Extraction {
       return;
     }
     keysLastLoop = keys;
-    record.forEachKey(
-        key -> {
-          boolean isAGatesOwn =
-              key.startsWith(LogKeys.GATES)
-                  && !key.endsWith(LogKeys.BLOCKING)
-                  && !key.endsWith(LogKeys.BLOCKING_TEXT);
-          if (!isAGatesOwn) {
-            return;
-          }
-          String name = key.substring(LogKeys.GATES.length());
-          if (gatesSeen.contains(name)) {
-            return;
-          }
-          gatesSeen.add(name);
-          int place;
-          synchronized (memory) {
-            place = memory.gate(name);
-          }
-          if (place >= 0) {
-            gates.add(
-                new GateKeys(place, key, key + LogKeys.BLOCKING, key + LogKeys.BLOCKING_TEXT));
-          } else {
-            gatesNotKept = gatesSeen.size() - gates.size();
-          }
-        });
+    record.forEachKey(key -> {
+      boolean isAGatesOwn =
+          key.startsWith(LogKeys.GATES)
+              && !key.endsWith(LogKeys.BLOCKING)
+              && !key.endsWith(LogKeys.BLOCKING_TEXT);
+      if (!isAGatesOwn) {
+        return;
+      }
+      String name = key.substring(LogKeys.GATES.length());
+      if (gatesSeen.contains(name)) {
+        return;
+      }
+      gatesSeen.add(name);
+      int place;
+      synchronized (memory) {
+        place = memory.gate(name);
+      }
+      if (place >= 0) {
+        gates.add(new GateKeys(place, key, key + LogKeys.BLOCKING, key + LogKeys.BLOCKING_TEXT));
+      } else {
+        gatesNotKept = gatesSeen.size() - gates.size();
+      }
+    });
   }
 
   /** How many gates the record has that the memory has no place for. */

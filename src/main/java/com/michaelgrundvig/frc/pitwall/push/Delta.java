@@ -70,12 +70,11 @@ public final class Delta {
   /** The whole state as sent, ready to send as JSON: where a newly opened stream starts. */
   public Map<String, Object> document() {
     Map<String, Object> document = new LinkedHashMap<>();
-    sent.forEach(
-        (name, section) -> {
-          Map<String, Object> values = new LinkedHashMap<>();
-          section.forEach((key, value) -> values.put(key, json(value)));
-          document.put(name, values);
-        });
+    sent.forEach((name, section) -> {
+      Map<String, Object> values = new LinkedHashMap<>();
+      section.forEach((key, value) -> values.put(key, json(value)));
+      document.put(name, values);
+    });
     return document;
   }
 

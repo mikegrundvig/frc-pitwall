@@ -73,23 +73,21 @@ class RigTest {
         .isThrownBy(() -> Rig.builder().name("Arm").gains(lag.config, "gains.kP").build())
         .withMessage("the rig Arm needs something to measure");
     assertThatIllegalStateException()
-        .isThrownBy(
-            () ->
-                Rig.builder()
-                    .name("Arm")
-                    .gains(lag.config, "gains.kP")
-                    .measurement("Angle", Degrees, () -> 0)
-                    .build())
+        .isThrownBy(() ->
+            Rig.builder()
+                .name("Arm")
+                .gains(lag.config, "gains.kP")
+                .measurement("Angle", Degrees, () -> 0)
+                .build())
         .withMessage("the rig Arm needs how to command its setpoint");
     assertThatIllegalStateException()
-        .isThrownBy(
-            () ->
-                Rig.builder()
-                    .name("Arm")
-                    .gains(lag.config, "gains.kP")
-                    .setpoint(Radians, radians -> {})
-                    .measurement("Angle", Degrees, () -> 0)
-                    .build())
+        .isThrownBy(() ->
+            Rig.builder()
+                .name("Arm")
+                .gains(lag.config, "gains.kP")
+                .setpoint(Radians, radians -> {})
+                .measurement("Angle", Degrees, () -> 0)
+                .build())
         .withMessage("the rig Arm needs its limits");
   }
 
@@ -102,15 +100,14 @@ class RigTest {
         .isThrownBy(() -> rig().limits(Degrees.of(10), Degrees.of(10)).build())
         .withMessage("Arm's limits go nowhere: 10 ° to 10 °");
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                Rig.builder()
-                    .name("Arm")
-                    .gains(lag.config, "gains.kP")
-                    .setpoint(Radians, radians -> {})
-                    .limits(Degrees.of(-100), Degrees.of(100))
-                    .measurement("Height", Meters, () -> 0)
-                    .build())
+        .isThrownBy(() ->
+            Rig.builder()
+                .name("Arm")
+                .gains(lag.config, "gains.kP")
+                .setpoint(Radians, radians -> {})
+                .limits(Degrees.of(-100), Degrees.of(100))
+                .measurement("Height", Meters, () -> 0)
+                .build())
         .withMessageContaining("a different kind of quantity from its setpoint");
     assertThatIllegalArgumentException()
         .isThrownBy(() -> rig().measurement("Other angle", Radians, () -> 0).build())

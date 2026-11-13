@@ -291,9 +291,8 @@ class ScenesTest {
     see("bad");
     loop(feed);
     assertThat(scenes.inspect("world", "ray.bad"))
-        .hasValueSatisfying(
-            inspection ->
-                assertThat(inspection.details()).extracting("value").containsExactly("bad"));
+        .hasValueSatisfying(inspection ->
+            assertThat(inspection.details()).extracting("value").containsExactly("bad"));
 
     see();
     loop(feed);
@@ -438,11 +437,8 @@ class ScenesTest {
 
     assertThat(after).isNotSameAs(before);
     assertThat(scenes.inspect("world", "view"))
-        .hasValueSatisfying(
-            inspection ->
-                assertThat(inspection.details())
-                    .extracting("value")
-                    .containsExactly("recalibrated"));
+        .hasValueSatisfying(inspection ->
+            assertThat(inspection.details()).extracting("value").containsExactly("recalibrated"));
     assertThat(loop(feed)).contains("\"robot\":[1,2,0]");
   }
 
@@ -590,10 +586,9 @@ class ScenesTest {
   }
 
   private void assertRefused(Consumer<SceneBuilder> describe, String why) {
-    assertThatThrownBy(
-            () ->
-                new Scenes(clock::get, said::add)
-                    .add(Scene.named("s", "S").layer(Layer.of("l", "L", describe))))
+    assertThatThrownBy(() ->
+            new Scenes(clock::get, said::add)
+                .add(Scene.named("s", "S").layer(Layer.of("l", "L", describe))))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining(why);
   }

@@ -56,10 +56,9 @@ class ComponentsTest {
                 "fan",
                 Fault.event("Jams")
                     .does("Stops dead.")
-                    .apply(
-                        values -> {
-                          throw new IllegalStateException("the fan has no motor");
-                        })
+                    .apply(values -> {
+                      throw new IllegalStateException("the fan has no motor");
+                    })
                     .undoneBy("Nothing.")
                     .build()));
   }
@@ -238,9 +237,8 @@ class ComponentsTest {
   @Test
   void aScenarioMustBeMadeOfDeclaredFaults() {
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                components.scenario("typo", "Misspelled.", List.of(Setting.of("Lamp", "Unpluged"))))
+        .isThrownBy(() ->
+            components.scenario("typo", "Misspelled.", List.of(Setting.of("Lamp", "Unpluged"))))
         .withMessage(
             "the scenario typo: Lamp has no fault named Unpluged; it has Unplugged, Dimmed,"
                 + " Flickers");
@@ -306,19 +304,17 @@ class ComponentsTest {
         .isThrownBy(() -> Fault.lasting("Off").does("Off.").apply(values -> {}).build())
         .withMessage("the fault Off needs how it's undone");
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                Fault.event("Bang")
-                    .does("Bang.")
-                    .apply(values -> {})
-                    .isOn(() -> true)
-                    .undoneBy("No.")
-                    .build())
+        .isThrownBy(() ->
+            Fault.event("Bang")
+                .does("Bang.")
+                .apply(values -> {})
+                .isOn(() -> true)
+                .undoneBy("No.")
+                .build())
         .withMessage("the event Bang happens once: it isn't on or off, and nothing undoes it");
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                Fault.event("Bang").parameter("Loudness", "dB", Limits.between(0, 10), 20).build())
+        .isThrownBy(() ->
+            Fault.event("Bang").parameter("Loudness", "dB", Limits.between(0, 10), 20).build())
         .withMessage("Loudness starts outside its range: 20 is above its limit of 10");
     assertThatIllegalArgumentException()
         .isThrownBy(

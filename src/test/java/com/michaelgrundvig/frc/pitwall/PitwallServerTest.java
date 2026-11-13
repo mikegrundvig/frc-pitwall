@@ -721,15 +721,14 @@ class PitwallServerTest {
 
     assertThat(page.headers().firstValue("X-Frame-Options")).hasValue("DENY");
     assertThat(page.headers().firstValue("Content-Security-Policy"))
-        .hasValueSatisfying(
-            policy ->
-                assertThat(policy)
-                    .contains("frame-ancestors 'none'")
-                    .as("scripts, styles and images only from the robot: no device is named")
-                    .contains("default-src 'self'", "img-src 'self';")
-                    .doesNotContain("http:", "https:")
-                    .as("no inline script or style runs")
-                    .doesNotContain("unsafe-inline"));
+        .hasValueSatisfying(policy ->
+            assertThat(policy)
+                .contains("frame-ancestors 'none'")
+                .as("scripts, styles and images only from the robot: no device is named")
+                .contains("default-src 'self'", "img-src 'self';")
+                .doesNotContain("http:", "https:")
+                .as("no inline script or style runs")
+                .doesNotContain("unsafe-inline"));
     assertThat(page.headers().firstValue("X-Content-Type-Options")).hasValue("nosniff");
   }
 

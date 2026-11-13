@@ -291,11 +291,10 @@ class RobotEventsTest {
       assertThat(everyEvent(fresh)).as(change.what()).containsExactly(change.events());
       assertThat(fresh.events().since(0, 10))
           .as(change.what() + ": in the loop it changed in, at that loop's time")
-          .allSatisfy(
-              event -> {
-                assertThat(event.loop()).isEqualTo(1);
-                assertThat(event.timestampNanos()).isEqualTo(Recorded.LOOP_NANOS);
-              });
+          .allSatisfy(event -> {
+            assertThat(event.loop()).isEqualTo(1);
+            assertThat(event.timestampNanos()).isEqualTo(Recorded.LOOP_NANOS);
+          });
     }
   }
 

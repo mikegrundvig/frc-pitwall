@@ -181,13 +181,12 @@ final class SimulatorRoutes {
   private static CompletableFuture<RequestOutcome> all(
       List<CompletableFuture<RequestOutcome>> pending) {
     return CompletableFuture.allOf(pending.toArray(CompletableFuture<?>[]::new))
-        .thenApply(
-            done ->
-                pending.stream()
-                    .map(CompletableFuture::join)
-                    .filter(outcome -> outcome.result() != RequestOutcome.Result.APPLIED)
-                    .findFirst()
-                    .orElse(RequestOutcome.applied()));
+        .thenApply(done ->
+            pending.stream()
+                .map(CompletableFuture::join)
+                .filter(outcome -> outcome.result() != RequestOutcome.Result.APPLIED)
+                .findFirst()
+                .orElse(RequestOutcome.applied()));
   }
 
   /**

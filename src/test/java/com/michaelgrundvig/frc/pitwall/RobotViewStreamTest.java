@@ -269,21 +269,20 @@ class RobotViewStreamTest {
     private void read(Stream<String> lines) {
       List<String> event = new ArrayList<>();
       try {
-        lines.forEach(
-            line -> {
-              if (!line.isEmpty()) {
-                event.add(line);
-                return;
-              }
-              if (event.size() == 2) {
-                events.add(
-                    new String[] {
-                      event.get(0).substring("event: ".length()),
-                      event.get(1).substring("data: ".length())
-                    });
-              }
-              event.clear();
-            });
+        lines.forEach(line -> {
+          if (!line.isEmpty()) {
+            event.add(line);
+            return;
+          }
+          if (event.size() == 2) {
+            events.add(
+                new String[] {
+                  event.get(0).substring("event: ".length()),
+                  event.get(1).substring("data: ".length())
+                });
+          }
+          event.clear();
+        });
       } catch (UncheckedIOException closed) {
         // The test closed the stream.
       }

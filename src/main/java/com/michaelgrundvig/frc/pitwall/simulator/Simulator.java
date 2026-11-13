@@ -156,17 +156,16 @@ public final class Simulator {
    */
   public CompletableFuture<RequestOutcome> requestDriverStation(
       UnaryOperator<DriverStationState> change) {
-    return enqueue(
-        () -> {
-          DriverStationState now = hal.driverStation();
-          DriverStationState changed = change.apply(now);
-          if (!changed.equals(now)) {
-            hal.driverStation(changed);
-            hal.announce();
-            countingMatchTime = changed.matchTime() >= 0;
-          }
-          return RequestOutcome.applied();
-        });
+    return enqueue(() -> {
+      DriverStationState now = hal.driverStation();
+      DriverStationState changed = change.apply(now);
+      if (!changed.equals(now)) {
+        hal.driverStation(changed);
+        hal.announce();
+        countingMatchTime = changed.matchTime() >= 0;
+      }
+      return RequestOutcome.applied();
+    });
   }
 
   /**
@@ -182,17 +181,16 @@ public final class Simulator {
         return CompletableFuture.completedFuture(RequestOutcome.applied());
       }
       long asked = resumes;
-      return enqueue(
-          () -> {
-            synchronized (timing) {
-              if (asked != resumes) {
-                return new RequestOutcome(
-                    RequestOutcome.Result.LOCKED, "Resumed since it was asked: not paused");
-              }
-            }
-            pauseAsked = asked;
-            return RequestOutcome.applied();
-          });
+      return enqueue(() -> {
+        synchronized (timing) {
+          if (asked != resumes) {
+            return new RequestOutcome(
+                RequestOutcome.Result.LOCKED, "Resumed since it was asked: not paused");
+          }
+        }
+        pauseAsked = asked;
+        return RequestOutcome.applied();
+      });
     }
   }
 

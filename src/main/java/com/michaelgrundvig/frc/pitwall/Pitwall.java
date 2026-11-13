@@ -220,11 +220,10 @@ public final class Pitwall implements AutoCloseable {
    */
   private static Simulator simulatorControls(boolean advantageKit, Consumer<String> said) {
     Components components =
-        new Components(
-            sentence -> {
-              System.out.println("Simulator: " + sentence);
-              said.accept(sentence);
-            });
+        new Components(sentence -> {
+          System.out.println("Simulator: " + sentence);
+          said.accept(sentence);
+        });
     return Simulator.wpilib(
         RobotController::getTime,
         components,

@@ -83,17 +83,16 @@ class SeriesTest {
     var series = new Series(samples);
     var problem = new AtomicReference<String>();
     Thread reader =
-        new Thread(
-            () -> {
-              while (series.count() < samples && problem.get() == null) {
-                int n = series.count();
-                for (int i = Math.max(0, n - 64); i < n; i++) {
-                  if (series.value(i) != series.time(i) * 0.5) {
-                    problem.set("sample " + i + " was read half written");
-                  }
-                }
+        new Thread(() -> {
+          while (series.count() < samples && problem.get() == null) {
+            int n = series.count();
+            for (int i = Math.max(0, n - 64); i < n; i++) {
+              if (series.value(i) != series.time(i) * 0.5) {
+                problem.set("sample " + i + " was read half written");
               }
-            });
+            }
+          }
+        });
     reader.start();
     for (int i = 1; i <= samples; i++) {
       series.add(i, i * 0.5);

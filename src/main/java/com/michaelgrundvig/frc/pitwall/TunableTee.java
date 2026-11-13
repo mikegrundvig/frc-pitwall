@@ -421,14 +421,13 @@ public final class TunableTee implements TunableBackend {
     TunableConfig config = real.getConfig();
     Runnable onTune = config != null ? config.getOnTune() : null;
     if (onTune != null) {
-      TunableRegistry.runAfterUpdate(
-          () -> {
-            try {
-              onTune.run();
-            } catch (RuntimeException e) {
-              TunableRegistry.reportWarning("Pitwall: reacting to " + path + " failed: " + e);
-            }
-          });
+      TunableRegistry.runAfterUpdate(() -> {
+        try {
+          onTune.run();
+        } catch (RuntimeException e) {
+          TunableRegistry.reportWarning("Pitwall: reacting to " + path + " failed: " + e);
+        }
+      });
     }
   }
 
@@ -662,15 +661,14 @@ public final class TunableTee implements TunableBackend {
         TunableRegistry.reportWarning("Pitwall: a logged change to " + paths[i] + " is unreadable");
       }
     }
-    configured.forEach(
-        (config, values) -> {
-          try {
-            config.accept(config.candidate(values));
-          } catch (IllegalArgumentException refused) {
-            TunableRegistry.reportWarning(
-                "Pitwall: " + config.name() + " refused a logged change: " + Said.of(refused));
-          }
-        });
+    configured.forEach((config, values) -> {
+      try {
+        config.accept(config.candidate(values));
+      } catch (IllegalArgumentException refused) {
+        TunableRegistry.reportWarning(
+            "Pitwall: " + config.name() + " refused a logged change: " + Said.of(refused));
+      }
+    });
   }
 
   /** Applies a logged change during a replay, as the robot applied it. */

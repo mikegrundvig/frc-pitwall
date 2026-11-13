@@ -45,9 +45,8 @@ class ActionsTest {
   private final List<String> logged = new ArrayList<>();
   private final FakeRoutine home = new FakeRoutine();
   private final Actions actions =
-      new Actions(
-              inputs ->
-                  logged.add(String.join(",", inputs.kinds) + "|" + String.join(",", inputs.names)))
+      new Actions(inputs ->
+          logged.add(String.join(",", inputs.kinds) + "|" + String.join(",", inputs.names)))
           .add("Home arm", home);
 
   private Actions.State state() {

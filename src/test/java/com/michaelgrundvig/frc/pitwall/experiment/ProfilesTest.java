@@ -61,13 +61,12 @@ class ProfilesTest {
             () -> Profiles.step().from(Degrees.of(0)).to(Degrees.of(90)).hold(Seconds.of(0)))
         .withMessageContaining("holds for some time");
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                Profiles.step()
-                    .from(Degrees.of(0))
-                    .to(Degrees.of(90))
-                    .hold(Seconds.of(1))
-                    .leadIn(Seconds.of(-1)))
+        .isThrownBy(() ->
+            Profiles.step()
+                .from(Degrees.of(0))
+                .to(Degrees.of(90))
+                .hold(Seconds.of(1))
+                .leadIn(Seconds.of(-1)))
         .withMessageContaining("can't be negative");
   }
 

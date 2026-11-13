@@ -151,10 +151,9 @@ class LiveConfigTest {
     assertThat(live.set(Map.of("kV", 2.7, "limit", 50.0))).isTrue();
     assertThat(live.get()).isEqualTo(new Seeded(Optional.of(2.7), Optional.of(Amps.of(50.0))));
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                LiveConfig.of("seeded", new Seeded(Optional.empty(), Optional.empty()))
-                    .number("kV", Limits.between(0, 5)))
+        .isThrownBy(() ->
+            LiveConfig.of("seeded", new Seeded(Optional.empty(), Optional.empty()))
+                .number("kV", Limits.between(0, 5)))
         .withMessage("seeded: kV is empty, so there's nothing to tune");
   }
 
@@ -607,10 +606,9 @@ class LiveConfigTest {
         .isThrownBy(() -> LiveConfig.of("machine", machine()).measure(KP, Amps.of(0), Amps.of(1)))
         .withMessageContaining("isn't a measure of the same kind");
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                LiveConfig.of("machine", machine())
-                    .measure("drive.limits.current", Volts.of(0), Volts.of(1)))
+        .isThrownBy(() ->
+            LiveConfig.of("machine", machine())
+                .measure("drive.limits.current", Volts.of(0), Volts.of(1)))
         .withMessageContaining("isn't a measure of the same kind");
   }
 }

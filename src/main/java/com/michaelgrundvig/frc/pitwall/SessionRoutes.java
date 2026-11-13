@@ -85,17 +85,16 @@ final class SessionRoutes {
     RobotView view =
         session
             .view(loop)
-            .orElseThrow(
-                () ->
-                    new Problem(
-                        404,
-                        "No such loop",
-                        "The session holds loops "
-                            + session.oldest()
-                            + " to "
-                            + (session.taken() - 1)
-                            + ", not "
-                            + loop));
+            .orElseThrow(() ->
+                new Problem(
+                    404,
+                    "No such loop",
+                    "The session holds loops "
+                        + session.oldest()
+                        + " to "
+                        + (session.taken() - 1)
+                        + ", not "
+                        + loop));
     Map<String, Object> wire = RobotWire.wire(view, loop, session.lastFiring(loop));
     session.changed(loop).ifPresent(changed -> wire.put("changed", RobotWire.wire(changed)));
     responses.json(exchange, 200, wire);

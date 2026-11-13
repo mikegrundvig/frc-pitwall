@@ -387,28 +387,23 @@ class ExperimentsTest {
         .isThrownBy(() -> experiments.add(new Experiment(STEP, rig, Lag.STEP_AND_BACK)))
         .withMessage("two experiments are named " + STEP);
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                experiments.add(
-                    new Experiment(
-                        "Too far",
-                        rig,
-                        Profiles.step()
-                            .from(Degrees.of(0))
-                            .to(Degrees.of(180))
-                            .hold(Seconds.of(1)))))
+        .isThrownBy(() ->
+            experiments.add(
+                new Experiment(
+                    "Too far",
+                    rig,
+                    Profiles.step().from(Degrees.of(0)).to(Degrees.of(180)).hold(Seconds.of(1)))))
         .withMessage("Too far can't run on Arm: 180 ° is outside Arm's limits, -100 ° to 100 °");
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                experiments.add(
-                    new Experiment(
-                        "Too long",
-                        rig,
-                        Profiles.stepAndBack()
-                            .from(Degrees.of(0))
-                            .to(Degrees.of(10))
-                            .hold(Seconds.of(5)))))
+        .isThrownBy(() ->
+            experiments.add(
+                new Experiment(
+                    "Too long",
+                    rig,
+                    Profiles.stepAndBack()
+                        .from(Degrees.of(0))
+                        .to(Degrees.of(10))
+                        .hold(Seconds.of(5)))))
         .withMessage("Too long runs 10.5 s; an experiment runs at most 10.0 s");
     assertThatIllegalArgumentException()
         .isThrownBy(

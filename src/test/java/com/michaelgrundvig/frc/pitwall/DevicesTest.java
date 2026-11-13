@@ -233,17 +233,15 @@ class DevicesTest {
     assertThatIllegalArgumentException()
         .isThrownBy(() -> Device.named("Vision Front", "Coprocessor", this::card));
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                Device.named("vision-back", "Coprocessor", this::card)
-                    .download("settings", "One", NO_FILE)
-                    .download("settings", "Two", NO_FILE))
+        .isThrownBy(() ->
+            Device.named("vision-back", "Coprocessor", this::card)
+                .download("settings", "One", NO_FILE)
+                .download("settings", "Two", NO_FILE))
         .withMessageContaining("two downloads");
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                Device.named("vision-back", "Coprocessor", this::card)
-                    .download("../etc", "Bad", NO_FILE));
+        .isThrownBy(() ->
+            Device.named("vision-back", "Coprocessor", this::card)
+                .download("../etc", "Bad", NO_FILE));
     assertThat(devices.named("vision-front")).isPresent();
     assertThat(devices.named("nothing")).isEmpty();
     assertThat(devices.all()).hasSize(1);
@@ -301,10 +299,9 @@ class DevicesTest {
     assertThatIllegalArgumentException()
         .isThrownBy(() -> Devices.File.of("a.txt", "text/html\r\nX: y", new byte[0]));
     assertThatIllegalArgumentException()
-        .isThrownBy(
-            () ->
-                new Devices.File(
-                    "a.txt", "text/plain", -2, new java.io.ByteArrayInputStream(new byte[0])));
+        .isThrownBy(() ->
+            new Devices.File(
+                "a.txt", "text/plain", -2, new java.io.ByteArrayInputStream(new byte[0])));
   }
 
   /** Once on the page, the server's threads read a device: it can't change after. */

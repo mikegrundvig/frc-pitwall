@@ -214,12 +214,11 @@ public final class Run {
     checked = now;
     Map<String, Double> changed = new LinkedHashMap<>(changedGains);
     rig.gainValues()
-        .forEach(
-            (field, value) -> {
-              if (!value.equals(gains.get(field))) {
-                changed.put(field, value);
-              }
-            });
+        .forEach((field, value) -> {
+          if (!value.equals(gains.get(field))) {
+            changed.put(field, value);
+          }
+        });
     changedGains = Map.copyOf(changed);
   }
 

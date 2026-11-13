@@ -195,12 +195,11 @@ final class SceneRoutes {
         state
             .scenes()
             .stateAt(scene, loop)
-            .orElseThrow(
-                () ->
-                    new Problem(
-                        404,
-                        "No such loop",
-                        "The session holds no loop " + loop + " for scene " + scene));
+            .orElseThrow(() ->
+                new Problem(
+                    404,
+                    "No such loop",
+                    "The session holds no loop " + loop + " for scene " + scene));
     Map<String, Object> shown = new LinkedHashMap<>();
     shown.put("index", loop);
     RobotSession session = state.robotSession();

@@ -199,14 +199,13 @@ class SceneStreamTest {
             .frustum(camera + ".view", camera)
             .fov(1.2, 0.8)
             .range(0, 7)
-            .inspect(
-                () ->
-                    Inspection.of(camera)
-                        .action("Calibrate the front camera")
-                        .component("Camera front")
-                        .offer(
-                            new Inspection.FaultOffer(
-                                "Place the robot here", "Robot", "Placed", Map.of("X", 3.0))));
+            .inspect(() ->
+                Inspection.of(camera)
+                    .action("Calibrate the front camera")
+                    .component("Camera front")
+                    .offer(
+                        new Inspection.FaultOffer(
+                            "Place the robot here", "Robot", "Placed", Map.of("X", 3.0))));
         scene.label(camera + ".name", camera).text(corner).at(0, 0, 0.08);
       }
       scene.value("ellipse.major", 0.005).value("ellipse.minor", 0.005);
@@ -273,10 +272,9 @@ class SceneStreamTest {
             .line(id, "field")
             .between("camera." + corner, "tag." + seenTag)
             .style(ok ? Style.OK : Style.BAD.dashed())
-            .inspect(
-                () ->
-                    Inspection.of(corner + " → tag " + tag)
-                        .detail("Verdict", ok ? "accepted" : "rejected: gate 45.2 > 13.8"));
+            .inspect(() ->
+                Inspection.of(corner + " → tag " + tag)
+                    .detail("Verdict", ok ? "accepted" : "rejected: gate 45.2 > 13.8"));
       }
     }
   }
@@ -430,21 +428,20 @@ class SceneStreamTest {
     private void read(Stream<String> lines) {
       List<String> event = new ArrayList<>();
       try {
-        lines.forEach(
-            line -> {
-              if (line.isEmpty()) {
-                if (event.size() == 2) {
-                  events.add(
-                      new String[] {
-                        event.get(0).substring("event: ".length()),
-                        event.get(1).substring("data: ".length())
-                      });
-                }
-                event.clear();
-              } else {
-                event.add(line);
-              }
-            });
+        lines.forEach(line -> {
+          if (line.isEmpty()) {
+            if (event.size() == 2) {
+              events.add(
+                  new String[] {
+                    event.get(0).substring("event: ".length()),
+                    event.get(1).substring("data: ".length())
+                  });
+            }
+            event.clear();
+          } else {
+            event.add(line);
+          }
+        });
       } catch (UncheckedIOException closed) {
         // The test closed it.
       }

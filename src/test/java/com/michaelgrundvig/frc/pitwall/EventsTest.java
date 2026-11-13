@@ -178,20 +178,19 @@ class EventsTest {
     private void read(Stream<String> lines) {
       List<String> event = new ArrayList<>();
       try {
-        lines.forEach(
-            line -> {
-              if (line.isEmpty()) {
-                if (event.size() == 2) {
-                  events.add(
-                      new Sse(
-                          event.get(0).substring("event: ".length()),
-                          event.get(1).substring("data: ".length())));
-                }
-                event.clear();
-              } else {
-                event.add(line);
-              }
-            });
+        lines.forEach(line -> {
+          if (line.isEmpty()) {
+            if (event.size() == 2) {
+              events.add(
+                  new Sse(
+                      event.get(0).substring("event: ".length()),
+                      event.get(1).substring("data: ".length())));
+            }
+            event.clear();
+          } else {
+            event.add(line);
+          }
+        });
       } catch (UncheckedIOException closed) {
         // The test closed it.
       }

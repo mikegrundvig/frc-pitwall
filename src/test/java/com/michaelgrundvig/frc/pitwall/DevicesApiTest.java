@@ -222,11 +222,10 @@ class DevicesApiTest {
 
   @Test
   void aFileThatEndsEarlyReachesThePageCutOff() {
-    assertThatThrownBy(
-            () ->
-                client.send(
-                    request("/api/devices/vision-front/downloads/short").build(),
-                    HttpResponse.BodyHandlers.ofByteArray()))
+    assertThatThrownBy(() ->
+            client.send(
+                request("/api/devices/vision-front/downloads/short").build(),
+                HttpResponse.BodyHandlers.ofByteArray()))
         .isInstanceOf(IOException.class);
   }
 

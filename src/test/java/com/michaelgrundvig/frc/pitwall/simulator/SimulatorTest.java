@@ -72,12 +72,11 @@ class SimulatorTest {
   @Test
   void aChangeWaitsForTheLoopWhichAppliesItAllAtOnceAndAnnouncesIt() {
     CompletableFuture<RequestOutcome> enabled =
-        simulator.requestDriverStation(
-            state ->
-                state
-                    .withMode(RobotMode.UTILITY)
-                    .withAllianceStation(AllianceStationID.RED_3)
-                    .withEnabled(true));
+        simulator.requestDriverStation(state ->
+            state
+                .withMode(RobotMode.UTILITY)
+                .withAllianceStation(AllianceStationID.RED_3)
+                .withEnabled(true));
 
     assertThat(enabled).isNotDone();
     assertThat(hal.driverStation().enabled()).isFalse();
@@ -351,10 +350,9 @@ class SimulatorTest {
             "a stand-in",
             Fault.lasting("Throws")
                 .does("Can't say whether it's on.")
-                .isOn(
-                    () -> {
-                      throw new IllegalStateException("broken");
-                    })
+                .isOn(() -> {
+                  throw new IllegalStateException("broken");
+                })
                 .apply(values -> {})
                 .undo("Nothing.", () -> {})
                 .build()));

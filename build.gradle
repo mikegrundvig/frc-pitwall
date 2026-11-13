@@ -133,10 +133,16 @@ def vendorThree = tasks.register("vendorThree", Sync) {
     def webjar = configurations.threeJs
     inputs.files(webjar)
     from({ zipTree(webjar.singleFile) }) {
-        threeFiles.each { include "META-INF/resources/webjars/three/${threeVersion}/${it}" }
-        eachFile { it.path = "com/michaelgrundvig/frc/pitwall/three/${it.name}" }
+        threeFiles.each {
+            include "META-INF/resources/webjars/three/${threeVersion}/${it}"
+        }
+        eachFile {
+            it.path = "com/michaelgrundvig/frc/pitwall/three/${it.name}"
+        }
         filesMatching("**/OrbitControls.js") {
-            filter { line -> line.replaceAll(/from\s+(['"])three\1/, "from './three.module.min.js'") }
+            filter { line ->
+                line.replaceAll(/from\s+(['"])three\1/, "from './three.module.min.js'")
+            }
         }
     }
     includeEmptyDirs = false

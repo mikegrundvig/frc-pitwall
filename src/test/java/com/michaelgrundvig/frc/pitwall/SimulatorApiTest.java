@@ -101,23 +101,21 @@ class SimulatorApiTest {
                           scene
                               .box("lamp.shade", SceneBuilder.ROOT)
                               .size(1, 1, 1)
-                              .inspect(
-                                  () ->
-                                      Inspection.of("The lamp")
-                                          .component("Lamp")
-                                          .component("A part the simulator doesn't have"));
+                              .inspect(() ->
+                                  Inspection.of("The lamp")
+                                      .component("Lamp")
+                                      .component("A part the simulator doesn't have"));
                           scene
                               .box("lamp.base", SceneBuilder.ROOT)
                               .size(1, 1, 1)
-                              .inspect(
-                                  () ->
-                                      Inspection.of("The lamp's base")
-                                          .offer(
-                                              new Inspection.FaultOffer(
-                                                  "Put it out", "Lamp", "Out", Map.of()))
-                                          .offer(
-                                              new Inspection.FaultOffer(
-                                                  "Break it", "Ghost", "Out", Map.of())));
+                              .inspect(() ->
+                                  Inspection.of("The lamp's base")
+                                      .offer(
+                                          new Inspection.FaultOffer(
+                                              "Put it out", "Lamp", "Out", Map.of()))
+                                      .offer(
+                                          new Inspection.FaultOffer(
+                                              "Break it", "Ghost", "Out", Map.of())));
                         }
                       }));
 

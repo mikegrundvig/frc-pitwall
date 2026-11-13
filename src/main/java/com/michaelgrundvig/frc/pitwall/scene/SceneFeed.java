@@ -227,19 +227,17 @@ final class SceneFeed implements Feed, SceneState {
   @Override
   public Map<String, Object> sent() {
     Map<String, Object> framesSent = new LinkedHashMap<>();
-    frames.forEach(
-        (name, pose) -> {
-          if (pose.everSent) {
-            framesSent.put(name, wire(pose.sent));
-          }
-        });
+    frames.forEach((name, pose) -> {
+      if (pose.everSent) {
+        framesSent.put(name, wire(pose.sent));
+      }
+    });
     Map<String, Object> valuesSent = new LinkedHashMap<>();
-    values.forEach(
-        (name, value) -> {
-          if (value.everSent) {
-            valuesSent.put(name, Wire.toResolution(value.sent, value.resolution));
-          }
-        });
+    values.forEach((name, value) -> {
+      if (value.everSent) {
+        valuesSent.put(name, Wire.toResolution(value.sent, value.resolution));
+      }
+    });
     Map<String, Object> shapesSent = new LinkedHashMap<>();
     for (Running running : layers) {
       if (!running.shapesSent.isEmpty()) {
@@ -408,28 +406,22 @@ final class SceneFeed implements Feed, SceneState {
     for (SceneBuilder builder : described) {
       builder
           .frames()
-          .forEach(
-              (name, frame) -> {
-                SceneBuilder.Frame before = allFrames.putIfAbsent(name, frame);
-                if (before != null && !before.equals(frame)) {
-                  throw new IllegalArgumentException(
-                      "scene " + scene.id() + ": two layers place frame " + name + " differently");
-                }
-              });
+          .forEach((name, frame) -> {
+            SceneBuilder.Frame before = allFrames.putIfAbsent(name, frame);
+            if (before != null && !before.equals(frame)) {
+              throw new IllegalArgumentException(
+                  "scene " + scene.id() + ": two layers place frame " + name + " differently");
+            }
+          });
       builder
           .values()
-          .forEach(
-              (name, resolution) -> {
-                Double before = allValues.putIfAbsent(name, resolution);
-                if (before != null && !before.equals(resolution)) {
-                  throw new IllegalArgumentException(
-                      "scene "
-                          + scene.id()
-                          + ": two layers declare value "
-                          + name
-                          + " differently");
-                }
-              });
+          .forEach((name, resolution) -> {
+            Double before = allValues.putIfAbsent(name, resolution);
+            if (before != null && !before.equals(resolution)) {
+              throw new IllegalArgumentException(
+                  "scene " + scene.id() + ": two layers declare value " + name + " differently");
+            }
+          });
     }
     for (String name : allFrames.keySet()) {
       Set<String> seen = new HashSet<>();
@@ -588,12 +580,11 @@ final class SceneFeed implements Feed, SceneState {
     Map<String, Value> held = new LinkedHashMap<>();
     checked
         .values()
-        .forEach(
-            (name, resolution) -> {
-              Value value = values.getOrDefault(name, new Value(name, resolution));
-              value.resolution = resolution;
-              held.put(name, value);
-            });
+        .forEach((name, resolution) -> {
+          Value value = values.getOrDefault(name, new Value(name, resolution));
+          value.resolution = resolution;
+          held.put(name, value);
+        });
     values = held;
     valueList = List.copyOf(held.values());
     Map<String, Supplier<Inspection>> ofTheDescription = new HashMap<>();
@@ -753,12 +744,11 @@ final class SceneFeed implements Feed, SceneState {
     }
     restyled = false;
     Map<String, @Nullable Object> changed = new LinkedHashMap<>();
-    styles.forEach(
-        (shape, style) -> {
-          if (!style.equals(stylesSent.get(shape))) {
-            changed.put(shape, style);
-          }
-        });
+    styles.forEach((shape, style) -> {
+      if (!style.equals(stylesSent.get(shape))) {
+        changed.put(shape, style);
+      }
+    });
     for (String shape : stylesSent.keySet()) {
       if (!styles.containsKey(shape)) {
         changed.put(shape, null);

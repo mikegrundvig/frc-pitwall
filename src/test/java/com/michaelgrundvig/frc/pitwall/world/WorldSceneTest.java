@@ -242,15 +242,14 @@ class WorldSceneTest {
         .contains("\"from\":[0.03,0,0],\"to\":[0.14,0,0]")
         .contains("\"mark\":\"fill\",\"style\":\"face\"");
     assertThat(scenes.inspect(WorldScene.ID, "element.1.0").orElseThrow())
-        .satisfies(
-            post -> {
-              assertThat(post.title()).isEqualTo("Post (red)");
-              assertThat(post.details())
-                  .extracting(Inspection.Detail::label, Inspection.Detail::value)
-                  .contains(
-                      tuple("Covers", "0.50 m along the field by 0.50 m across"),
-                      tuple("Height", "1.20 m"));
-            });
+        .satisfies(post -> {
+          assertThat(post.title()).isEqualTo("Post (red)");
+          assertThat(post.details())
+              .extracting(Inspection.Detail::label, Inspection.Detail::value)
+              .contains(
+                  tuple("Covers", "0.50 m along the field by 0.50 m across"),
+                  tuple("Height", "1.20 m"));
+        });
   }
 
   /** The simulator's parts, as a robot's simulation would name them. */
@@ -379,21 +378,20 @@ class WorldSceneTest {
         .contains("\"id\":\"start.red.0.name\"", "\"text\":\"Red left\"")
         .contains("\"mark\":\"outline\",\"style\":\"muted dashed\"");
     assertThat(scenes.inspect(WorldScene.ID, "start.red.0.outline").orElseThrow())
-        .satisfies(
-            start -> {
-              assertThat(start.title()).isEqualTo("Red left start");
-              assertThat(start.details())
-                  .extracting(Inspection.Detail::label, Inspection.Detail::value)
-                  .contains(
-                      tuple("Name", "Left"),
-                      tuple("Alliance", "Red"),
-                      tuple("Where", "x 13.500 m, y 6.000 m"),
-                      tuple("Heading", "180.0°"));
-              assertThat(start.offers())
-                  .containsExactly(
-                      new Inspection.FaultOffer(
-                          "Place the robot here", "Robot", "Placed", Map.of("X", 13.5, "Y", 6.0)));
-            });
+        .satisfies(start -> {
+          assertThat(start.title()).isEqualTo("Red left start");
+          assertThat(start.details())
+              .extracting(Inspection.Detail::label, Inspection.Detail::value)
+              .contains(
+                  tuple("Name", "Left"),
+                  tuple("Alliance", "Red"),
+                  tuple("Where", "x 13.500 m, y 6.000 m"),
+                  tuple("Heading", "180.0°"));
+          assertThat(start.offers())
+              .containsExactly(
+                  new Inspection.FaultOffer(
+                      "Place the robot here", "Robot", "Placed", Map.of("X", 13.5, "Y", 6.0)));
+        });
     assertThat(scenes.inspect(WorldScene.ID, "start.blue.0.facing"))
         .as("the arrow is no thing to click: the outline is")
         .isEmpty();

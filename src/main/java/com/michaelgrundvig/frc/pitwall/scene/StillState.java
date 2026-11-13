@@ -108,14 +108,13 @@ public final class StillState implements SceneState {
   /** Each layer's shapes of the moment, by the layer's id, each shape as the page reads it. */
   public Map<String, List<Map<String, Object>>> shapesOfTheMoment() {
     Map<String, List<Map<String, Object>>> byLayer = new LinkedHashMap<>();
-    shapes.forEach(
-        (id, moment) -> {
-          List<Map<String, Object>> wires = new ArrayList<>();
-          for (Shape<?> shape : moment.shapes()) {
-            wires.add(Collections.unmodifiableMap(shape.wire()));
-          }
-          byLayer.put(id, List.copyOf(wires));
-        });
+    shapes.forEach((id, moment) -> {
+      List<Map<String, Object>> wires = new ArrayList<>();
+      for (Shape<?> shape : moment.shapes()) {
+        wires.add(Collections.unmodifiableMap(shape.wire()));
+      }
+      byLayer.put(id, List.copyOf(wires));
+    });
     return Collections.unmodifiableMap(byLayer);
   }
 
@@ -129,14 +128,12 @@ public final class StillState implements SceneState {
    */
   Map<String, Object> wire(Map<String, Double> resolutions) {
     Map<String, Object> frames = new LinkedHashMap<>();
-    poses.forEach(
-        (name, pose) ->
-            frames.put(name, Wire.pose(pose[0], pose[1], pose[2], pose[3], pose[4], pose[5])));
+    poses.forEach((name, pose) ->
+        frames.put(name, Wire.pose(pose[0], pose[1], pose[2], pose[3], pose[4], pose[5])));
     Map<String, Object> rounded = new LinkedHashMap<>();
-    values.forEach(
-        (name, value) ->
-            rounded.put(
-                name, Wire.toResolution(value, resolutions.getOrDefault(name, Wire.METER_STEP))));
+    values.forEach((name, value) ->
+        rounded.put(
+            name, Wire.toResolution(value, resolutions.getOrDefault(name, Wire.METER_STEP))));
     Map<String, Object> wire = new LinkedHashMap<>();
     wire.put("frames", frames);
     wire.put("values", rounded);

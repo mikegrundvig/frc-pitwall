@@ -100,12 +100,11 @@ public record ParameterDocs(String summary, String text, Map<String, String> par
     }
     Map<String, String> params = new LinkedHashMap<>();
     if (doc.get("params") instanceof Map<?, ?> found) {
-      found.forEach(
-          (name, text) -> {
-            if (name instanceof String component && text instanceof String meaning) {
-              params.put(component, meaning);
-            }
-          });
+      found.forEach((name, text) -> {
+        if (name instanceof String component && text instanceof String meaning) {
+          params.put(component, meaning);
+        }
+      });
     }
     return new ParameterDocs(text(doc.get("summary")), text(doc.get("text")), params);
   }
