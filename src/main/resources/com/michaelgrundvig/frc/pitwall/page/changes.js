@@ -45,7 +45,8 @@ function mount(view) {
       h("h2", null, "To commit"),
       h("p", { class: "meta" }, "Nothing is saved on the robot: a restart, or the field "
           + "connecting, returns every value to committed. To keep a value, write its builder call "
-          + "into the robot's configuration and commit it."),
+          + "into the robot's configuration and commit it. A camera's exposure and gain are the "
+          + "exception: keep those in the venue from the camera's card on the Pit view."),
       none, reports,
       h("div", { class: "acts" }, copyAll, resetAll),
       copyBox,
@@ -245,7 +246,7 @@ function renderHistory() {
         entry.items.length > 0 && h("div", { class: "items" }, itemsText(entry.items)),
         entry.code && entry.code.length > 0 && h("div", { class: "items" },
           "The code changed (committed): " + itemsText(entry.code))),
-      entry.items.length > 0 ? h("button", { type: "button",
+      entry.items.length > 0 && entry.kind !== "start" ? h("button", { type: "button",
         "data-entry": String(entries.length - 1 - index), disabled: locked },
         entry.kind === "staged" ? "Stage them again"
           : undid(entry) ? "Restore what it undid" : "Restore these") : h("span"))));

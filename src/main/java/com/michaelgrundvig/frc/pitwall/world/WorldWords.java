@@ -8,6 +8,7 @@ import com.michaelgrundvig.frc.pitwall.scene.Inspection;
 import com.michaelgrundvig.frc.world.field.Alliance;
 import com.michaelgrundvig.frc.world.robot.Body;
 import com.michaelgrundvig.frc.world.robot.CameraConfig;
+import com.michaelgrundvig.frc.world.robot.ImageSensor;
 import com.michaelgrundvig.frc.world.robot.ImuMount;
 import com.michaelgrundvig.frc.world.robot.Sensor;
 import java.util.Locale;
@@ -60,22 +61,22 @@ final class WorldWords {
       CameraConfig camera,
       Function<String, Optional<String>> cameraAction,
       SimulatedParts simulated) {
-    CameraConfig.ImageSensor sensor = camera.sensor();
+    ImageSensor sensor = camera.sensor();
     Inspection said =
         Inspection.of("Camera " + camera.name())
             .detail(
                 "Mounted",
                 mountedAt(
-                    camera.forward().orElseThrow(),
-                    camera.left().orElseThrow(),
-                    camera.up().orElseThrow()))
+                    camera.station().forward().orElseThrow(),
+                    camera.station().left().orElseThrow(),
+                    camera.station().up().orElseThrow()))
             .detail(
                 "Turned",
                 String.format(
                     Locale.ROOT,
                     "yaw %.1f°, tilted up %.1f°, roll %.1f°",
-                    camera.yaw().orElseThrow().in(Degrees),
-                    camera.tiltUp().orElseThrow().in(Degrees),
+                    camera.station().yaw().orElseThrow().in(Degrees),
+                    camera.station().tiltUp().orElseThrow().in(Degrees),
                     camera.rollOrDefault().in(Degrees)))
             .detail(
                 "Sees",

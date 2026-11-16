@@ -83,6 +83,7 @@ class TuningTest {
                 Limits.between(0, 100),
                 16,
                 16,
+                16,
                 "Fixtures.Gains",
                 "drive.gains",
                 "volts per meter per second of error"));

@@ -1,6 +1,6 @@
 // Pit's devices: a card for each device the robot reports on (the venue it plays on, say), saying
 // whether it's there and how it is, and ending in what can be done about it: a file to download
-// from it or send to it, or a choice to make. The robot program asks the device; this page asks
+// from it or send to it, a choice to make, or a button to press, some asking for words first. The robot program asks the device; this page asks
 // only the robot (/api/devices/...), but for a card's live picture, which it loads from the device
 // itself (picture.js). A card may show a live configuration's values too, tuned there as in Tune:
 // a camera's exposure and gain beside its picture.
@@ -41,7 +41,7 @@ function render(snapshot) {
   section.hidden = names.length === 0;
   // Rebuilt only when the devices or what can be done from them change; updated in place after.
   const key = names.map((name) => name + ":" + JSON.stringify([devices[name].kind,
-    devices[name].downloads, devices[name].uploads,
+    devices[name].downloads, devices[name].uploads, devices[name].presses,
     (devices[name].choices || []).map((choice) => choice.id), "picture" in devices[name],
     tunedPaths(devices[name].tuning)])).join("\n");
   if (snapshot || key !== built) {
@@ -87,6 +87,23 @@ function makeCard(name, device) {
       if (file) send(button, "/api/devices/" + name + "/uploads/" + upload.id, file, upload.label);
     });
     actions.push(button, input);
+  }
+  for (const press of device.presses || []) {
+    const path = "/api/devices/" + name + "/presses/" + press.id;
+    if (!press.asks) {
+      const button = h("button", { type: "button" }, press.label);
+      button.addEventListener("click", () => send(button, path, { text: "" }, press.label));
+      actions.push(button);
+      continue;
+    }
+    // A button that asks for words first: what's typed goes with it, and stays until it's taken.
+    const input = h("input", { type: "text", placeholder: press.asks, "aria-label": press.asks });
+    const button = h("button", { type: "button" }, press.label);
+    // What's typed is cleared once the robot takes it, and kept to fix when it refuses.
+    button.addEventListener("click", async () => {
+      if (await send(button, path, { text: input.value }, press.label)) input.value = "";
+    });
+    actions.push(h("label", { class: "dchoice" }, input, button));
   }
   // The values it tunes, each a row as in Tune, its edits applied from the bar as there.
   // What a value means is in Tune, where its name leads.
@@ -162,8 +179,10 @@ export function makeChoice(name, choice) {
 }
 
 /**
- * Sends a file or a choice to the robot, which takes it or says why not. Either way the page says
- * what happened; the card itself shows the result at its next update.
+ * Sends a file, a choice or a press to the robot, which takes it or says why not. Either way the
+ * page says what happened; the card itself shows the result at its next update.
+ *
+ * @return whether the robot took it
  */
 async function send(button, path, body, what) {
   button.disabled = true;
@@ -172,11 +191,13 @@ async function send(button, path, body, what) {
     const answer = await response.json().catch(() => null);
     if (!response.ok) {
       say(what + ": " + (answer && answer.detail ? answer.detail : response.statusText), true);
-      return;
+      return false;
     }
     say(what + ": " + (answer && answer.message ? answer.message : "done."));
+    return true;
   } catch (error) {
     say(what + ": the robot isn't answering.", true);
+    return false;
   } finally {
     button.disabled = false;
   }

@@ -80,9 +80,9 @@ import java.util.function.Consumer;
  *       name, such as {@code DrivetrainControl.SwerveGains}.
  *   <li>{@code GET /api/tunables}: the configurations' tunable values, by the WPILib tunable each
  *       is published as, {@code {path: {"config", "field", "unit", "limits", "min", "max",
- *       "committed", "record", "group", "meaning"}}}: its tuning limits as text and their ends as
- *       numbers (an open end has none), and the record that declares the value, its path, and what
- *       its {@code @param} says the value means (empty when there's none).
+ *       "committed", "written", "record", "group", "meaning"}}}: its tuning limits as text and
+ *       their ends as numbers (an open end has none), and the record that declares the value, its
+ *       path, and what its {@code @param} says the value means (empty when there's none).
  *   <li>{@code GET /api/values}: their current values, {@code {path: number}}. {@code PATCH} it
  *       with a JSON merge patch (RFC 7396) to change several at once, all or none, each checked by
  *       its configuration first; {@code null} returns a value to its committed one.

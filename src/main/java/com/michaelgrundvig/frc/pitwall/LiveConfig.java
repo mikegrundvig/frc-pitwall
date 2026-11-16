@@ -67,10 +67,11 @@ import org.wpilib.units.Units;
  * beside the change's values in that record. Any message refuses the change; this form only places
  * it.
  *
- * <p>Nothing is saved on the robot. {@link #changes()} lists what differs from the committed
- * configuration, each with the builder call that commits it: by default the record's own builder
- * step, {@code .steerKp(18.5)}, or the call a value's tuning names where the configuration is
- * written otherwise, {@code .withKs(0.25)}.
+ * <p>Nothing is saved on the robot by this class; a program that keeps a value elsewhere, such as
+ * in a venue's file, moves what the tuning starts from with {@link #rebase}. {@link #changes()}
+ * lists what differs from the committed configuration, each with the builder call that commits it:
+ * by default the record's own builder step, {@code .steerKp(18.5)}, or the call a value's tuning
+ * names where the configuration is written otherwise, {@code .withKs(0.25)}.
  *
  * <p>Values are named by path, the record component names from the root: {@code gains.steerKp}. A
  * measure is tuned as a number in the unit its committed value was written in: amps, for {@code
@@ -215,19 +216,33 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
   }
 
   private final String name;
-  private final T committed;
+
+  /**
+   * What it starts from, as committed or as moved since ({@link #rebase}), and what's in effect,
+   * the tuned values applied: one pair, swapped whole, so a reader on another thread sees both as
+   * one change left them, never one moved and the other not.
+   *
+   * @param committed what it starts from
+   * @param current what's in effect
+   */
+  private record State<C>(C committed, C current) {}
+
+  private volatile State<T> state;
+
+  /** What it started from as it was made, the code's, before any move ({@link #rebase}). */
+  private final T written;
+
   private final Map<String, Slot> slots = new LinkedHashMap<>();
   private final Map<TunableBase, String> children =
       Collections.synchronizedMap(new IdentityHashMap<>());
-  private volatile T current;
 
   /** What the records' Javadoc says, once it's been read; again after a value is chosen. */
   private volatile @Nullable Documentation documentation;
 
   private LiveConfig(String name, T committed) {
     this.name = name;
-    this.committed = committed;
-    this.current = committed;
+    this.state = new State<>(committed, committed);
+    this.written = committed;
   }
 
   /**
@@ -278,7 +293,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
       throw new IllegalArgumentException(name + ": " + path + " is tunable already");
     }
     List<RecordComponent> route = new ArrayList<>();
-    Record node = committed;
+    Record node = state.committed();
     String[] steps = path.split("\\.", -1);
     for (int i = 0; i < steps.length; i++) {
       RecordComponent component = component(node, steps[i], path);
@@ -315,7 +330,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
               component,
               unit,
               commit != null ? commit : "." + component.getName() + "(" + VALUE + ")");
-      String outside = limits.whyNot(number(slot, committed));
+      String outside = limits.whyNot(number(slot, state.committed()));
       if (outside != null) {
         throw new IllegalArgumentException(
             name + ": the committed " + path + " is outside its tuning limits: " + outside);
@@ -376,7 +391,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
             slot.component(),
             unit,
             slot.commit());
-    String outside = limits.whyNot(number(limited, committed), limited.knob().unit());
+    String outside = limits.whyNot(number(limited, state.committed()), limited.knob().unit());
     if (outside != null) {
       slots.remove(path);
       throw new IllegalArgumentException(
@@ -394,12 +409,12 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
 
   /** The configuration with every tuned value applied. Safe to call from any thread. */
   public T get() {
-    return current;
+    return state.current();
   }
 
   /** The configuration as committed. */
   public T committed() {
-    return committed;
+    return state.committed();
   }
 
   /** Every value that can be tuned, in the order they were chosen. */
@@ -446,7 +461,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
    * @throws IllegalArgumentException if no tunable value has this path
    */
   public double value(String path) {
-    return number(slot(path), current);
+    return number(slot(path), state.current());
   }
 
   /**
@@ -455,7 +470,18 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
    * @throws IllegalArgumentException if no tunable value has this path
    */
   public double committedValue(String path) {
-    return number(slot(path), committed);
+    return number(slot(path), state.committed());
+  }
+
+  /**
+   * A tunable value as the code gives it, in its knob's unit: what it started from as it was made,
+   * before anything kept elsewhere moved its start ({@link #rebase}). The same as {@link
+   * #committedValue} while nothing has.
+   *
+   * @throws IllegalArgumentException if no tunable value has this path
+   */
+  public double writtenValue(String path) {
+    return number(slot(path), written);
   }
 
   /**
@@ -506,7 +532,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
     if (candidate == null) {
       return false;
     }
-    current = candidate;
+    setCurrent(candidate);
     return true;
   }
 
@@ -515,26 +541,101 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
    * checks more before it applies a change.
    */
   void accept(Record candidate) {
-    if (candidate.getClass() != committed.getClass()) {
+    Class<?> kind = state.committed().getClass();
+    if (candidate.getClass() != kind) {
       throw new IllegalArgumentException(
-          name + " is a " + committed.getClass().getSimpleName() + ", not a " + candidate);
+          name + " is a " + kind.getSimpleName() + ", not a " + candidate);
     }
-    current = sameType(candidate);
+    setCurrent(sameType(candidate));
   }
 
   /** Returns every tuned value to its committed value. */
   public void revert() {
-    current = committed;
+    State<T> now = state;
+    state = new State<>(now.committed(), now.committed());
+  }
+
+  /** Puts a configuration in effect, keeping what it starts from. */
+  private void setCurrent(T candidate) {
+    state = new State<>(state.committed(), candidate);
+  }
+
+  /**
+   * Moves the configuration it starts from to another, for a program that keeps a value somewhere
+   * the code isn't: a camera's gain kept in a venue's file on the robot, or read back from the
+   * camera. A value tuned away from the one it started from stays as tuned; every other follows the
+   * new one. What the page shows as committed, and {@link #changes}, move with it. Tune it from the
+   * robot loop's thread, as the tuning is.
+   *
+   * @param moved the configuration to start from now
+   * @throws IllegalArgumentException if a tunable value of the new one is outside its limits, or
+   *     the tuned values don't fit it (its records refuse them): nothing changes then
+   */
+  public void rebase(T moved) {
+    State<T> was = state;
+    Map<String, Double> tuned = new LinkedHashMap<>();
+    for (Slot slot : slots.values()) {
+      String path = slot.knob().path();
+      String outside = slot.knob().limits().whyNot(number(slot, moved));
+      if (outside != null) {
+        throw new IllegalArgumentException(
+            name + ": the new " + path + " is outside its tuning limits: " + outside);
+      }
+      if (differs(number(slot, was.committed()), number(slot, was.current()))) {
+        tuned.put(path, number(slot, was.current()));
+      }
+    }
+    T next = moved;
+    if (!tuned.isEmpty()) {
+      try {
+        next = rebuilt(moved, tuned);
+      } catch (RuntimeException refused) {
+        // A record's refusal comes wrapped, to say which record it was: its own words are inside.
+        Throwable why = refused;
+        if (refused instanceof Rejected && refused.getCause() != null) {
+          why = refused.getCause();
+        }
+        throw new IllegalArgumentException(
+            name + ": the tuned values don't fit the new start: " + Said.of(why), refused);
+      }
+    }
+    state = new State<>(moved, next);
+  }
+
+  /** Whether a tuned value differs from the one it started from, past rounding. */
+  private static boolean differs(double was, double is) {
+    return Math.abs(is - was) > 1e-9 * Math.max(1, Math.abs(was));
+  }
+
+  /**
+   * The configuration as tuned now, and its tuned values that differ from what it started from,
+   * read together: a reader on another thread never sees one from before a change and the other
+   * from after it.
+   *
+   * @param value the configuration in effect
+   * @param changes what differs from what it started from, in knob order ({@link #changes})
+   */
+  public record Tuned<C>(C value, List<Change> changes) {}
+
+  /** The configuration in effect and what of it is tuned, from one moment ({@link Tuned}). */
+  public Tuned<T> tuned() {
+    State<T> now = state;
+    return new Tuned<>(now.current(), changes(now));
   }
 
   /** The tuned values that differ from the committed configuration, in knob order. */
   public List<Change> changes() {
-    T now = current;
+    return changes(state);
+  }
+
+  private List<Change> changes(State<T> at) {
+    T committed = at.committed();
+    T now = at.current();
     List<Change> changes = new ArrayList<>();
     for (Slot slot : slots.values()) {
       double was = number(slot, committed);
       double is = number(slot, now);
-      if (Math.abs(is - was) > 1e-9 * Math.max(1, Math.abs(was))) {
+      if (differs(was, is)) {
         changes.add(
             new Change(
                 slot.knob().path(), shown(slot, was), shown(slot, is), builderCall(slot, is)));
@@ -612,7 +713,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
           "Pitwall refused " + path + " = " + value + ": " + String.join("; ", lines(problems)));
       return;
     }
-    current = candidate;
+    setCurrent(candidate);
   }
 
   /** Which tunable value a published tunable is, or null if it isn't one of these. */
@@ -622,7 +723,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
 
   /** Reads what the records' Javadoc says, following each value's route as it was found. */
   private Documentation describe() {
-    Class<? extends Record> root = committed.getClass();
+    Class<? extends Record> root = state.committed().getClass();
     Map<String, Documentation.Group> groups = new LinkedHashMap<>();
     Map<String, Documentation.Value> values = new LinkedHashMap<>();
     for (Slot slot : slots.values()) {
@@ -709,7 +810,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
       Rejected rejected =
           refused instanceof Rejected known
               ? known
-              : new Rejected(committed.getClass(), "", refused);
+              : new Rejected(state.committed().getClass(), "", refused);
       Throwable cause = Objects.requireNonNull(rejected.getCause());
       for (String line : Said.of(cause).split("\n")) {
         problems.add(refusedBy(rejected, line, values.keySet()));
@@ -776,6 +877,11 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
 
   /** The configuration rebuilt with new values, each in its knob's unit; throws if rejected. */
   private T rebuilt(Map<String, Double> values) {
+    return rebuilt(state.current(), values);
+  }
+
+  /** A configuration rebuilt with new values, each in its knob's unit; throws if rejected. */
+  private T rebuilt(T from, Map<String, Double> values) {
     Map<String, Object> replacements = new HashMap<>();
     for (Map.Entry<String, Double> entry : values.entrySet()) {
       Slot slot = slot(entry.getKey());
@@ -785,7 +891,7 @@ public final class LiveConfig<T extends Record> implements ComplexTunable {
       boolean optional = slot.component().getType() == Optional.class;
       replacements.put(entry.getKey(), optional ? Optional.of(replacement) : replacement);
     }
-    return sameType(rebuild(current, "", replacements));
+    return sameType(rebuild(from, "", replacements));
   }
 
   /** A tuned value as its record holds it: a measure in its slot's unit, or a number. */

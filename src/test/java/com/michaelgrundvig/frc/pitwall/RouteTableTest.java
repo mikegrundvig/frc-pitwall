@@ -53,6 +53,7 @@ class RouteTableTest {
           new Listed("GET", "/api/devices/vision-front/downloads/settings"),
           new Listed("POST", "/api/devices/venue/uploads/survey"),
           new Listed("POST", "/api/devices/venue/choices/venue"),
+          new Listed("POST", "/api/devices/venue/presses/keep"),
           new Listed("GET", "/api/robot"),
           new Listed("GET", "/api/robot/view"),
           new Listed("GET", "/api/robot/events"),

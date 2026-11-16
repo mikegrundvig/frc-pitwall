@@ -1,6 +1,7 @@
 // The session's history: every change to a configuration value this page saw, newest last, with
 // where it came from (this page, a dashboard or another page, the field connecting, the robot
-// restarting) and each value's before and after, so any of it can be staged again.
+// restarting, or the value its tuning starts from moving) and each value's before and after, so
+// what was tuned can be staged again.
 //
 // Kept in this tab's sessionStorage, so a reload (a phone's pull to refresh) keeps it; closing the
 // tab ends it, as nothing else of the session outlives the tab. A browser that won't keep it (a
@@ -134,9 +135,14 @@ function restarted() {
         && !(typeof after === "number" && near(before, after))) {
       items.push({ path, config: was.config, field: was.field, from: before, to: after });
     }
-    if (value && typeof was.committed === "number" && !near(was.committed, value.committed)) {
-      code.push({ path, config: was.config, field: was.field, from: was.committed,
-                  to: value.committed });
+    // What the code gives, not where the tuning started: a start moved by a value kept on the
+    // robot is no change of the code's.
+    const wasWritten = typeof was.written === "number" ? was.written : was.committed;
+    const nowWritten = value && typeof value.written === "number" ? value.written
+      : value && value.committed;
+    if (value && typeof wasWritten === "number" && typeof nowWritten === "number"
+        && !near(wasWritten, nowWritten)) {
+      code.push({ path, config: was.config, field: was.field, from: wasWritten, to: nowWritten });
     }
   }
   expected.clear();
@@ -147,6 +153,7 @@ function restarted() {
 function noteChanges(values, source, kind) {
   const now = Date.now();
   const items = [];
+  const moved = []; // values whose tuning's start moved, with nothing tuned: not anyone's change
   const mine = new Map(); // a queued change of this page's, seen at last: its source -> items
   for (const [path, to] of Object.entries(values)) {
     const from = known.values[path];
@@ -161,18 +168,41 @@ function noteChanges(values, source, kind) {
       }
       continue;
     }
-    items.push({ path, config: value.config, field: value.field, from, to });
+    const item = { path, config: value.config, field: value.field, from, to };
+    if (startMoved(path, to)) {
+      moved.push(item);
+      continue;
+    }
+    items.push(item);
   }
   for (const [path, asked] of expected) if (asked.until < now) expected.delete(path);
   for (const [from, applied] of mine) add({ source: from, kind: "apply", items: applied });
   add({ source, kind, items });
+  // Not tuning: the value its tuning starts from moved under it, kept somewhere other than the
+  // code (a camera's gain kept in a venue, say). Said apart, with nothing to restore.
+  add({ source: "where its tuning starts moved, to a value kept on the robot", kind: "start",
+        items: moved });
+}
+
+/**
+ * Whether a value moved because what its tuning starts from moved with it: its committed value
+ * changed since this page last saw it, and the value is now that committed value.
+ */
+function startMoved(path, to) {
+  const now = robot.doc.tunables[path];
+  const was = known.tunables[path];
+  if (!now || !was || typeof now.committed !== "number" || typeof was.committed !== "number") {
+    return false;
+  }
+  return !near(now.committed, was.committed) && near(to, now.committed);
 }
 
 /** Enough of each value to name it after it's gone, and its committed value. */
 function describe(doc) {
   const described = {};
   for (const [path, value] of Object.entries(doc.tunables)) {
-    described[path] = { config: value.config, field: value.field, committed: value.committed };
+    described[path] = { config: value.config, field: value.field, committed: value.committed,
+                        written: value.written };
   }
   return described;
 }

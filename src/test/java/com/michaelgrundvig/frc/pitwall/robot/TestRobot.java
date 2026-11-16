@@ -15,15 +15,20 @@ import static org.wpilib.units.Units.Rotations;
 
 import com.michaelgrundvig.frc.world.physical.Inertia;
 import com.michaelgrundvig.frc.world.robot.Body;
+import com.michaelgrundvig.frc.world.robot.Camera;
 import com.michaelgrundvig.frc.world.robot.CameraConfig;
+import com.michaelgrundvig.frc.world.robot.CameraStation;
+import com.michaelgrundvig.frc.world.robot.CameraType;
 import com.michaelgrundvig.frc.world.robot.Driven.AbsoluteEncoder;
 import com.michaelgrundvig.frc.world.robot.Drivetrain;
 import com.michaelgrundvig.frc.world.robot.Gearing;
+import com.michaelgrundvig.frc.world.robot.ImageSensor;
 import com.michaelgrundvig.frc.world.robot.ImuMount;
 import com.michaelgrundvig.frc.world.robot.Joint;
 import com.michaelgrundvig.frc.world.robot.Link;
 import com.michaelgrundvig.frc.world.robot.MechanismControl;
 import com.michaelgrundvig.frc.world.robot.Motor;
+import com.michaelgrundvig.frc.world.robot.MountTolerance;
 import com.michaelgrundvig.frc.world.robot.Output;
 import com.michaelgrundvig.frc.world.robot.Part;
 import com.michaelgrundvig.frc.world.robot.Position;
@@ -139,30 +144,32 @@ public final class TestRobot {
           .runsOnlyWhen(CLAW_BEAM.clear())
           .control(MechanismControl.velocity(0.02));
 
-  private static final CameraConfig.ImageSensor CAMERA =
-      CameraConfig.ImageSensor.of(1280, 800, Hertz.of(30))
-          .fieldOfView(Degrees.of(80), CameraConfig.Across.DIAGONAL)
+  private static final ImageSensor CAMERA =
+      ImageSensor.of(1280, 800, Hertz.of(30))
+          .fieldOfView(Degrees.of(80), ImageSensor.Across.DIAGONAL)
           .latency(Milliseconds.of(30))
           .sightRange(Meters.of(7));
 
   /** A camera on the chassis, facing forward and to the left, tilted up. */
   static final CameraConfig FRONT_CAMERA =
-      CameraConfig.of("front", CAMERA)
+      CameraStation.named("front")
           .at(Inches.of(10), Inches.of(8), Inches.of(20))
           .facing(Degrees.of(10), Degrees.of(20))
           .roll(Degrees.of(0))
           .noiseScale(1.0)
-          .measured();
+          .mountTolerance(MountTolerance.MEASURED)
+          .holds(Camera.photonVision(1, CameraType.of("test camera", CAMERA)));
 
   /** A camera that rides on the arm, so it is where the elevator and the arm put it. */
   static final CameraConfig ARM_CAMERA =
-      CameraConfig.of("on-arm", CAMERA)
+      CameraStation.named("on-arm")
           .at(Inches.of(4), Inches.of(0), Inches.of(2))
           .facing(Degrees.of(0), Degrees.of(0))
           .roll(Degrees.of(0))
           .noiseScale(1.0)
           .on(ARM)
-          .measured();
+          .mountTolerance(MountTolerance.MEASURED)
+          .holds(Camera.photonVision(2, CameraType.of("test camera", CAMERA)));
 
   /** The robot. */
   public static RobotDefinition definition() {

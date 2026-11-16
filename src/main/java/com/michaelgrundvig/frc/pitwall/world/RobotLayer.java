@@ -10,6 +10,7 @@ import com.michaelgrundvig.frc.pitwall.scene.SceneState;
 import com.michaelgrundvig.frc.pitwall.scene.Style;
 import com.michaelgrundvig.frc.world.robot.Body;
 import com.michaelgrundvig.frc.world.robot.CameraConfig;
+import com.michaelgrundvig.frc.world.robot.ImageSensor;
 import com.michaelgrundvig.frc.world.robot.ImuMount;
 import com.michaelgrundvig.frc.world.robot.Joint;
 import com.michaelgrundvig.frc.world.robot.RobotDefinition;
@@ -435,9 +436,9 @@ final class RobotLayer extends WorldLayer {
     double halfWidth = body.bumperWidth().in(Meters) / 2 + LABEL_CLEARANCE;
     List<Translation3d> places = new ArrayList<>();
     for (CameraConfig camera : cameras) {
-      double facing = camera.yaw().orElseThrow().in(Radians);
-      double x = camera.forward().orElseThrow().in(Meters);
-      double y = camera.left().orElseThrow().in(Meters);
+      double facing = camera.station().yaw().orElseThrow().in(Radians);
+      double x = camera.station().forward().orElseThrow().in(Meters);
+      double y = camera.station().left().orElseThrow().in(Meters);
       // How far out from the camera the name is, along the way the camera faces.
       double out = VIEW_STUB_METERS;
       for (int step = 0; step < LABEL_STEPS; step++) {
@@ -453,7 +454,7 @@ final class RobotLayer extends WorldLayer {
           new Translation3d(
               x + out * Math.cos(facing),
               y + out * Math.sin(facing),
-              camera.up().orElseThrow().in(Meters) + LABEL_RISE));
+              camera.station().up().orElseThrow().in(Meters) + LABEL_RISE));
     }
     return places;
   }
@@ -542,7 +543,7 @@ final class RobotLayer extends WorldLayer {
    * <pre>angle across = 2 × atan((width / 2) / focal)</pre>
    */
   static FieldOfView fieldOfView(CameraConfig camera) {
-    CameraConfig.ImageSensor sensor = camera.sensor();
+    ImageSensor sensor = camera.sensor();
     double widthPixels = sensor.widthPixels();
     double heightPixels = sensor.heightPixels();
     double diagonalPixels = Math.hypot(widthPixels, heightPixels);

@@ -22,19 +22,20 @@ import java.util.regex.Pattern;
  * template's venue card does:
  *
  * {@snippet :
- * return Devices.Device.named(NAME, "Field", pit::card)
- *     .upload("survey", "Upload venue", pit::upload)
- *     .choose("venue", pit::choose)
- *     .download("file", "Download venue file", pit::download);
+ * return Devices.Device.named(NAME, "Field", this::card)
+ *     .upload("survey", "Upload venue", this::upload)
+ *     .press("event", "New venue for this event", "Event name", this::makeEventVenue)
+ *     .choose("venue", this::choose)
+ *     .download("file", "Download venue file", this::download);
  * }
  *
  * <p>A card is read in the robot loop, like a status item: only while a page watches, and at most
- * once an interval, so keep it cheap (what the loop already read). Downloads, uploads and choices
- * are made on the page's own request, on Pitwall's server threads and never in the robot loop, so
- * they may wait on the network or the disk; the page talks to a device itself for one thing only, a
- * card's {@link Picture}, which the browser fetches straight from the device, so video never passes
- * through the robot program, and only from the places named with {@link #picturesFrom}. None of
- * them changes the robot loop's state, so nothing is logged for replay.
+ * once an interval, so keep it cheap (what the loop already read). Downloads, uploads, choices and
+ * presses are made on the page's own request, on Pitwall's server threads and never in the robot
+ * loop, so they may wait on the network or the disk; the page talks to a device itself for one
+ * thing only, a card's {@link Picture}, which the browser fetches straight from the device, so
+ * video never passes through the robot program, and only from the places named with {@link
+ * #picturesFrom}. None of them changes the robot loop's state, so nothing is logged for replay.
  *
  * <p>A card can also show a live configuration's values ({@link Device#tuning}), tuned from the
  * card as from the Tune view: a camera's exposure and gain beside its picture, so everything about
@@ -243,6 +244,36 @@ public final class Devices {
     String accept(byte[] body) throws IOException;
   }
 
+  /**
+   * A button on a card, which asks the device to do something now: keep a camera's tuned settings,
+   * say. One that asks for words first shows a text box before its button, such as a name.
+   *
+   * @param id its id in the page's addresses: lowercase letters, digits, and hyphens
+   * @param label the button's words, such as "Keep in venue"
+   * @param asks what the text box asks for, such as "Event name"; empty for a button alone
+   * @param pressed does what the button says
+   */
+  public record Press(String id, String label, String asks, Pressed pressed) {
+    public Press {
+      if (!NAME.matcher(id).matches()) {
+        throw new IllegalArgumentException(
+            "a press's id is lowercase letters, digits, and hyphens: " + id);
+      }
+    }
+  }
+
+  /** Does what a card's button says, on Pitwall's server threads, never in the robot loop. */
+  @FunctionalInterface
+  public interface Pressed {
+    /**
+     * @param text what the page's text box held, as typed; empty for a button that asks nothing
+     * @return what the page says it did
+     * @throws Refused saying why not
+     * @throws IOException if doing it failed
+     */
+    String press(String text) throws IOException;
+  }
+
   /** Takes a choice the page makes, on Pitwall's server threads, never in the robot loop. */
   @FunctionalInterface
   public interface Choose {
@@ -351,6 +382,7 @@ public final class Devices {
     private final Supplier<Card> card;
     private final List<Download> downloads = new ArrayList<>();
     private final List<Upload> uploads = new ArrayList<>();
+    private final List<Press> presses = new ArrayList<>();
     private final Map<String, Choose> choosers = new LinkedHashMap<>();
     private boolean autonomous;
     private Optional<String> tuning = Optional.empty();
@@ -396,6 +428,25 @@ public final class Devices {
         throw new IllegalArgumentException(name + " has two uploads named " + id);
       }
       uploads.add(upload);
+      return this;
+    }
+
+    /** Adds a button to its card, which does what it says when pressed. */
+    public Device press(String id, String label, Pressed pressed) {
+      return press(id, label, "", pressed);
+    }
+
+    /**
+     * Adds a button to its card with a text box before it, which asks for this, such as "Event
+     * name": what's typed goes to the button's handler.
+     */
+    public Device press(String id, String label, String asks, Pressed pressed) {
+      unchanged();
+      Press press = new Press(id, label, asks, pressed);
+      if (presses.stream().anyMatch(p -> p.id().equals(id))) {
+        throw new IllegalArgumentException(name + " has two presses named " + id);
+      }
+      presses.add(press);
       return this;
     }
 
@@ -465,6 +516,11 @@ public final class Devices {
     /** Its upload with this id, if it has one. */
     public Optional<Upload> upload(String id) {
       return uploads.stream().filter(u -> u.id().equals(id)).findFirst();
+    }
+
+    /** Its button with this id, if it has one. */
+    public Optional<Press> press(String id) {
+      return presses.stream().filter(p -> p.id().equals(id)).findFirst();
     }
 
     /** What answers its card's choice with this id, if anything does. */
@@ -588,11 +644,11 @@ public final class Devices {
   /**
    * The devices as of the last read, for the event stream: {@code {name: {"kind", "state", "level",
    * "lines": [{"label", "value", "level"}], "downloads": [{"id", "label"}], "uploads": [{"id",
-   * "label"}], "choices": [{"id", "label", "options": [{"value", "label"}], "current"}]}}}, levels
-   * in lowercase; {@code "autonomous": true} for the device that says what autonomous runs; {@code
-   * "picture": {"url"}} or {@code "picture": {"unavailable"}} for a card with a picture: where it
-   * is, or why there's none; and {@code "tuning": name} for a card that shows a live
-   * configuration's values.
+   * "label"}], "presses": [{"id", "label", "asks"}], "choices": [{"id", "label", "options":
+   * [{"value", "label"}], "current"}]}}}, levels in lowercase; {@code "autonomous": true} for the
+   * device that says what autonomous runs; {@code "picture": {"url"}} or {@code "picture":
+   * {"unavailable"}} for a card with a picture: where it is, or why there's none; and {@code
+   * "tuning": name} for a card that shows a live configuration's values.
    */
   Map<String, Object> view() {
     return section;
@@ -645,6 +701,15 @@ public final class Devices {
       uploads.add(each);
     }
     shown.put("uploads", uploads);
+    List<Object> presses = new ArrayList<>();
+    for (Press press : device.presses) {
+      Map<String, Object> each = new LinkedHashMap<>();
+      each.put("id", press.id());
+      each.put("label", press.label());
+      each.put("asks", press.asks());
+      presses.add(each);
+    }
+    shown.put("presses", presses);
     List<Object> choices = new ArrayList<>();
     for (Choice choice : card.choices()) {
       if (!device.choosers.containsKey(choice.id())) {

@@ -3,6 +3,7 @@ package com.michaelgrundvig.frc.pitwall;
 import static com.michaelgrundvig.frc.pitwall.Fixtures.machine;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.wpilib.units.Units.Amps;
 import static org.wpilib.units.Units.Milliseconds;
@@ -343,6 +344,60 @@ class LiveConfigTest {
         assertThat(live.whyNot(Map.of("gain", c.value()))).as(c.name()).isEqualTo(c.says());
       }
     }
+  }
+
+  /** A range that must run upward, as a joint's travel must. */
+  record Ordered(double low, double high) {
+    Ordered {
+      if (low > high) {
+        throw new IllegalArgumentException("Ordered.low: must be at most high (" + high + ")");
+      }
+    }
+  }
+
+  /**
+   * What the tuning starts from can move, as a value kept on the robot moves it: a value tuned away
+   * from the old start stays as tuned, one never tuned follows, and the changes are against the new
+   * start. A start outside a knob's limits, or one the tuned values don't fit, is refused, and
+   * nothing moves.
+   */
+  @Test
+  void whatTheTuningStartsFromMovesKeepingWhatWasTuned() {
+    var live =
+        LiveConfig.of("camera", new Ordered(1, 2))
+            .number("low", Limits.between(0, 10))
+            .number("high", Limits.between(0, 10));
+    live.rebase(new Ordered(3, 9));
+    assertThat(live.get()).as("nothing tuned: it follows").isEqualTo(new Ordered(3, 9));
+    assertThat(live.committedValue("low")).isEqualTo(3);
+    assertThat(live.changes()).isEmpty();
+
+    assertThat(live.set(Map.of("low", 5.0))).isTrue();
+    live.rebase(new Ordered(6, 7));
+    assertThat(live.get()).as("low tuned, high followed").isEqualTo(new Ordered(5, 7));
+    assertThat(live.changes()).extracting(LiveConfig.Change::path).containsExactly("low");
+    // Read together, from one moment: what's in effect, and what of it differs from the start.
+    LiveConfig.Tuned<Ordered> tuned = live.tuned();
+    assertThat(tuned.value()).isEqualTo(new Ordered(5, 7));
+    assertThat(tuned.changes())
+        .containsExactly(new LiveConfig.Change("low", "6.0", "5.0", ".low(5.0)"));
+
+    live.rebase(new Ordered(5, 8));
+    assertThat(live.changes()).as("kept as tuned: nothing differs").isEmpty();
+    assertThat(live.get()).isEqualTo(new Ordered(5, 8));
+
+    assertThatThrownBy(() -> live.rebase(new Ordered(1, 11)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("camera: the new high is outside its tuning limits");
+    assertThat(live.set(Map.of("low", 7.0))).isTrue();
+    assertThatThrownBy(() -> live.rebase(new Ordered(1, 6)))
+        .as("the tuned low doesn't fit the new high")
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Ordered.low: must be at most high (6.0)");
+    assertThat(live.get()).as("nothing moved").isEqualTo(new Ordered(7, 8));
+    assertThat(live.committedValue("low")).isEqualTo(5);
+    live.revert();
+    assertThat(live.get()).isEqualTo(new Ordered(5, 8));
   }
 
   @Test

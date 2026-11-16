@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.michaelgrundvig.frc.pitwall.robot.TestRobot;
 import com.michaelgrundvig.frc.world.robot.CameraConfig;
-import com.michaelgrundvig.frc.world.robot.CameraConfigBuilder;
+import com.michaelgrundvig.frc.world.robot.CameraStationBuilder;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class CameraIdsTest {
   private static CameraConfig named(String name) {
     CameraConfig any = TestRobot.definition().cameras().get(0);
-    return CameraConfigBuilder.builder(any).name(name).build();
+    return CameraStationBuilder.builder(any.station()).name(name).build().holds(any.camera());
   }
 
   @Test

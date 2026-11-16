@@ -389,9 +389,9 @@ public final class Page {
 
   /**
    * Each configuration value, by its tunable: {@code {"config", "field", "unit", "limits",
-   * "committed", "record", "group", "meaning"}}, the last three the display name of the record that
-   * declares it, that record's path ({@code /api/configs}' group), and what its {@code @param} says
-   * the value means.
+   * "committed", "written", "record", "group", "meaning"}}, the last three the display name of the
+   * record that declares it, that record's path ({@code /api/configs}' group), and what its
+   * {@code @param} says the value means.
    */
   static Map<String, Object> tunables(Tuning.View view) {
     Map<String, Object> described = new LinkedHashMap<>();
@@ -405,6 +405,7 @@ public final class Page {
             "limits", value.limits().equals(Limits.NONE) ? "" : value.limits().toString());
         ends(description, value.limits());
         description.put("committed", value.committed());
+        description.put("written", value.written());
         description.put("record", value.record());
         description.put("group", value.group());
         description.put("meaning", value.meaning());

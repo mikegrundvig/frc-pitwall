@@ -84,6 +84,7 @@ final class Api {
             Route.matching(GET, DeviceRoutes.DOWNLOAD, devices::download),
             Route.matching(POST, DeviceRoutes.UPLOAD, devices::upload),
             Route.matching(POST, DeviceRoutes.CHOICE, devices::choice),
+            Route.matching(POST, DeviceRoutes.PRESS, devices::press),
             Route.at(GET, "/api/robot", session::summary),
             Route.at(GET, "/api/robot/view", session::view),
             Route.at(GET, "/api/robot/events", session::events),

@@ -12,9 +12,9 @@ import java.util.regex.Pattern;
 
 /**
  * A device's routes: its cards ({@code GET /api/devices}), a download by its id (GET), and a file
- * sent to it or a choice made on its card (POST). Each is asked of the device on the server's
- * thread, never the robot loop's, and only by the page: a request names the page's event stream,
- * which another site's page can't send.
+ * sent to it, a choice made on its card or a button pressed there (POST). Each is asked of the
+ * device on the server's thread, never the robot loop's, and only by the page: a request names the
+ * page's event stream, which another site's page can't send.
  */
 final class DeviceRoutes {
   /** A device's download: the device's name, then the download's id. */
@@ -22,6 +22,9 @@ final class DeviceRoutes {
 
   /** A file sent to a device: the device's name, then the upload's id. */
   static final Pattern UPLOAD = route("uploads");
+
+  /** A button pressed on a device's card: the device's name, then the press's id. */
+  static final Pattern PRESS = route("presses");
 
   /** A choice made on a device's card: the device's name, then the choice's id. */
   static final Pattern CHOICE = route("choices");
@@ -135,6 +138,33 @@ final class DeviceRoutes {
                 throw new Problem(400, "No value", "A choice is sent as {\"value\": \"...\"}");
               }
               return choose.choose(chosen);
+            });
+    responses.json(exchange, 200, Map.of("message", message));
+  }
+
+  /**
+   * A button pressed on a device's card, done by the robot's own handler, on this thread, never the
+   * robot loop. Never while the field system is connected. The request's {@code "text"} is what the
+   * card's text box held; a button that asks nothing is sent none.
+   */
+  void press(HttpExchange exchange, Matcher route) throws IOException {
+    String name = route.group(1);
+    Devices.Device device = device(exchange, name);
+    whileOffTheField();
+    String id = route.group(2);
+    Devices.Press press =
+        device
+            .press(id)
+            .orElseThrow(() -> new Problem(404, "No press", name + " has no press named " + id));
+    String message =
+        taken(
+            name,
+            () -> {
+              Object text = requests.object(exchange).getOrDefault("text", "");
+              if (!(text instanceof String typed)) {
+                throw new Problem(400, "No text", "A press is sent as {\"text\": \"...\"}");
+              }
+              return press.pressed().press(typed);
             });
     responses.json(exchange, 200, Map.of("message", message));
   }

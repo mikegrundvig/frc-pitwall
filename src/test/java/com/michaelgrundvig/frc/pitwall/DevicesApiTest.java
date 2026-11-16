@@ -112,6 +112,8 @@ class DevicesApiTest {
                                             new Devices.Option("practice", "Practice field")),
                                         chosenVenue))))
                 .upload("survey", "Upload venue", DevicesApiTest::survey)
+                .press("keep", "Keep", text -> "Kept")
+                .press("make", "Make venue", "Event name", DevicesApiTest::make)
                 .choose("venue", this::chooseVenue));
     server.start();
     loop.scheduleAtFixedRate(
@@ -415,16 +417,63 @@ class DevicesApiTest {
     chosenVenue = "official";
   }
 
+  /** A press that asks for a name: it takes one, and refuses none. */
+  private static String make(String name) throws Devices.Refused {
+    if (name.isBlank()) {
+      throw new Devices.Refused("give the event's name");
+    }
+    return "Made " + name;
+  }
+
+  /**
+   * A card's buttons show on it, each with what it asks for, and a press is done by the device or
+   * refused saying why: a button alone is sent no words, and one that asks is sent what was typed.
+   */
+  @Test
+  void aPressShowsOnTheCardAndIsDoneThere() throws Exception {
+    assertThat(get("/api/devices").body())
+        .contains(
+            "\"presses\":[{\"id\":\"keep\",\"label\":\"Keep\",\"asks\":\"\"},"
+                + "{\"id\":\"make\",\"label\":\"Make venue\",\"asks\":\"Event name\"}]");
+    record Case(String press, String body, int status, String says) {}
+    List<Case> cases =
+        List.of(
+            new Case("keep", "{\"text\": \"\"}", 200, "Kept"),
+            new Case("make", "{\"text\": \"Week 1 event\"}", 200, "Made Week 1 event"),
+            new Case("make", "{\"text\": \" \"}", 422, "give the event's name"),
+            new Case("make", "{\"text\": 3}", 400, "A press is sent as"),
+            new Case("moon", "{\"text\": \"\"}", 404, "venue has no press named moon"));
+    for (Case c : cases) {
+      HttpResponse<String> pressed =
+          post(
+              "/api/devices/venue/presses/" + c.press(),
+              HttpRequest.BodyPublishers.ofString(c.body()),
+              "application/json");
+      assertThat(pressed.statusCode()).as(c.press() + " " + c.body()).isEqualTo(c.status());
+      assertThat(pressed.body()).as(c.press() + " " + c.body()).contains(c.says());
+    }
+  }
+
+  /** Every change to a device waits while the field is connected: a file, a choice, a press. */
   @Test
   void changesToDevicesWaitWhileTheFieldIsConnected() throws Exception {
     fieldConnected.set(true);
     Await.until("the field system connected", tuning::isFieldConnected);
-    HttpResponse<String> response =
-        post(
-            "/api/devices/venue/uploads/survey",
-            HttpRequest.BodyPublishers.ofString("good"),
-            "application/octet-stream");
-    assertThat(response.statusCode()).isEqualTo(409);
+    record Row(String path, String body, String type) {}
+    List<Row> rows =
+        List.of(
+            new Row("/api/devices/venue/uploads/survey", "good", "application/octet-stream"),
+            new Row(
+                "/api/devices/venue/choices/venue",
+                "{\"value\": \"practice\"}",
+                "application/json"),
+            new Row("/api/devices/venue/presses/keep", "{\"text\": \"\"}", "application/json"));
+    for (Row row : rows) {
+      HttpResponse<String> response =
+          post(row.path(), HttpRequest.BodyPublishers.ofString(row.body()), row.type());
+      assertThat(response.statusCode()).as(row.path()).isEqualTo(409);
+      assertThat(response.body()).as(row.path()).contains("field system disconnects");
+    }
   }
 
   @Test

@@ -385,7 +385,7 @@ class PitwallServerTest {
     assertThat(get("/api/tunables").body())
         .contains(
             "\"/Machine/drive/gains/kP\":{\"config\":\"machine\",\"field\":\"drive.gains.kP\",\"unit\":\"\","
-                + "\"limits\":\"0 to 100\",\"min\":0.0,\"max\":100.0,\"committed\":16.0,"
+                + "\"limits\":\"0 to 100\",\"min\":0.0,\"max\":100.0,\"committed\":16.0,\"written\":16.0,"
                 + "\"record\":\"Fixtures.Gains\",\"group\":\"drive.gains\","
                 + "\"meaning\":\"volts per meter per second of error\"}")
         .as("no limits, no ends")

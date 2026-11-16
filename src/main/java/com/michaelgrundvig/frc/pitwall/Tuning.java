@@ -64,7 +64,9 @@ public final class Tuning {
    * @param field where it is in the configuration, such as {@code gains.steerKp}
    * @param unit the unit it is tuned in; empty for a plain number
    * @param limits the range it may be tuned in
-   * @param committed its committed value
+   * @param committed its committed value: what its tuning starts from now
+   * @param written its value as the code gives it, which {@code committed} is until something kept
+   *     elsewhere moves the start ({@link LiveConfig#rebase})
    * @param current its value now
    * @param record the display name of the record that declares it, such as {@code
    *     DrivetrainControl.SwerveGains}
@@ -78,6 +80,7 @@ public final class Tuning {
       String unit,
       Limits limits,
       double committed,
+      double written,
       double current,
       String record,
       String group,
@@ -306,6 +309,7 @@ public final class Tuning {
                   knob.unit(),
                   knob.limits(),
                   config.committedValue(knob.path()),
+                  config.writtenValue(knob.path()),
                   config.value(knob.path()),
                   doc.record(),
                   doc.group(),
